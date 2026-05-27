@@ -97,6 +97,8 @@ npm run test:e2e
 - `/users`
 - `/integrations/feishu/config`
 - `/integrations/feishu/send/bot-message`
+- `/integrations/feishu/send/app-message`
+- `/integrations/feishu/contacts/sync-users`
 - `/integrations/feishu/webhook/events`
 - `/integrations/feishu/sync-logs`
 

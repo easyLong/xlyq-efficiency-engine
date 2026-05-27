@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { SendAppMessageDto } from './dto/send-app-message.dto';
 import { SendBotMessageDto } from './dto/send-bot-message.dto';
+import { SyncFeishuUsersDto } from './dto/sync-feishu-users.dto';
 import { FeishuService } from './feishu.service';
 
 @Controller('integrations/feishu')
@@ -14,6 +16,16 @@ export class FeishuController {
   @Post('send/bot-message')
   sendBotMessage(@Body() dto: SendBotMessageDto) {
     return this.feishuService.sendBotMessage(dto);
+  }
+
+  @Post('send/app-message')
+  sendAppMessage(@Body() dto: SendAppMessageDto) {
+    return this.feishuService.sendAppMessage(dto);
+  }
+
+  @Post('contacts/sync-users')
+  syncUsers(@Body() dto: SyncFeishuUsersDto) {
+    return this.feishuService.syncUsers(dto);
   }
 
   @Post('webhook/events')

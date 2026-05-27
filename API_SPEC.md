@@ -444,6 +444,16 @@
 - 说明：发送机器人消息
 - 入参：`text`、`objectType`、`objectId`、`feishuObjectType`、`feishuObjectId`
 
+### `POST /integrations/feishu/send/app-message`
+- 说明：通过企业自建应用向员工或群发送消息
+- 入参：`receiveIdType`、`receiveId`、`text`、`objectType`、`objectId`
+- 备注：`receiveIdType` 支持 `open_id/user_id/union_id/email/chat_id`
+
+### `POST /integrations/feishu/contacts/sync-users`
+- 说明：从飞书通讯录同步员工到本地用户表
+- 入参：`departmentId`、`pageSize`
+- 备注：默认从 `FEISHU_DEFAULT_DEPARTMENT_ID` 同步，根部门通常为 `0`
+
 ### `POST /integrations/feishu/webhook/events`
 - 说明：飞书事件回调入口
 
