@@ -1,5 +1,8 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { ScanFeishuSyncFailuresDto } from './dto/scan-feishu-sync-failures.dto';
+import { ScanTaskDeadlinesDto } from './dto/scan-task-deadlines.dto';
 import { SendNotificationDto } from './dto/send-notification.dto';
+import { SendWorklogRemindersDto } from './dto/send-worklog-reminders.dto';
 import { TaskNotificationDto } from './dto/task-notification.dto';
 import { NotificationsService } from './notifications.service';
 
@@ -31,6 +34,21 @@ export class NotificationsController {
       dto.taskId,
       dto.message,
     );
+  }
+
+  @Post('task-deadline-scan')
+  taskDeadlineScan(@Body() dto: ScanTaskDeadlinesDto) {
+    return this.notificationsService.scanTaskDeadlines(dto);
+  }
+
+  @Post('worklog-reminders')
+  worklogReminders(@Body() dto: SendWorklogRemindersDto) {
+    return this.notificationsService.sendWorklogReminders(dto);
+  }
+
+  @Post('feishu-sync-failure-scan')
+  feishuSyncFailureScan(@Body() dto: ScanFeishuSyncFailuresDto) {
+    return this.notificationsService.scanFeishuSyncFailures(dto);
   }
 
   @Post(':id/read')

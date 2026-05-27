@@ -93,6 +93,9 @@ npm run test:e2e
 - `/notifications`
 - `/notifications/send`
 - `/notifications/task-assignment`
+- `/notifications/task-deadline-scan`
+- `/notifications/worklog-reminders`
+- `/notifications/feishu-sync-failure-scan`
 - `/worklogs`
 - `/quotations`
 - `/quote-mappings`

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'node:crypto';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateRequirementDto } from './dto/create-requirement.dto';
 import { CreateRequirementItemDto } from './dto/create-requirement-item.dto';
 import { UpdateRequirementDto } from './dto/update-requirement.dto';
@@ -19,6 +20,7 @@ export class RequirementsService {
     private readonly requirementItemsRepository: Repository<RequirementItemEntity>,
     @InjectRepository(AiExecutionLogEntity)
     private readonly aiExecutionLogsRepository: Repository<AiExecutionLogEntity>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async findAll(projectId?: string) {
@@ -63,7 +65,9 @@ export class RequirementsService {
       summary: dto.rawContent ?? null,
     });
 
-    return this.requirementsRepository.save(requirement);
+    const saved = await this.requirementsRepository.save(requirement);
+    await this.notificationsService.notifyRequirementCreated(saved);
+    return saved;
   }
 
   async update(id: string, dto: UpdateRequirementDto) {
@@ -78,7 +82,9 @@ export class RequirementsService {
       summary: dto.summary ?? requirement.summary,
     });
 
-    return this.requirementsRepository.save(requirement);
+    const saved = await this.requirementsRepository.save(requirement);
+    await this.notificationsService.notifyRequirementChanged(saved);
+    return saved;
   }
 
   async parse(id: string) {
@@ -126,7 +132,9 @@ export class RequirementsService {
     const requirement = await this.findOne(id);
     requirement.status = 'confirmed';
     requirement.confirmed_at = new Date();
-    return this.requirementsRepository.save(requirement);
+    const saved = await this.requirementsRepository.save(requirement);
+    await this.notificationsService.notifyRequirementChanged(saved);
+    return saved;
   }
 
   async createItem(requirementId: string, dto: CreateRequirementItemDto) {
@@ -179,7 +187,9 @@ export class RequirementsService {
   }
 
   async confirmItem(itemId: string) {
-    return this.updateItem(itemId, { status: 'confirmed' });
+    const item = await this.updateItem(itemId, { status: 'confirmed' });
+    await this.notificationsService.notifyRequirementItemConfirmed(item);
+    return item;
   }
 
   async obsoleteItem(itemId: string) {

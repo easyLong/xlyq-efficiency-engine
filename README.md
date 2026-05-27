@@ -17,6 +17,7 @@
 | --- | --- |
 | [PROJECT_PLAN.md](PROJECT_PLAN.md) | 项目整体规划、业务目标、MVP 范围、实施路线 |
 | [MVP_SCOPE.md](MVP_SCOPE.md) | 第一版最小 MVP 范围和验收闭环 |
+| [NOTIFICATION_RULES.md](NOTIFICATION_RULES.md) | 消息通知规则、触发场景和渠道策略 |
 | [PRD.md](PRD.md) | 产品需求文档，包含角色、场景、功能范围和业务流程 |
 | [DB_SCHEMA.md](DB_SCHEMA.md) | 数据库表结构设计说明 |
 | [mysql_schema.sql](mysql_schema.sql) | MySQL 建库建表 SQL |

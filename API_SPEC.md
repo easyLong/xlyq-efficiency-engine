@@ -579,3 +579,15 @@
 
 ### `POST /notifications/{notificationId}/read`
 - 说明：标记消息已读
+
+### `POST /notifications/task-deadline-scan`
+- 说明：扫描即将逾期和已逾期任务并发送提醒
+- 入参：`projectId`、`daysAhead`
+
+### `POST /notifications/worklog-reminders`
+- 说明：扫描未提交工时的任务并提醒负责人
+- 入参：`projectId`、`workDate`
+
+### `POST /notifications/feishu-sync-failure-scan`
+- 说明：扫描飞书同步失败日志并提醒管理员
+- 入参：`hours`

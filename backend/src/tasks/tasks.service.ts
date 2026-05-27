@@ -303,6 +303,15 @@ export class TasksService {
       remark: dto.remark ?? null,
     });
 
-    return this.taskResultFilesRepository.save(file);
+    const saved = await this.taskResultFilesRepository.save(file);
+    const notification =
+      await this.notificationsService.notifyTaskResultFileSubmitted(
+        task,
+        saved,
+      );
+    return {
+      file: saved,
+      notification,
+    };
   }
 }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { RequirementItemEntity } from './entities/requirement-item.entity';
 import { RequirementEntity } from './entities/requirement.entity';
 import {
@@ -11,6 +12,7 @@ import { RequirementsService } from './requirements.service';
 
 @Module({
   imports: [
+    NotificationsModule,
     TypeOrmModule.forFeature([
       RequirementEntity,
       RequirementItemEntity,
