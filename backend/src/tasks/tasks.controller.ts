@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
+import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TasksService } from './tasks.service';
@@ -45,6 +47,32 @@ export class TasksController {
   @Post(':id/assign')
   assign(@Param('id') id: string, @Body() dto: AssignTaskDto) {
     return this.tasksService.assign(id, dto);
+  }
+
+  @Get(':id/workspace')
+  getWorkspace(@Param('id') id: string) {
+    return this.tasksService.getWorkspace(id);
+  }
+
+  @Post(':id/workspace/provision')
+  provisionWorkspace(
+    @Param('id') id: string,
+    @Body() dto: ProvisionTaskWorkspaceDto,
+  ) {
+    return this.tasksService.provisionWorkspace(id, dto);
+  }
+
+  @Get(':id/result-files')
+  listResultFiles(@Param('id') id: string) {
+    return this.tasksService.listResultFiles(id);
+  }
+
+  @Post(':id/result-files')
+  registerResultFile(
+    @Param('id') id: string,
+    @Body() dto: RegisterTaskResultFileDto,
+  ) {
+    return this.tasksService.registerResultFile(id, dto);
   }
 
   @Post(':id/status')

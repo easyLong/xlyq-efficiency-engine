@@ -1,13 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { Repository } from 'typeorm';
+import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
+import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { TaskDirectoryEntity } from './entities/task-directory.entity';
 import { TaskEntity } from './entities/task.entity';
+import { TaskResultFileEntity } from './entities/task-result-file.entity';
 
 @Injectable()
 export class TasksService {
@@ -16,6 +21,12 @@ export class TasksService {
     private readonly tasksRepository: Repository<TaskEntity>,
     @InjectRepository(RequirementItemEntity)
     private readonly requirementItemsRepository: Repository<RequirementItemEntity>,
+    @InjectRepository(TaskDirectoryEntity)
+    private readonly taskDirectoriesRepository: Repository<TaskDirectoryEntity>,
+    @InjectRepository(TaskResultFileEntity)
+    private readonly taskResultFilesRepository: Repository<TaskResultFileEntity>,
+    @InjectRepository(FeishuSyncLogEntity)
+    private readonly feishuSyncLogsRepository: Repository<FeishuSyncLogEntity>,
   ) {}
 
   async findAll(projectId?: string, assigneeUserId?: string) {
@@ -119,16 +130,31 @@ export class TasksService {
         ? new Date(dto.actualEndAt)
         : task.actual_end_at,
       estimated_hours: dto.estimatedHours ?? task.estimated_hours,
-      progress_percent: dto.progressPercent
-        ? Number(dto.progressPercent)
-        : task.progress_percent,
+      progress_percent:
+        dto.progressPercent !== undefined
+          ? Number(dto.progressPercent)
+          : task.progress_percent,
       blocked_reason: dto.blockedReason ?? task.blocked_reason,
     });
     return this.tasksRepository.save(task);
   }
 
   async assign(id: string, dto: AssignTaskDto) {
-    return this.update(id, { assigneeUserId: dto.assigneeUserId });
+    const task = await this.update(id, { assigneeUserId: dto.assigneeUserId });
+    if (!dto.provisionWorkspace) {
+      return task;
+    }
+
+    const workspace = await this.provisionWorkspace(id, {
+      assigneeUserId: dto.assigneeUserId,
+      feishuFolderToken: dto.feishuFolderToken,
+      directoryUrl: dto.directoryUrl,
+    });
+
+    return {
+      task,
+      workspace,
+    };
   }
 
   async updateStatus(id: string, dto: UpdateTaskStatusDto) {
@@ -165,5 +191,103 @@ export class TasksService {
         matchScore: fallbackAssignee?.assigneeUserId ? 72 : 0,
       },
     };
+  }
+
+  async getWorkspace(id: string) {
+    await this.findOne(id);
+    return this.taskDirectoriesRepository.findOne({ where: { task_id: id } });
+  }
+
+  async provisionWorkspace(id: string, dto: ProvisionTaskWorkspaceDto) {
+    const task = await this.findOne(id);
+    const assigneeUserId = dto.assigneeUserId ?? task.assignee_user_id;
+    if (!assigneeUserId) {
+      throw new BadRequestException(
+        'Task must have an assignee before provisioning workspace permission',
+      );
+    }
+
+    let workspace = await this.taskDirectoriesRepository.findOne({
+      where: { task_id: id },
+    });
+
+    if (!workspace) {
+      workspace = this.taskDirectoriesRepository.create({
+        id: randomUUID(),
+        task_id: task.id,
+        project_id: task.project_id,
+        assignee_user_id: assigneeUserId,
+        feishu_folder_token: dto.feishuFolderToken ?? null,
+        directory_url:
+          dto.directoryUrl ??
+          (dto.feishuFolderToken
+            ? `https://www.feishu.cn/drive/folder/${dto.feishuFolderToken}`
+            : null),
+        permission_status: 'pending_sync',
+        last_synced_at: null,
+      });
+    } else {
+      Object.assign(workspace, {
+        assignee_user_id: assigneeUserId,
+        feishu_folder_token:
+          dto.feishuFolderToken ?? workspace.feishu_folder_token,
+        directory_url: dto.directoryUrl ?? workspace.directory_url,
+      });
+    }
+
+    workspace.permission_status = 'mock_granted';
+    workspace.last_synced_at = new Date();
+    const saved = await this.taskDirectoriesRepository.save(workspace);
+
+    await this.feishuSyncLogsRepository.save(
+      this.feishuSyncLogsRepository.create({
+        object_type: 'task',
+        object_id: task.id,
+        action_type: 'grant_folder_permission',
+        feishu_object_type: 'folder',
+        feishu_object_id: saved.feishu_folder_token,
+        request_payload_json: {
+          taskId: task.id,
+          assigneeUserId,
+          directoryUrl: saved.directory_url,
+        },
+        response_payload_json: {
+          mocked: true,
+          permissionStatus: saved.permission_status,
+        },
+        status: 'mock_sent',
+        error_code: null,
+        error_message: null,
+        triggered_at: new Date(),
+        finished_at: new Date(),
+      }),
+    );
+
+    return saved;
+  }
+
+  async listResultFiles(id: string) {
+    await this.findOne(id);
+    return this.taskResultFilesRepository.find({
+      where: { task_id: id },
+      order: { created_at: 'DESC' },
+    });
+  }
+
+  async registerResultFile(id: string, dto: RegisterTaskResultFileDto) {
+    const task = await this.findOne(id);
+    const file = this.taskResultFilesRepository.create({
+      id: randomUUID(),
+      task_id: task.id,
+      project_id: task.project_id,
+      file_name: dto.fileName,
+      file_url: dto.fileUrl,
+      feishu_file_token: dto.feishuFileToken ?? null,
+      uploaded_by_user_id: dto.uploadedByUserId ?? task.assignee_user_id,
+      source: dto.feishuFileToken ? 'feishu' : 'manual',
+      remark: dto.remark ?? null,
+    });
+
+    return this.taskResultFilesRepository.save(file);
   }
 }

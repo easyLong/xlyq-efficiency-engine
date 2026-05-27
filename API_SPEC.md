@@ -240,8 +240,22 @@
 - 说明：更新任务
 
 ### `POST /tasks/{taskId}/assign`
-- 说明：指派任务
-- 入参：`assigneeUserId`
+- 说明：指派任务，可选同步创建任务成果目录授权记录
+- 入参：`assigneeUserId`、`provisionWorkspace`、`feishuFolderToken`、`directoryUrl`
+
+### `GET /tasks/{taskId}/workspace`
+- 说明：获取任务成果目录和权限状态
+
+### `POST /tasks/{taskId}/workspace/provision`
+- 说明：创建或更新任务成果目录授权记录
+- 入参：`assigneeUserId`、`feishuFolderToken`、`directoryUrl`
+
+### `GET /tasks/{taskId}/result-files`
+- 说明：获取任务结果文件列表
+
+### `POST /tasks/{taskId}/result-files`
+- 说明：登记任务结果文件
+- 入参：`fileName`、`fileUrl`、`feishuFileToken`、`uploadedByUserId`、`remark`
 
 ### `POST /tasks/{taskId}/status`
 - 说明：修改任务状态
@@ -426,27 +440,16 @@
 ### `GET /integrations/feishu/config`
 - 说明：获取飞书配置状态
 
-### `POST /integrations/feishu/config`
-- 说明：保存飞书配置
-
-### `POST /integrations/feishu/sync/requirements`
-- 说明：同步飞书文档需求
-
-### `POST /integrations/feishu/sync/tasks`
-- 说明：同步任务到飞书
-
 ### `POST /integrations/feishu/send/bot-message`
 - 说明：发送机器人消息
+- 入参：`text`、`objectType`、`objectId`、`feishuObjectType`、`feishuObjectId`
 
 ### `POST /integrations/feishu/webhook/events`
 - 说明：飞书事件回调入口
 
-### `GET /integrations/feishu/object-links`
-- 说明：对象映射查询
-- 查询：`objectType`、`objectId`
-
 ### `GET /integrations/feishu/sync-logs`
 - 说明：同步日志列表
+- 查询：`objectType`、`objectId`、`status`
 
 ## 16. AI 助手
 

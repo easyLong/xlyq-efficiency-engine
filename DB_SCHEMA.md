@@ -66,6 +66,8 @@ projects 1---n requirements
 requirements 1---n requirement_versions
 requirements 1---n requirement_items
 requirement_items 1---n tasks
+tasks 1---1 task_directories
+tasks 1---n task_result_files
 tasks 1---n worklogs
 projects 1---n quotations
 quotations 1---n quotation_items
@@ -359,7 +361,56 @@ projects n---n users (via project_members)
 - `idx_tasks_status`
 - `idx_tasks_planned_end_at`
 
-## 10.2 `task_watchers`
+## 10.2 `task_directories`
+
+任务成果目录和权限状态表，服务于“任务分配给人后，给人进入对应目录的权限”。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | char(36) | pk | 主键 |
+| task_id | char(36) | fk, not null | 任务ID |
+| project_id | char(36) | fk, not null | 项目ID |
+| assignee_user_id | char(36) | fk, null | 被授权人 |
+| feishu_folder_token | varchar(128) | null | 飞书目录 Token |
+| directory_url | varchar(500) | null | 目录访问链接 |
+| permission_status | varchar(32) | not null | `pending_sync/mock_granted/granted/failed` |
+| last_synced_at | datetime | null | 最近同步时间 |
+| created_at | datetime | not null | 创建时间 |
+| updated_at | datetime | not null | 更新时间 |
+| deleted_at | datetime | null | 删除时间 |
+
+唯一约束：
+- `task_id`
+
+索引建议：
+- `idx_task_directories_project_id`
+- `idx_task_directories_assignee_user_id`
+
+## 10.3 `task_result_files`
+
+任务结果文件表，记录员工放入任务目录的成果文件。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | char(36) | pk | 主键 |
+| task_id | char(36) | fk, not null | 任务ID |
+| project_id | char(36) | fk, not null | 项目ID |
+| file_name | varchar(256) | not null | 文件名 |
+| file_url | varchar(500) | not null | 文件链接 |
+| feishu_file_token | varchar(128) | null | 飞书文件 Token |
+| uploaded_by_user_id | char(36) | fk, null | 上传人 |
+| source | varchar(32) | not null | `manual/feishu` |
+| remark | varchar(500) | null | 备注 |
+| created_at | datetime | not null | 创建时间 |
+| updated_at | datetime | not null | 更新时间 |
+| deleted_at | datetime | null | 删除时间 |
+
+索引建议：
+- `idx_task_result_files_task_id`
+- `idx_task_result_files_project_id`
+- `idx_task_result_files_uploaded_by_user_id`
+
+## 10.4 `task_watchers`
 
 任务关注人。
 
@@ -374,7 +425,7 @@ projects n---n users (via project_members)
 
 - `(task_id, user_id)`
 
-## 10.3 `worklogs`
+## 10.5 `worklogs`
 
 工时记录表。
 
@@ -401,7 +452,7 @@ projects n---n users (via project_members)
 - `idx_worklogs_requirement_item_id`
 - `idx_worklogs_user_id_work_date`
 
-## 10.4 `resource_load_snapshots`
+## 10.6 `resource_load_snapshots`
 
 资源负载快照表，用于日报表与 AI 负载分析。
 
@@ -858,6 +909,8 @@ AI 建议采纳记录表。
 - `requirement_versions`
 - `requirement_items`
 - `tasks`
+- `task_directories`
+- `task_result_files`
 - `worklogs`
 - `risk_alerts`
 - `weekly_reports`

@@ -19,6 +19,7 @@ src/
   customers/         客户管理
   dashboard/         工作台统计
   health/            健康检查
+  integrations/      飞书等外部集成
   projects/          项目管理
   quote-mappings/    需求报价适配
   quotations/        报价单管理
@@ -86,12 +87,18 @@ npm run test:e2e
 - `/projects`
 - `/requirements`
 - `/tasks`
+- `/tasks/{id}/workspace`
+- `/tasks/{id}/result-files`
 - `/worklogs`
 - `/quotations`
 - `/quote-mappings`
 - `/risk-alerts`
 - `/weekly-reports`
 - `/users`
+- `/integrations/feishu/config`
+- `/integrations/feishu/send/bot-message`
+- `/integrations/feishu/webhook/events`
+- `/integrations/feishu/sync-logs`
 
 ## 数据库
 
