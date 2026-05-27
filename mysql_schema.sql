@@ -27,6 +27,7 @@ DROP TABLE IF EXISTS `quotations`;
 DROP TABLE IF EXISTS `weekly_reports`;
 DROP TABLE IF EXISTS `ai_execution_logs`;
 DROP TABLE IF EXISTS `risk_alerts`;
+DROP TABLE IF EXISTS `notification_messages`;
 DROP TABLE IF EXISTS `task_result_files`;
 DROP TABLE IF EXISTS `task_directories`;
 DROP TABLE IF EXISTS `worklogs`;
@@ -304,6 +305,29 @@ CREATE TABLE `task_result_files` (
   CONSTRAINT `fk_task_result_files_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`),
   CONSTRAINT `fk_task_result_files_uploaded_by_user` FOREIGN KEY (`uploaded_by_user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务结果文件表';
+
+CREATE TABLE `notification_messages` (
+  `id` CHAR(36) NOT NULL,
+  `recipient_user_id` CHAR(36) NULL,
+  `title` VARCHAR(128) NOT NULL,
+  `content` TEXT NOT NULL,
+  `object_type` VARCHAR(32) NULL,
+  `object_id` CHAR(36) NULL,
+  `channels_json` JSON NULL,
+  `delivery_result_json` JSON NULL,
+  `status` VARCHAR(32) NOT NULL,
+  `sent_at` DATETIME NULL,
+  `read_at` DATETIME NULL,
+  `error_message` TEXT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_notification_messages_recipient` (`recipient_user_id`, `status`),
+  KEY `idx_notification_messages_object` (`object_type`, `object_id`),
+  KEY `idx_notification_messages_created_at` (`created_at`),
+  CONSTRAINT `fk_notification_messages_recipient` FOREIGN KEY (`recipient_user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='站内消息和通知投递表';
 
 CREATE TABLE `worklogs` (
   `id` CHAR(36) NOT NULL,

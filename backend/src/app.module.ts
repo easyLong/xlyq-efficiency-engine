@@ -5,6 +5,7 @@ import { CustomersModule } from './customers/customers.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthModule } from './health/health.module';
 import { FeishuModule } from './integrations/feishu/feishu.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { ProjectsModule } from './projects/projects.module';
 import { QuoteMappingsModule } from './quote-mappings/quote-mappings.module';
 import { QuotationsModule } from './quotations/quotations.module';
@@ -36,6 +37,7 @@ import { WorklogsModule } from './worklogs/worklogs.module';
     }),
     HealthModule,
     FeishuModule,
+    NotificationsModule,
     CustomersModule,
     UsersModule,
     ProjectsModule,

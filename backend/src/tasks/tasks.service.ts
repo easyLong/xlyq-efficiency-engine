@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -27,6 +28,7 @@ export class TasksService {
     private readonly taskResultFilesRepository: Repository<TaskResultFileEntity>,
     @InjectRepository(FeishuSyncLogEntity)
     private readonly feishuSyncLogsRepository: Repository<FeishuSyncLogEntity>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async findAll(projectId?: string, assigneeUserId?: string) {
@@ -141,8 +143,14 @@ export class TasksService {
 
   async assign(id: string, dto: AssignTaskDto) {
     const task = await this.update(id, { assigneeUserId: dto.assigneeUserId });
+    const notification = await this.notificationsService.notifyTaskAssigned(
+      task,
+    );
     if (!dto.provisionWorkspace) {
-      return task;
+      return {
+        task,
+        notification,
+      };
     }
 
     const workspace = await this.provisionWorkspace(id, {
@@ -154,6 +162,7 @@ export class TasksService {
     return {
       task,
       workspace,
+      notification,
     };
   }
 
@@ -166,7 +175,13 @@ export class TasksService {
       patch.progressPercent = '100';
       patch.actualEndAt = new Date().toISOString();
     }
-    return this.update(id, patch);
+    const task = await this.update(id, patch);
+    const notification =
+      await this.notificationsService.notifyTaskStatusChanged(task);
+    return {
+      task,
+      notification,
+    };
   }
 
   async aiAssignmentSuggestion(id: string) {

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
 import { TaskDirectoryEntity } from './entities/task-directory.entity';
 import { TaskEntity } from './entities/task.entity';
@@ -10,6 +11,7 @@ import { TasksService } from './tasks.service';
 
 @Module({
   imports: [
+    NotificationsModule,
     TypeOrmModule.forFeature([
       TaskEntity,
       RequirementItemEntity,

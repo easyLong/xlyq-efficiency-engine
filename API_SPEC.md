@@ -558,3 +558,24 @@
 6. `change-requests`
 7. `feishu integrations`
 8. `ai logs`、`audit logs`
+
+## 20. 消息通知接口
+
+### `GET /notifications`
+- 说明：消息列表
+- 查询：`recipientUserId`、`status`
+
+### `GET /notifications/{notificationId}`
+- 说明：消息详情
+
+### `POST /notifications/send`
+- 说明：发送业务消息，默认写站内消息并尝试发送飞书应用消息
+- 入参：`recipientUserId`、`title`、`content`、`objectType`、`objectId`、`channels`、`botText`
+- 渠道：`in_app`、`feishu_app`、`feishu_bot`
+
+### `POST /notifications/task-assignment`
+- 说明：手动触发任务分配通知
+- 入参：`taskId`、`message`
+
+### `POST /notifications/{notificationId}/read`
+- 说明：标记消息已读

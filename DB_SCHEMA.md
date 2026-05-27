@@ -77,6 +77,7 @@ change_requests 1---n change_request_items
 projects 1---n risk_alerts
 projects 1---n weekly_reports
 projects 1---n feishu_object_links
+users 1---n notification_messages
 projects 1---n ai_execution_logs
 users n---n roles (via user_roles)
 projects n---n users (via project_members)
@@ -921,6 +922,7 @@ AI 建议采纳记录表。
 - `change_request_items`
 - `feishu_object_links`
 - `feishu_sync_logs`
+- `notification_messages`
 - `ai_execution_logs`
 - `ai_suggestion_actions`
 - `audit_logs`

@@ -20,6 +20,7 @@ src/
   dashboard/         工作台统计
   health/            健康检查
   integrations/      飞书等外部集成
+  notifications/     站内消息和飞书通知编排
   projects/          项目管理
   quote-mappings/    需求报价适配
   quotations/        报价单管理
@@ -89,6 +90,9 @@ npm run test:e2e
 - `/tasks`
 - `/tasks/{id}/workspace`
 - `/tasks/{id}/result-files`
+- `/notifications`
+- `/notifications/send`
+- `/notifications/task-assignment`
 - `/worklogs`
 - `/quotations`
 - `/quote-mappings`
