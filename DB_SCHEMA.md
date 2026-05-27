@@ -10,9 +10,9 @@
 
 ## 2. 技术假设
 
-- 数据库：PostgreSQL 15+
-- 主键类型：`uuid`
-- 时间字段：`timestamptz`
+- 数据库：MySQL 8.0+
+- 主键类型：`char(36)`，应用层按 UUID 字符串处理
+- 时间字段：`datetime`
 - 金额字段：`numeric(14,2)`
 - 工时字段：`numeric(8,2)`
 - 状态类字段：V1 采用 `varchar(32)`，由应用层和数据库约束共同控制
@@ -44,12 +44,12 @@
 建议以下业务表默认包含：
 
 ```text
-id uuid pk
-created_at timestamptz not null
-updated_at timestamptz not null
-deleted_at timestamptz null
-created_by uuid null
-updated_by uuid null
+id char(36) pk
+created_at datetime not null
+updated_at datetime not null
+deleted_at datetime null
+created_by char(36) null
+updated_by char(36) null
 ```
 
 说明：
@@ -899,6 +899,6 @@ AI 建议采纳记录表。
 数据库表结构确认后，建议继续输出：
 
 1. ER 图
-2. PostgreSQL 建表 SQL
+2. MySQL 建表 SQL
 3. ORM 实体定义
 4. 核心接口清单
