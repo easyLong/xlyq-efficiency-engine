@@ -1,0 +1,29 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+
+# Logs
+*.log
+backend/run.out.log
+backend/run.err.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Node / Nest
+backend/node_modules/
+backend/dist/
+backend/coverage/
+
+# Env files
+.env
+backend/.env
+
+# Misc
+*.tmp
+*.bak

@@ -1,0 +1,423 @@
+
+<h2 class="sr-only">AI项目管理系统交互原型</h2>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); }
+  .app { display: flex; height: 580px; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; }
+  .sidebar { width: 180px; background: var(--color-background-secondary); border-right: 0.5px solid var(--color-border-tertiary); padding: 16px 0; flex-shrink: 0; display: flex; flex-direction: column; }
+  .logo { padding: 0 16px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); margin-bottom: 8px; }
+  .logo-text { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+  .logo-sub { font-size: 11px; color: var(--color-text-tertiary); }
+  .nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 13px; color: var(--color-text-secondary); cursor: pointer; border-radius: 0; transition: background .15s; }
+  .nav-item:hover { background: var(--color-background-primary); }
+  .nav-item.active { color: var(--color-text-primary); background: var(--color-background-primary); font-weight: 500; border-left: 2px solid #1D9E75; }
+  .nav-item i { font-size: 16px; }
+  .nav-section { font-size: 10px; color: var(--color-text-tertiary); padding: 12px 16px 4px; letter-spacing: .05em; }
+  .main { flex: 1; overflow-y: auto; background: var(--color-background-primary); }
+  .topbar { padding: 12px 20px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 12px; }
+  .topbar-title { font-size: 15px; font-weight: 500; flex: 1; }
+  .btn { padding: 6px 14px; border-radius: var(--border-radius-md); font-size: 12px; cursor: pointer; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); transition: background .15s; }
+  .btn:hover { background: var(--color-background-secondary); }
+  .btn-primary { background: #1D9E75; border-color: #1D9E75; color: #fff; }
+  .btn-primary:hover { background: #0F6E56; }
+  .content { padding: 20px; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .metric-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 14px; }
+  .metric-label { font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 6px; }
+  .metric-val { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+  .metric-sub { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; }
+  .metric-up { color: #1D9E75; }
+  .metric-warn { color: #BA7517; }
+  .section-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 16px; }
+  .card-title { font-size: 13px; font-weight: 500; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .task-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 0.5px solid var(--color-border-tertiary); font-size: 12px; }
+  .task-item:last-child { border-bottom: none; }
+  .avatar { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; flex-shrink: 0; }
+  .av-teal { background: #9FE1CB; color: #085041; }
+  .av-purple { background: #CECBF6; color: #3C3489; }
+  .av-amber { background: #FAC775; color: #633806; }
+  .av-coral { background: #F5C4B3; color: #712B13; }
+  .task-name { flex: 1; color: var(--color-text-primary); }
+  .badge { padding: 2px 8px; border-radius: 20px; font-size: 10px; flex-shrink: 0; }
+  .badge-green { background: #EAF3DE; color: #3B6D11; }
+  .badge-amber { background: #FAEEDA; color: #854F0B; }
+  .badge-red { background: #FCEBEB; color: #A32D2D; }
+  .badge-blue { background: #E6F1FB; color: #185FA5; }
+  .progress-row { margin-bottom: 10px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; }
+  .progress-bar { height: 4px; background: var(--color-background-secondary); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+  .ai-box { background: linear-gradient(135deg, #E1F5EE 0%, #E6F1FB 100%); border: 0.5px solid #9FE1CB; border-radius: var(--border-radius-lg); padding: 14px; margin-bottom: 16px; }
+  .ai-box-dark { background: var(--color-background-secondary); border-color: var(--color-border-secondary); }
+  .ai-header { font-size: 12px; font-weight: 500; color: #0F6E56; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .ai-msg { font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; }
+  .ai-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .tabs { display: flex; gap: 2px; margin-bottom: 16px; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 3px; }
+  .tab { padding: 5px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; color: var(--color-text-secondary); transition: all .15s; }
+  .tab.active { background: var(--color-background-primary); color: var(--color-text-primary); font-weight: 500; box-shadow: 0 0 0 0.5px var(--color-border-tertiary); }
+  .req-item { padding: 10px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .req-item:last-child { border-bottom: none; }
+  .req-title { font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 3px; }
+  .req-meta { font-size: 11px; color: var(--color-text-tertiary); display: flex; gap: 10px; }
+  .quote-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 0.5px solid var(--color-border-tertiary); font-size: 12px; }
+  .quote-row:last-child { border-bottom: none; }
+  .feishu-badge { display: inline-flex; align-items: center; gap: 4px; background: #E8F4FF; color: #1456CC; border-radius: 4px; padding: 2px 6px; font-size: 10px; }
+</style>
+
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="logo">
+      <div class="logo-text">🚀 ProjAI</div>
+      <div class="logo-sub">AI 项目管理</div>
+    </div>
+    <div class="nav-section">工作台</div>
+    <div class="nav-item active" onclick="switchView('dashboard')"><i class="ti ti-layout-dashboard" aria-hidden="true"></i> 仪表盘</div>
+    <div class="nav-item" onclick="switchView('requirements')"><i class="ti ti-file-description" aria-hidden="true"></i> 需求管理</div>
+    <div class="nav-item" onclick="switchView('tasks')"><i class="ti ti-checklist" aria-hidden="true"></i> 任务看板</div>
+    <div class="nav-item" onclick="switchView('finance')"><i class="ti ti-receipt" aria-hidden="true"></i> 财务结算</div>
+    <div class="nav-section">工具</div>
+    <div class="nav-item" onclick="switchView('feishu')"><i class="ti ti-brand-slack" aria-hidden="true"></i> 飞书集成</div>
+    <div class="nav-item" onclick="switchView('reports')"><i class="ti ti-chart-bar" aria-hidden="true"></i> 报表分析</div>
+    <div style="flex:1"></div>
+    <div class="nav-item" style="margin-top:auto"><i class="ti ti-settings" aria-hidden="true"></i> 设置</div>
+  </div>
+
+  <!-- Main -->
+  <div class="main" id="main-content">
+    <!-- Dashboard View -->
+    <div id="view-dashboard">
+      <div class="topbar">
+        <span class="topbar-title">项目总览</span>
+        <span class="feishu-badge"><i class="ti ti-link" style="font-size:12px" aria-hidden="true"></i> 飞书已同步</span>
+        <button class="btn btn-primary" onclick="sendPrompt('帮我用AI生成本周项目进度周报')">✨ AI 生成周报</button>
+      </div>
+      <div class="content">
+        <!-- AI 提示 -->
+        <div class="ai-box">
+          <div class="ai-header"><i class="ti ti-robot" style="font-size:16px" aria-hidden="true"></i> AI 助手提醒</div>
+          <div class="ai-msg">📌 检测到 <strong>「商城改版项目」</strong> 有 2 个任务延期风险，建议提前沟通。「年度报告」报价单草稿已生成，等待审核。</div>
+          <div class="ai-actions">
+            <button class="btn" onclick="switchView('tasks')">查看风险任务</button>
+            <button class="btn" onclick="switchView('finance')">审核报价单</button>
+          </div>
+        </div>
+
+        <!-- Metrics -->
+        <div class="metrics">
+          <div class="metric-card">
+            <div class="metric-label">进行中项目</div>
+            <div class="metric-val">8</div>
+            <div class="metric-sub metric-up">↑ 2 本月新增</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">待处理任务</div>
+            <div class="metric-val">34</div>
+            <div class="metric-sub metric-warn">⚠ 5 个逾期</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">本月收入</div>
+            <div class="metric-val">¥128K</div>
+            <div class="metric-sub metric-up">↑ 18% vs 上月</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">客户满意度</div>
+            <div class="metric-val">4.8</div>
+            <div class="metric-sub">基于 24 次反馈</div>
+          </div>
+        </div>
+
+        <div class="section-row">
+          <!-- 项目进度 -->
+          <div class="card">
+            <div class="card-title"><i class="ti ti-chart-gantt" style="font-size:16px" aria-hidden="true"></i> 项目进度</div>
+            <div class="progress-row">
+              <div class="progress-label"><span>商城改版</span><span>65%</span></div>
+              <div class="progress-bar"><div class="progress-fill" style="width:65%;background:#1D9E75"></div></div>
+            </div>
+            <div class="progress-row">
+              <div class="progress-label"><span>CRM系统</span><span>42%</span></div>
+              <div class="progress-bar"><div class="progress-fill" style="width:42%;background:#534AB7"></div></div>
+            </div>
+            <div class="progress-row">
+              <div class="progress-label"><span>品牌视觉升级</span><span>88%</span></div>
+              <div class="progress-bar"><div class="progress-fill" style="width:88%;background:#1D9E75"></div></div>
+            </div>
+            <div class="progress-row">
+              <div class="progress-label"><span>年度报告设计</span><span style="color:#BA7517">20%</span></div>
+              <div class="progress-bar"><div class="progress-fill" style="width:20%;background:#EF9F27"></div></div>
+            </div>
+          </div>
+
+          <!-- 最近任务 -->
+          <div class="card">
+            <div class="card-title"><i class="ti ti-checklist" style="font-size:16px" aria-hidden="true"></i> 近期任务</div>
+            <div class="task-item">
+              <div class="avatar av-teal">李H</div>
+              <div class="task-name">首页设计稿评审</div>
+              <span class="badge badge-green">进行中</span>
+            </div>
+            <div class="task-item">
+              <div class="avatar av-purple">王S</div>
+              <div class="task-name">接口联调测试</div>
+              <span class="badge badge-amber">延期风险</span>
+            </div>
+            <div class="task-item">
+              <div class="avatar av-amber">张M</div>
+              <div class="task-name">客户需求文档整理</div>
+              <span class="badge badge-blue">待开始</span>
+            </div>
+            <div class="task-item">
+              <div class="avatar av-coral">陈F</div>
+              <div class="task-name">报价单最终确认</div>
+              <span class="badge badge-amber">审核中</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Requirements View -->
+    <div id="view-requirements" style="display:none">
+      <div class="topbar">
+        <span class="topbar-title">需求管理</span>
+        <button class="btn" onclick="sendPrompt('如何用AI自动解析客户需求邮件并转化为任务？')">✨ AI 解析需求</button>
+        <button class="btn btn-primary">+ 新建需求</button>
+      </div>
+      <div class="content">
+        <div class="ai-box">
+          <div class="ai-header"><i class="ti ti-robot" style="font-size:16px" aria-hidden="true"></i> AI 需求分析</div>
+          <div class="ai-msg">已从飞书文档自动提取 <strong>「商城改版」</strong> 需求，识别出 12 个功能点，建议拆分为 18 个子任务，预计工期 45 天。</div>
+          <div class="ai-actions">
+            <button class="btn" onclick="sendPrompt('查看AI自动拆分的18个子任务详情')">查看拆分详情 ↗</button>
+            <button class="btn">一键生成任务</button>
+          </div>
+        </div>
+        <div class="tabs">
+          <div class="tab active">全部需求</div>
+          <div class="tab">待评估</div>
+          <div class="tab">进行中</div>
+          <div class="tab">已完成</div>
+        </div>
+        <div class="card">
+          <div class="req-item">
+            <div class="req-title">🛒 商城首页改版 — 用户体验优化</div>
+            <div class="req-meta">
+              <span>客户：杭州锋合科技</span><span>优先级：高</span><span class="badge badge-green" style="font-size:10px">AI已拆解</span>
+            </div>
+          </div>
+          <div class="req-item">
+            <div class="req-title">📊 后台数据报表新增维度</div>
+            <div class="req-meta">
+              <span>客户：上海云帆网络</span><span>优先级：中</span><span class="badge badge-amber" style="font-size:10px">待评估</span>
+            </div>
+          </div>
+          <div class="req-item">
+            <div class="req-title">🔔 消息推送系统重构</div>
+            <div class="req-meta">
+              <span>客户：北京星图科技</span><span>优先级：高</span><span class="badge badge-blue" style="font-size:10px">需求确认中</span>
+            </div>
+          </div>
+          <div class="req-item">
+            <div class="req-title">🎨 品牌视觉规范文档输出</div>
+            <div class="req-meta">
+              <span>客户：成都橙意设计</span><span>优先级：低</span><span class="badge badge-green" style="font-size:10px">已完成</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tasks View -->
+    <div id="view-tasks" style="display:none">
+      <div class="topbar">
+        <span class="topbar-title">任务看板</span>
+        <button class="btn" onclick="sendPrompt('AI如何根据员工技能和负载自动分配任务？')">✨ AI 智能分配</button>
+        <button class="btn btn-primary">+ 新建任务</button>
+      </div>
+      <div class="content">
+        <div class="ai-box">
+          <div class="ai-header"><i class="ti ti-robot" style="font-size:16px" aria-hidden="true"></i> AI 任务建议</div>
+          <div class="ai-msg">「接口联调测试」当前指派给王S，但其本周负载已达 92%。建议将此任务转交给张M（当前负载 45%，技能匹配度 89%）。</div>
+          <div class="ai-actions">
+            <button class="btn">接受建议</button>
+            <button class="btn" onclick="sendPrompt('展示所有员工的当前工作负载分布')">查看负载分布 ↗</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div class="card">
+            <div class="card-title" style="color:#185FA5">📋 待开始 (4)</div>
+            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
+              <div style="font-size:12px;font-weight:500">客户需求文档整理</div>
+              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-amber" style="width:20px;height:20px;font-size:9px">张M</div><span style="font-size:11px;color:var(--color-text-tertiary)">截止 12/20</span></div>
+            </div>
+            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
+              <div style="font-size:12px;font-weight:500">UI组件库搭建</div>
+              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-purple" style="width:20px;height:20px;font-size:9px">王S</div><span style="font-size:11px;color:var(--color-text-tertiary)">截止 12/25</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="color:#854F0B">⚡ 进行中 (6)</div>
+            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
+              <div style="font-size:12px;font-weight:500">首页设计稿评审</div>
+              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-teal" style="width:20px;height:20px;font-size:9px">李H</div><span class="badge badge-green" style="font-size:10px">正常</span></div>
+            </div>
+            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
+              <div style="font-size:12px;font-weight:500">接口联调测试 ⚠</div>
+              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-purple" style="width:20px;height:20px;font-size:9px">王S</div><span class="badge badge-red" style="font-size:10px">延期风险</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="color:#1D9E75">✅ 已完成 (12)</div>
+            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
+              <div style="font-size:12px;font-weight:500">品牌色板确定</div>
+              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-coral" style="width:20px;height:20px;font-size:9px">陈F</div><span class="badge badge-green" style="font-size:10px">已完成</span></div>
+            </div>
+            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
+              <div style="font-size:12px;font-weight:500">技术方案评审</div>
+              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-teal" style="width:20px;height:20px;font-size:9px">李H</div><span class="badge badge-green" style="font-size:10px">已完成</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Finance View -->
+    <div id="view-finance" style="display:none">
+      <div class="topbar">
+        <span class="topbar-title">财务结算</span>
+        <button class="btn" onclick="sendPrompt('AI如何根据项目工时和资源消耗自动生成报价单？')">✨ AI 生成报价单</button>
+        <button class="btn btn-primary">导出报表</button>
+      </div>
+      <div class="content">
+        <div class="ai-box">
+          <div class="ai-header"><i class="ti ti-robot" style="font-size:16px" aria-hidden="true"></i> AI 财务助手</div>
+          <div class="ai-msg">已基于「商城改版」项目实际工时（248h）和历史单价，自动生成报价单草稿，总金额 ¥86,800。与客户预算（¥90,000）差距合理，建议直接确认。</div>
+          <div class="ai-actions">
+            <button class="btn" onclick="sendPrompt('显示商城改版项目的完整报价单明细')">查看报价明细 ↗</button>
+            <button class="btn btn-primary">确认并发送飞书</button>
+          </div>
+        </div>
+        <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
+          <div class="metric-card">
+            <div class="metric-label">本月已结算</div>
+            <div class="metric-val">¥96K</div>
+            <div class="metric-sub metric-up">3 个项目</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">待结算</div>
+            <div class="metric-val">¥154K</div>
+            <div class="metric-sub metric-warn">5 个项目</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">报价单状态</div>
+            <div class="metric-val">2</div>
+            <div class="metric-sub">待客户确认</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="ti ti-receipt" style="font-size:16px" aria-hidden="true"></i> 报价单列表</div>
+          <div class="quote-row">
+            <div>
+              <div style="font-size:12px;font-weight:500">QT-2024-018 · 商城改版项目</div>
+              <div style="font-size:11px;color:var(--color-text-tertiary)">杭州锋合科技 · AI自动生成</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:13px;font-weight:500">¥86,800</div>
+              <span class="badge badge-amber">待确认</span>
+            </div>
+          </div>
+          <div class="quote-row">
+            <div>
+              <div style="font-size:12px;font-weight:500">QT-2024-017 · CRM系统开发</div>
+              <div style="font-size:11px;color:var(--color-text-tertiary)">上海云帆网络</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:13px;font-weight:500">¥142,000</div>
+              <span class="badge badge-green">已确认</span>
+            </div>
+          </div>
+          <div class="quote-row">
+            <div>
+              <div style="font-size:12px;font-weight:500">QT-2024-016 · 品牌视觉升级</div>
+              <div style="font-size:11px;color:var(--color-text-tertiary)">成都橙意设计</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:13px;font-weight:500">¥38,500</div>
+              <span class="badge badge-blue">已结算</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feishu View -->
+    <div id="view-feishu" style="display:none">
+      <div class="topbar">
+        <span class="topbar-title">飞书集成配置</span>
+        <button class="btn btn-primary" onclick="sendPrompt('如何配置飞书机器人来实现任务通知和进度更新？')">配置指引 ↗</button>
+      </div>
+      <div class="content">
+        <div class="section-row">
+          <div class="card">
+            <div class="card-title">🔗 已连接功能</div>
+            <div class="task-item"><i class="ti ti-check" style="color:#1D9E75;font-size:16px" aria-hidden="true"></i><span class="task-name" style="font-size:12px">飞书文档 — 需求同步</span><span class="badge badge-green">已启用</span></div>
+            <div class="task-item"><i class="ti ti-check" style="color:#1D9E75;font-size:16px" aria-hidden="true"></i><span class="task-name" style="font-size:12px">飞书任务 — 双向同步</span><span class="badge badge-green">已启用</span></div>
+            <div class="task-item"><i class="ti ti-check" style="color:#1D9E75;font-size:16px" aria-hidden="true"></i><span class="task-name" style="font-size:12px">飞书机器人 — 任务通知</span><span class="badge badge-green">已启用</span></div>
+            <div class="task-item"><i class="ti ti-x" style="color:#A32D2D;font-size:16px" aria-hidden="true"></i><span class="task-name" style="font-size:12px">飞书日历 — 排期同步</span><span class="badge badge-amber">待配置</span></div>
+            <div class="task-item"><i class="ti ti-x" style="color:#A32D2D;font-size:16px" aria-hidden="true"></i><span class="task-name" style="font-size:12px">飞书审批 — 报价单审批</span><span class="badge badge-amber">待配置</span></div>
+          </div>
+          <div class="card">
+            <div class="card-title">📊 同步统计（今日）</div>
+            <div class="metric-card" style="margin-bottom:8px">
+              <div class="metric-label">文档同步</div>
+              <div class="metric-val" style="font-size:18px">23</div>
+            </div>
+            <div class="metric-card" style="margin-bottom:8px">
+              <div class="metric-label">任务推送</div>
+              <div class="metric-val" style="font-size:18px">47</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">消息通知</div>
+              <div class="metric-val" style="font-size:18px">156</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reports View -->
+    <div id="view-reports" style="display:none">
+      <div class="topbar">
+        <span class="topbar-title">报表分析</span>
+        <button class="btn btn-primary" onclick="sendPrompt('帮我分析当前项目数据，给出经营建议')">✨ AI 分析报告</button>
+      </div>
+      <div class="content">
+        <div class="ai-box">
+          <div class="ai-header"><i class="ti ti-robot" style="font-size:16px" aria-hidden="true"></i> AI 经营洞察</div>
+          <div class="ai-msg">本月项目交付率 87%，同比提升 12%。UI设计类项目利润率最高（42%），建议增加此类业务占比。3 位员工连续高负载，建议考虑扩招或优化任务分配策略。</div>
+        </div>
+        <div class="metrics">
+          <div class="metric-card"><div class="metric-label">平均项目周期</div><div class="metric-val">38<span style="font-size:13px">天</span></div><div class="metric-sub metric-up">↓ 5天 更高效</div></div>
+          <div class="metric-card"><div class="metric-label">人均产值</div><div class="metric-val">¥32K</div><div class="metric-sub metric-up">↑ 8%</div></div>
+          <div class="metric-card"><div class="metric-label">客户复购率</div><div class="metric-val">68%</div><div class="metric-sub metric-up">健康水平</div></div>
+          <div class="metric-card"><div class="metric-label">AI任务建议采纳</div><div class="metric-val">79%</div><div class="metric-sub">本月数据</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const views = ['dashboard','requirements','tasks','finance','feishu','reports'];
+const navMap = {'dashboard':0,'requirements':1,'tasks':2,'finance':3,'feishu':4,'reports':5};
+function switchView(v) {
+  views.forEach(id => {
+    document.getElementById('view-'+id).style.display = id===v?'block':'none';
+  });
+  const items = document.querySelectorAll('.nav-item');
+  items.forEach(el => el.classList.remove('active'));
+  items[navMap[v]].classList.add('active');
+}
+</script>
