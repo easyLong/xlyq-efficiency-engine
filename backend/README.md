@@ -1,6 +1,6 @@
 # 效能引擎后端
 
-这是效能引擎项目的后端 MVP，基于 NestJS、TypeORM 和 MySQL 实现，用于承接项目管理、需求管理、任务管理、报价结算和需求报价适配等核心业务。
+这是效能引擎项目的后端 MVP，基于 NestJS、TypeORM 和 MySQL 实现，负责承接项目管理、需求管理、任务管理、飞书集成、消息通知、报价适配和基础统计。
 
 ## 技术栈
 
@@ -26,7 +26,7 @@ src/
   quotations/        报价单管理
   requirements/      需求管理
   risk-alerts/       风险预警
-  tasks/             任务管理
+  tasks/             任务管理、成果目录、结果文件
   users/             用户与角色
   weekly-reports/    周报
   worklogs/          工时
@@ -40,7 +40,7 @@ src/
 copy .env.example .env
 ```
 
-主要配置项：
+主要配置：
 
 ```env
 PORT=3000
@@ -49,6 +49,12 @@ DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=your-password
 DB_NAME=efficiency_engine
+
+FEISHU_APP_ID=
+FEISHU_APP_SECRET=
+FEISHU_BOT_WEBHOOK_URL=
+FEISHU_EVENT_VERIFICATION_TOKEN=
+FEISHU_DEFAULT_DEPARTMENT_ID=0
 ```
 
 ## 启动
@@ -61,7 +67,7 @@ npm run start:dev
 健康检查：
 
 ```text
-GET http://localhost:3000/health
+GET http://localhost:3000/api/v1/health
 ```
 
 ## 常用脚本
@@ -75,39 +81,37 @@ npm run test
 npm run test:e2e
 ```
 
-## API 文档
+## 主要接口模块
 
-接口清单见根目录 [../API_SPEC.md](../API_SPEC.md)。
+- `GET /api/v1/health`
+- `/api/v1/customers`
+- `/api/v1/projects`
+- `/api/v1/requirements`
+- `/api/v1/requirement-items`
+- `/api/v1/tasks`
+- `/api/v1/tasks/{id}/workspace`
+- `/api/v1/tasks/{id}/result-files`
+- `/api/v1/worklogs`
+- `/api/v1/notifications`
+- `/api/v1/integrations/feishu`
+- `/api/v1/quotations`
+- `/api/v1/quote-mappings`
+- `/api/v1/risk-alerts`
+- `/api/v1/weekly-reports`
+- `/api/v1/users`
 
-当前模块已覆盖：
+完整接口清单见根目录 [../API_SPEC.md](../API_SPEC.md)。
 
-- `GET /health`
-- `GET /dashboard/overview`
-- `GET /dashboard/alerts`
-- `/customers`
-- `/projects`
-- `/requirements`
-- `/tasks`
-- `/tasks/{id}/workspace`
-- `/tasks/{id}/result-files`
-- `/notifications`
-- `/notifications/send`
-- `/notifications/task-assignment`
-- `/notifications/task-deadline-scan`
-- `/notifications/worklog-reminders`
-- `/notifications/feishu-sync-failure-scan`
-- `/worklogs`
-- `/quotations`
-- `/quote-mappings`
-- `/risk-alerts`
-- `/weekly-reports`
-- `/users`
-- `/integrations/feishu/config`
-- `/integrations/feishu/send/bot-message`
-- `/integrations/feishu/send/app-message`
-- `/integrations/feishu/contacts/sync-users`
-- `/integrations/feishu/webhook/events`
-- `/integrations/feishu/sync-logs`
+## 消息机制
+
+消息机制由 `notifications` 模块统一编排：
+
+- 站内消息落库：`notification_messages`
+- 飞书个人消息：企业自建应用 IM 消息
+- 飞书群消息：机器人 Webhook
+- 投递结果记录：`delivery_result_json`、`status`、`error_message`
+
+通知规则见根目录 [../NOTIFICATION_RULES.md](../NOTIFICATION_RULES.md)。
 
 ## 数据库
 
