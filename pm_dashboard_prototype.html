@@ -1,423 +1,596 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>效能引擎 MVP 原型</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f5f7f4;
+      color: #17211b;
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+    }
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    .app { display: grid; grid-template-columns: 230px 1fr; min-height: 100vh; }
+    .sidebar { background: #17211b; color: #f7fbf7; padding: 22px 16px; display: flex; flex-direction: column; gap: 18px; }
+    .brand { border-bottom: 1px solid rgba(255,255,255,.14); padding-bottom: 18px; }
+    .brand h1 { margin: 0 0 6px; font-size: 21px; }
+    .brand p { margin: 0; color: rgba(247,251,247,.68); font-size: 12px; line-height: 1.6; }
+    .nav-title { color: rgba(247,251,247,.44); font-size: 11px; padding: 0 8px 4px; }
+    .nav { display: grid; gap: 6px; }
+    .nav button {
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: rgba(247,251,247,.78);
+      min-height: 40px;
+      padding: 9px 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+    }
+    .nav button.active { background: #f7fbf7; color: #17211b; font-weight: 700; }
+    .nav i {
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,.1);
+      font-style: normal;
+      font-size: 12px;
+    }
+    .nav button.active i { background: #dfe9df; }
+    .sidebar-note {
+      margin-top: auto;
+      border-radius: 8px;
+      background: rgba(255,255,255,.08);
+      padding: 12px;
+      color: rgba(247,251,247,.72);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    .main { padding: 22px; min-width: 0; }
+    .topbar { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
+    .topbar h2 { margin: 0 0 5px; font-size: 24px; }
+    .topbar p { margin: 0; color: #67746d; font-size: 13px; }
+    .pill { border: 1px solid #d8e1d7; background: #fff; border-radius: 999px; padding: 8px 12px; color: #67746d; font-size: 12px; white-space: nowrap; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .grid { display: grid; gap: 14px; }
+    .cols-2 { grid-template-columns: minmax(0, 1.08fr) minmax(330px, .92fr); }
+    .cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .panel {
+      background: #fff;
+      border: 1px solid #d8e1d7;
+      border-radius: 9px;
+      padding: 16px;
+      box-shadow: 0 12px 30px rgba(30,48,36,.08);
+      min-width: 0;
+    }
+    .panel h3 { margin: 0 0 12px; font-size: 15px; display: flex; justify-content: space-between; gap: 12px; }
+    .sub { color: #7c887f; font-size: 12px; font-weight: 400; }
+    .metric { min-height: 112px; display: flex; flex-direction: column; justify-content: space-between; }
+    .metric small { color: #67746d; }
+    .metric strong { font-size: 30px; line-height: 1; }
+    label { display: grid; gap: 6px; color: #67746d; font-size: 12px; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid #d8e1d7;
+      border-radius: 7px;
+      background: #fbfdfb;
+      padding: 9px 10px;
+      color: #17211b;
+      outline: none;
+    }
+    textarea { min-height: 128px; resize: vertical; line-height: 1.55; }
+    input:focus, textarea:focus, select:focus { border-color: #1f7a55; }
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      border: 1px solid #d8e1d7;
+      border-radius: 7px;
+      background: #eef3ed;
+      color: #17211b;
+      min-height: 34px;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+    .btn.primary { background: #1f7a55; border-color: #1f7a55; color: #fff; font-weight: 700; }
+    .btn.danger { background: #fff1ee; border-color: #efc9c3; color: #9e3c31; }
+    .list { display: grid; gap: 10px; }
+    .item { border: 1px solid #d8e1d7; background: #fbfdfb; border-radius: 8px; padding: 12px; display: grid; gap: 8px; }
+    .item.selected { border-color: #1f7a55; box-shadow: 0 0 0 2px rgba(31,122,85,.12); }
+    .item-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .title { font-weight: 700; font-size: 14px; line-height: 1.45; }
+    .meta { color: #67746d; font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; line-height: 1.6; }
+    .tag { border: 1px solid #d8e1d7; background: #eef3ed; border-radius: 999px; padding: 3px 8px; font-size: 11px; white-space: nowrap; color: #67746d; }
+    .tag.green { color: #1f7a55; background: #edf7ef; border-color: #c9dfcc; }
+    .tag.blue { color: #245c95; background: #edf4fb; border-color: #c8d9eb; }
+    .tag.amber { color: #9a6415; background: #fff5e5; border-color: #edd6ad; }
+    .tag.red { color: #a13d34; background: #fff1ee; border-color: #efc9c3; }
+    .hint { color: #67746d; font-size: 12px; line-height: 1.7; background: #f8faf7; border: 1px dashed #d8e1d7; border-radius: 8px; padding: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #d8e1d7; padding: 10px 8px; text-align: left; vertical-align: middle; }
+    th { color: #67746d; background: #f8faf7; font-size: 12px; }
+    tr:hover td { background: #fbfdfb; }
+    .kanban { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+    .lane { background: #eef3ed; border: 1px solid #d8e1d7; border-radius: 8px; padding: 10px; min-height: 360px; }
+    .lane h3 { margin: 0 0 10px; color: #67746d; font-size: 13px; }
+    .task-card { background: #fff; border: 1px solid #d8e1d7; border-radius: 8px; padding: 11px; margin-bottom: 9px; display: grid; gap: 8px; }
+    .avatar { width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; color: #fff; background: #1f7a55; font-size: 11px; font-weight: 700; }
+    .avatar.blue { background: #245c95; }
+    .avatar.amber { background: #9a6415; }
+    .avatar.red { background: #a13d34; }
+    .people { display: flex; gap: 8px; align-items: center; }
+    .progress { height: 8px; border-radius: 999px; background: #dfe8df; overflow: hidden; }
+    .bar { height: 100%; width: 0; background: #1f7a55; transition: width .22s; }
+    .chart { height: 220px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: end; }
+    .bar-col { display: grid; justify-items: center; gap: 8px; color: #67746d; font-size: 12px; }
+    .bar-shape { width: 100%; max-width: 58px; min-height: 16px; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, #1f7a55, #9ab99a); }
+    .toast { position: fixed; right: 22px; bottom: 22px; background: #17211b; color: #fff; border-radius: 8px; padding: 12px 14px; opacity: 0; transform: translateY(18px); transition: .2s; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 1080px) {
+      .app { grid-template-columns: 1fr; }
+      .cols-2, .cols-4, .kanban { grid-template-columns: 1fr; }
+      .topbar { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>效能引擎</h1>
+        <p>需求、任务、成果、结算的项目管理 MVP</p>
+      </div>
+      <div>
+        <div class="nav-title">业务流程</div>
+        <div class="nav">
+          <button class="active" data-view="overview"><i>总</i>总览</button>
+          <button data-view="requirements"><i>需</i>需求录入</button>
+          <button data-view="breakdown"><i>拆</i>需求拆解任务</button>
+          <button data-view="assign"><i>派</i>任务指派</button>
+          <button data-view="status"><i>态</i>任务状态管理</button>
+          <button data-view="settlement"><i>结</i>结算挂靠</button>
+          <button data-view="analytics"><i>析</i>分析统计</button>
+        </div>
+      </div>
+      <div class="sidebar-note">演示重点：任务完成后如何挂靠到结算单子项，并查看结算依据。</div>
+    </aside>
 
-<h2 class="sr-only">AI项目管理系统交互原型</h2>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: var(--font-sans); }
-  .app { display: flex; height: 580px; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; }
-  .sidebar { width: 180px; background: var(--color-background-secondary); border-right: 0.5px solid var(--color-border-tertiary); padding: 16px 0; flex-shrink: 0; display: flex; flex-direction: column; }
-  .logo { padding: 0 16px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); margin-bottom: 8px; }
-  .logo-text { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
-  .logo-sub { font-size: 11px; color: var(--color-text-tertiary); }
-  .nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 13px; color: var(--color-text-secondary); cursor: pointer; border-radius: 0; transition: background .15s; }
-  .nav-item:hover { background: var(--color-background-primary); }
-  .nav-item.active { color: var(--color-text-primary); background: var(--color-background-primary); font-weight: 500; border-left: 2px solid #1D9E75; }
-  .nav-item i { font-size: 16px; }
-  .nav-section { font-size: 10px; color: var(--color-text-tertiary); padding: 12px 16px 4px; letter-spacing: .05em; }
-  .main { flex: 1; overflow-y: auto; background: var(--color-background-primary); }
-  .topbar { padding: 12px 20px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 12px; }
-  .topbar-title { font-size: 15px; font-weight: 500; flex: 1; }
-  .btn { padding: 6px 14px; border-radius: var(--border-radius-md); font-size: 12px; cursor: pointer; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); transition: background .15s; }
-  .btn:hover { background: var(--color-background-secondary); }
-  .btn-primary { background: #1D9E75; border-color: #1D9E75; color: #fff; }
-  .btn-primary:hover { background: #0F6E56; }
-  .content { padding: 20px; }
-  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-  .metric-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 14px; }
-  .metric-label { font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 6px; }
-  .metric-val { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
-  .metric-sub { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; }
-  .metric-up { color: #1D9E75; }
-  .metric-warn { color: #BA7517; }
-  .section-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-  .card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 16px; }
-  .card-title { font-size: 13px; font-weight: 500; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
-  .task-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 0.5px solid var(--color-border-tertiary); font-size: 12px; }
-  .task-item:last-child { border-bottom: none; }
-  .avatar { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; flex-shrink: 0; }
-  .av-teal { background: #9FE1CB; color: #085041; }
-  .av-purple { background: #CECBF6; color: #3C3489; }
-  .av-amber { background: #FAC775; color: #633806; }
-  .av-coral { background: #F5C4B3; color: #712B13; }
-  .task-name { flex: 1; color: var(--color-text-primary); }
-  .badge { padding: 2px 8px; border-radius: 20px; font-size: 10px; flex-shrink: 0; }
-  .badge-green { background: #EAF3DE; color: #3B6D11; }
-  .badge-amber { background: #FAEEDA; color: #854F0B; }
-  .badge-red { background: #FCEBEB; color: #A32D2D; }
-  .badge-blue { background: #E6F1FB; color: #185FA5; }
-  .progress-row { margin-bottom: 10px; }
-  .progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; }
-  .progress-bar { height: 4px; background: var(--color-background-secondary); border-radius: 2px; overflow: hidden; }
-  .progress-fill { height: 100%; border-radius: 2px; transition: width .3s; }
-  .ai-box { background: linear-gradient(135deg, #E1F5EE 0%, #E6F1FB 100%); border: 0.5px solid #9FE1CB; border-radius: var(--border-radius-lg); padding: 14px; margin-bottom: 16px; }
-  .ai-box-dark { background: var(--color-background-secondary); border-color: var(--color-border-secondary); }
-  .ai-header { font-size: 12px; font-weight: 500; color: #0F6E56; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
-  .ai-msg { font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; }
-  .ai-actions { display: flex; gap: 8px; margin-top: 10px; }
-  .tabs { display: flex; gap: 2px; margin-bottom: 16px; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 3px; }
-  .tab { padding: 5px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; color: var(--color-text-secondary); transition: all .15s; }
-  .tab.active { background: var(--color-background-primary); color: var(--color-text-primary); font-weight: 500; box-shadow: 0 0 0 0.5px var(--color-border-tertiary); }
-  .req-item { padding: 10px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
-  .req-item:last-child { border-bottom: none; }
-  .req-title { font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 3px; }
-  .req-meta { font-size: 11px; color: var(--color-text-tertiary); display: flex; gap: 10px; }
-  .quote-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 0.5px solid var(--color-border-tertiary); font-size: 12px; }
-  .quote-row:last-child { border-bottom: none; }
-  .feishu-badge { display: inline-flex; align-items: center; gap: 4px; background: #E8F4FF; color: #1456CC; border-radius: 4px; padding: 2px 6px; font-size: 10px; }
-</style>
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h2 id="pageTitle">项目总览</h2>
+          <p id="pageSubtitle">从客户需求到任务执行，再到结算单子项挂靠。</p>
+        </div>
+        <div class="pill">后端接口：localhost:3000</div>
+      </div>
 
-<div class="app">
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="logo">
-      <div class="logo-text">🚀 ProjAI</div>
-      <div class="logo-sub">AI 项目管理</div>
-    </div>
-    <div class="nav-section">工作台</div>
-    <div class="nav-item active" onclick="switchView('dashboard')"><i class="ti ti-layout-dashboard" aria-hidden="true"></i> 仪表盘</div>
-    <div class="nav-item" onclick="switchView('requirements')"><i class="ti ti-file-description" aria-hidden="true"></i> 需求管理</div>
-    <div class="nav-item" onclick="switchView('tasks')"><i class="ti ti-checklist" aria-hidden="true"></i> 任务看板</div>
-    <div class="nav-item" onclick="switchView('finance')"><i class="ti ti-receipt" aria-hidden="true"></i> 财务结算</div>
-    <div class="nav-section">工具</div>
-    <div class="nav-item" onclick="switchView('feishu')"><i class="ti ti-brand-slack" aria-hidden="true"></i> 飞书集成</div>
-    <div class="nav-item" onclick="switchView('reports')"><i class="ti ti-chart-bar" aria-hidden="true"></i> 报表分析</div>
-    <div style="flex:1"></div>
-    <div class="nav-item" style="margin-top:auto"><i class="ti ti-settings" aria-hidden="true"></i> 设置</div>
+      <section class="view active" id="view-overview">
+        <div class="grid cols-4" id="metricCards"></div>
+        <div class="grid cols-2" style="margin-top:14px">
+          <div class="panel">
+            <h3>业务闭环 <span class="sub">MVP 核心路径</span></h3>
+            <div class="list">
+              <div class="item"><div class="title">1. 需求录入</div><div class="meta">项目经理手工录入客户需求，后续接飞书群 AI 提取。</div></div>
+              <div class="item"><div class="title">2. 需求拆解任务</div><div class="meta">把需求拆成可执行任务，保留需求项和任务关系。</div></div>
+              <div class="item"><div class="title">3. 任务指派与状态管理</div><div class="meta">分配负责人、记录目录权限、提交成果文件、更新进度。</div></div>
+              <div class="item"><div class="title">4. 结算挂靠</div><div class="meta">任务完成后挂靠到结算单子项，形成财务结算依据。</div></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>最近动态 <span class="sub">业务动作和通知</span></h3>
+            <div class="list" id="activityList"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-requirements">
+        <div class="grid cols-2">
+          <div class="panel">
+            <h3>新增客户需求 <span class="sub">先支持手工录入</span></h3>
+            <div class="grid">
+              <label>需求标题<input id="reqTitle" value="官网咨询表单自动分配销售跟进" /></label>
+              <label>客户名称<input id="reqCustomer" value="杭州锋合科技" /></label>
+              <label>需求描述<textarea id="reqContent">客户希望官网表单提交后自动进入飞书群，并根据地区分配给对应销售；管理者可以查看处理进度和未跟进提醒。</textarea></label>
+              <div class="btns">
+                <button class="btn primary" onclick="addRequirement()">保存需求</button>
+                <button class="btn" onclick="fillSampleRequirement()">填入示例</button>
+              </div>
+              <div class="hint">保存后进入右侧需求池，可选择后进入“需求拆解任务”。</div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>需求池 <span class="sub">选择一条后拆解</span></h3>
+            <div class="list" id="requirementList"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-breakdown">
+        <div class="grid cols-2">
+          <div class="panel">
+            <h3>当前需求 <span class="sub">拆成任务</span></h3>
+            <div id="selectedRequirementBox"></div>
+            <div class="btns" style="margin-top:12px">
+              <button class="btn primary" onclick="decomposeSelectedRequirement()">一键拆解为任务</button>
+              <button class="btn" onclick="goView('assign')">去任务指派</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>拆解结果 <span class="sub">需求项 -> 任务</span></h3>
+            <div class="list" id="breakdownList"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-assign">
+        <div class="panel">
+          <h3>任务指派 <span class="sub">给人并记录成果目录权限</span></h3>
+          <table>
+            <thead>
+              <tr><th>任务</th><th>来源需求</th><th>负责人</th><th>目录权限</th><th>截止时间</th><th>操作</th></tr>
+            </thead>
+            <tbody id="assignTable"></tbody>
+          </table>
+          <div style="margin-top:14px" id="feishuMessagePreview"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-status">
+        <div class="kanban" id="kanban"></div>
+      </section>
+
+      <section class="view" id="view-settlement">
+        <div class="grid cols-2">
+          <div class="panel">
+            <h3>已完成 / 待验收任务 <span class="sub">选择后挂靠结算子项</span></h3>
+            <div class="list" id="completedTaskList"></div>
+          </div>
+          <div class="panel">
+            <h3>结算详情 <span class="sub">任务、成果、工时、金额核对</span></h3>
+            <div id="settlementDetail"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:14px">
+          <h3>结算单子项 <span class="sub">财务看到报价，项目部提供任务依据</span></h3>
+          <table>
+            <thead>
+              <tr><th>结算子项</th><th>挂靠任务</th><th>成果文件</th><th>工时</th><th>金额</th><th>状态</th></tr>
+            </thead>
+            <tbody id="settlementTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-analytics">
+        <div class="grid cols-4" id="analyticsMetrics"></div>
+        <div class="grid cols-2" style="margin-top:14px">
+          <div class="panel">
+            <h3>任务状态分布 <span class="sub">实时计算</span></h3>
+            <div class="chart" id="statusChart"></div>
+          </div>
+          <div class="panel">
+            <h3>人员负载 <span class="sub">任务指派参考</span></h3>
+            <div class="list" id="peopleLoad"></div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <!-- Main -->
-  <div class="main" id="main-content">
-    <!-- Dashboard View -->
-    <div id="view-dashboard">
-      <div class="topbar">
-        <span class="topbar-title">项目总览</span>
-        <span class="feishu-badge"><i class="ti ti-link" style="font-size:12px" aria-hidden="true"></i> 飞书已同步</span>
-        <button class="btn btn-primary" onclick="sendPrompt('帮我用AI生成本周项目进度周报')">✨ AI 生成周报</button>
-      </div>
-      <div class="content">
-        <!-- AI 提示 -->
-        <div class="ai-box">
-          <div class="ai-header"><i class="ti ti-robot" style="font-size:16px" aria-hidden="true"></i> AI 助手提醒</div>
-          <div class="ai-msg">📌 检测到 <strong>「商城改版项目」</strong> 有 2 个任务延期风险，建议提前沟通。「年度报告」报价单草稿已生成，等待审核。</div>
-          <div class="ai-actions">
-            <button class="btn" onclick="switchView('tasks')">查看风险任务</button>
-            <button class="btn" onclick="switchView('finance')">审核报价单</button>
-          </div>
-        </div>
+  <div class="toast" id="toast"></div>
 
-        <!-- Metrics -->
-        <div class="metrics">
-          <div class="metric-card">
-            <div class="metric-label">进行中项目</div>
-            <div class="metric-val">8</div>
-            <div class="metric-sub metric-up">↑ 2 本月新增</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">待处理任务</div>
-            <div class="metric-val">34</div>
-            <div class="metric-sub metric-warn">⚠ 5 个逾期</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">本月收入</div>
-            <div class="metric-val">¥128K</div>
-            <div class="metric-sub metric-up">↑ 18% vs 上月</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">客户满意度</div>
-            <div class="metric-val">4.8</div>
-            <div class="metric-sub">基于 24 次反馈</div>
-          </div>
-        </div>
+  <script>
+    const people = [
+      { id: "u1", name: "李晨", role: "项目经理", color: "" },
+      { id: "u2", name: "王珊", role: "前端", color: "blue" },
+      { id: "u3", name: "张敏", role: "后端", color: "amber" },
+      { id: "u4", name: "陈可", role: "设计", color: "red" }
+    ];
 
-        <div class="section-row">
-          <!-- 项目进度 -->
-          <div class="card">
-            <div class="card-title"><i class="ti ti-chart-gantt" style="font-size:16px" aria-hidden="true"></i> 项目进度</div>
-            <div class="progress-row">
-              <div class="progress-label"><span>商城改版</span><span>65%</span></div>
-              <div class="progress-bar"><div class="progress-fill" style="width:65%;background:#1D9E75"></div></div>
-            </div>
-            <div class="progress-row">
-              <div class="progress-label"><span>CRM系统</span><span>42%</span></div>
-              <div class="progress-bar"><div class="progress-fill" style="width:42%;background:#534AB7"></div></div>
-            </div>
-            <div class="progress-row">
-              <div class="progress-label"><span>品牌视觉升级</span><span>88%</span></div>
-              <div class="progress-bar"><div class="progress-fill" style="width:88%;background:#1D9E75"></div></div>
-            </div>
-            <div class="progress-row">
-              <div class="progress-label"><span>年度报告设计</span><span style="color:#BA7517">20%</span></div>
-              <div class="progress-bar"><div class="progress-fill" style="width:20%;background:#EF9F27"></div></div>
-            </div>
-          </div>
+    const state = {
+      selectedRequirementId: "r1",
+      selectedSettlementItemId: "s1",
+      requirements: [
+        { id: "r1", title: "商城首页改版与活动配置", customer: "杭州锋合科技", content: "客户希望优化商城首页首屏、活动区和商品推荐区，同时支持运营人员配置活动素材。", status: "待拆解", priority: "高" },
+        { id: "r2", title: "售后工单进度提醒", customer: "上海云帆网络", content: "客服创建售后工单后，需要自动提醒负责人，并在超时未处理时通知主管。", status: "已拆解", priority: "中" }
+      ],
+      tasks: [
+        { id: "t1", requirementId: "r2", name: "工单状态字段梳理", ownerId: "u1", status: "done", progress: 100, due: "2026-06-02", permission: "已授权", hours: 4, resultFile: "工单状态字段说明.xlsx", workspaceUrl: "https://www.feishu.cn/drive/folder/demo-after-sale-status" },
+        { id: "t2", requirementId: "r2", name: "飞书提醒消息模板", ownerId: "u2", status: "doing", progress: 60, due: "2026-06-05", permission: "已授权", hours: 8, workspaceUrl: "https://www.feishu.cn/drive/folder/demo-message-template" },
+        { id: "t3", requirementId: "r2", name: "超时规则接口", ownerId: "u3", status: "blocked", progress: 35, due: "2026-06-04", permission: "已授权", hours: 12, workspaceUrl: "https://www.feishu.cn/drive/folder/demo-timeout-api" }
+      ],
+      settlementItems: [
+        { id: "s1", name: "售后工单流程梳理", quotationNo: "QT-2026-018", taskIds: ["t1"], amount: 3200, status: "待项目确认" },
+        { id: "s2", name: "提醒消息与超时规则开发", quotationNo: "QT-2026-018", taskIds: [], amount: 9800, status: "待挂靠任务" },
+        { id: "s3", name: "商城首页改版交付", quotationNo: "QT-2026-019", taskIds: [], amount: 16800, status: "待任务完成" }
+      ],
+      activities: ["李晨 创建了需求「商城首页改版与活动配置」", "王珊 收到任务「飞书提醒消息模板」", "工单状态字段梳理 已挂靠到结算子项"]
+    };
 
-          <!-- 最近任务 -->
-          <div class="card">
-            <div class="card-title"><i class="ti ti-checklist" style="font-size:16px" aria-hidden="true"></i> 近期任务</div>
-            <div class="task-item">
-              <div class="avatar av-teal">李H</div>
-              <div class="task-name">首页设计稿评审</div>
-              <span class="badge badge-green">进行中</span>
-            </div>
-            <div class="task-item">
-              <div class="avatar av-purple">王S</div>
-              <div class="task-name">接口联调测试</div>
-              <span class="badge badge-amber">延期风险</span>
-            </div>
-            <div class="task-item">
-              <div class="avatar av-amber">张M</div>
-              <div class="task-name">客户需求文档整理</div>
-              <span class="badge badge-blue">待开始</span>
-            </div>
-            <div class="task-item">
-              <div class="avatar av-coral">陈F</div>
-              <div class="task-name">报价单最终确认</div>
-              <span class="badge badge-amber">审核中</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    const viewMeta = {
+      overview: ["项目总览", "从客户需求到任务执行，再到结算单子项挂靠。"],
+      requirements: ["需求录入", "手工录入客户需求，形成需求池。"],
+      breakdown: ["需求拆解任务", "把需求拆成可执行任务，为后续指派和跟进做准备。"],
+      assign: ["任务指派", "把任务分给具体员工，同时记录目录权限。"],
+      status: ["任务状态管理", "用看板查看任务推进、阻塞、待验收和完成情况。"],
+      settlement: ["结算挂靠与详情", "任务完成后挂靠到结算单子项，核对成果、工时和金额。"],
+      analytics: ["分析统计", "查看任务数量、完成率、人员负载和逾期风险。"]
+    };
 
-    <!-- Requirements View -->
-    <div id="view-requirements" style="display:none">
-      <div class="topbar">
-        <span class="topbar-title">需求管理</span>
-        <button class="btn" onclick="sendPrompt('如何用AI自动解析客户需求邮件并转化为任务？')">✨ AI 解析需求</button>
-        <button class="btn btn-primary">+ 新建需求</button>
-      </div>
-      <div class="content">
-        <div class="ai-box">
-          <div class="ai-header"><i class="ti ti-robot" style="font-size:16px" aria-hidden="true"></i> AI 需求分析</div>
-          <div class="ai-msg">已从飞书文档自动提取 <strong>「商城改版」</strong> 需求，识别出 12 个功能点，建议拆分为 18 个子任务，预计工期 45 天。</div>
-          <div class="ai-actions">
-            <button class="btn" onclick="sendPrompt('查看AI自动拆分的18个子任务详情')">查看拆分详情 ↗</button>
-            <button class="btn">一键生成任务</button>
-          </div>
-        </div>
-        <div class="tabs">
-          <div class="tab active">全部需求</div>
-          <div class="tab">待评估</div>
-          <div class="tab">进行中</div>
-          <div class="tab">已完成</div>
-        </div>
-        <div class="card">
-          <div class="req-item">
-            <div class="req-title">🛒 商城首页改版 — 用户体验优化</div>
-            <div class="req-meta">
-              <span>客户：杭州锋合科技</span><span>优先级：高</span><span class="badge badge-green" style="font-size:10px">AI已拆解</span>
-            </div>
-          </div>
-          <div class="req-item">
-            <div class="req-title">📊 后台数据报表新增维度</div>
-            <div class="req-meta">
-              <span>客户：上海云帆网络</span><span>优先级：中</span><span class="badge badge-amber" style="font-size:10px">待评估</span>
-            </div>
-          </div>
-          <div class="req-item">
-            <div class="req-title">🔔 消息推送系统重构</div>
-            <div class="req-meta">
-              <span>客户：北京星图科技</span><span>优先级：高</span><span class="badge badge-blue" style="font-size:10px">需求确认中</span>
-            </div>
-          </div>
-          <div class="req-item">
-            <div class="req-title">🎨 品牌视觉规范文档输出</div>
-            <div class="req-meta">
-              <span>客户：成都橙意设计</span><span>优先级：低</span><span class="badge badge-green" style="font-size:10px">已完成</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    const statusMap = {
+      todo: { label: "待开始", tag: "blue" },
+      doing: { label: "进行中", tag: "amber" },
+      blocked: { label: "阻塞", tag: "red" },
+      review: { label: "待验收", tag: "amber" },
+      done: { label: "已完成", tag: "green" }
+    };
 
-    <!-- Tasks View -->
-    <div id="view-tasks" style="display:none">
-      <div class="topbar">
-        <span class="topbar-title">任务看板</span>
-        <button class="btn" onclick="sendPrompt('AI如何根据员工技能和负载自动分配任务？')">✨ AI 智能分配</button>
-        <button class="btn btn-primary">+ 新建任务</button>
-      </div>
-      <div class="content">
-        <div class="ai-box">
-          <div class="ai-header"><i class="ti ti-robot" style="font-size:16px" aria-hidden="true"></i> AI 任务建议</div>
-          <div class="ai-msg">「接口联调测试」当前指派给王S，但其本周负载已达 92%。建议将此任务转交给张M（当前负载 45%，技能匹配度 89%）。</div>
-          <div class="ai-actions">
-            <button class="btn">接受建议</button>
-            <button class="btn" onclick="sendPrompt('展示所有员工的当前工作负载分布')">查看负载分布 ↗</button>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-          <div class="card">
-            <div class="card-title" style="color:#185FA5">📋 待开始 (4)</div>
-            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
-              <div style="font-size:12px;font-weight:500">客户需求文档整理</div>
-              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-amber" style="width:20px;height:20px;font-size:9px">张M</div><span style="font-size:11px;color:var(--color-text-tertiary)">截止 12/20</span></div>
-            </div>
-            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
-              <div style="font-size:12px;font-weight:500">UI组件库搭建</div>
-              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-purple" style="width:20px;height:20px;font-size:9px">王S</div><span style="font-size:11px;color:var(--color-text-tertiary)">截止 12/25</span></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title" style="color:#854F0B">⚡ 进行中 (6)</div>
-            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
-              <div style="font-size:12px;font-weight:500">首页设计稿评审</div>
-              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-teal" style="width:20px;height:20px;font-size:9px">李H</div><span class="badge badge-green" style="font-size:10px">正常</span></div>
-            </div>
-            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
-              <div style="font-size:12px;font-weight:500">接口联调测试 ⚠</div>
-              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-purple" style="width:20px;height:20px;font-size:9px">王S</div><span class="badge badge-red" style="font-size:10px">延期风险</span></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-title" style="color:#1D9E75">✅ 已完成 (12)</div>
-            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
-              <div style="font-size:12px;font-weight:500">品牌色板确定</div>
-              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-coral" style="width:20px;height:20px;font-size:9px">陈F</div><span class="badge badge-green" style="font-size:10px">已完成</span></div>
-            </div>
-            <div class="task-item" style="flex-direction:column;align-items:flex-start;gap:6px">
-              <div style="font-size:12px;font-weight:500">技术方案评审</div>
-              <div style="display:flex;gap:6px;align-items:center"><div class="avatar av-teal" style="width:20px;height:20px;font-size:9px">李H</div><span class="badge badge-green" style="font-size:10px">已完成</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    function qs(id) { return document.getElementById(id); }
+    function person(id) { return people.find(p => p.id === id) || people[0]; }
+    function requirement(id) { return state.requirements.find(r => r.id === id); }
+    function addActivity(text) { state.activities.unshift(text); state.activities = state.activities.slice(0, 6); }
 
-    <!-- Finance View -->
-    <div id="view-finance" style="display:none">
-      <div class="topbar">
-        <span class="topbar-title">财务结算</span>
-        <button class="btn" onclick="sendPrompt('AI如何根据项目工时和资源消耗自动生成报价单？')">✨ AI 生成报价单</button>
-        <button class="btn btn-primary">导出报表</button>
-      </div>
-      <div class="content">
-        <div class="ai-box">
-          <div class="ai-header"><i class="ti ti-robot" style="font-size:16px" aria-hidden="true"></i> AI 财务助手</div>
-          <div class="ai-msg">已基于「商城改版」项目实际工时（248h）和历史单价，自动生成报价单草稿，总金额 ¥86,800。与客户预算（¥90,000）差距合理，建议直接确认。</div>
-          <div class="ai-actions">
-            <button class="btn" onclick="sendPrompt('显示商城改版项目的完整报价单明细')">查看报价明细 ↗</button>
-            <button class="btn btn-primary">确认并发送飞书</button>
-          </div>
-        </div>
-        <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
-          <div class="metric-card">
-            <div class="metric-label">本月已结算</div>
-            <div class="metric-val">¥96K</div>
-            <div class="metric-sub metric-up">3 个项目</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">待结算</div>
-            <div class="metric-val">¥154K</div>
-            <div class="metric-sub metric-warn">5 个项目</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">报价单状态</div>
-            <div class="metric-val">2</div>
-            <div class="metric-sub">待客户确认</div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title"><i class="ti ti-receipt" style="font-size:16px" aria-hidden="true"></i> 报价单列表</div>
-          <div class="quote-row">
+    function goView(view) {
+      document.querySelectorAll(".view").forEach(el => el.classList.remove("active"));
+      qs("view-" + view).classList.add("active");
+      document.querySelectorAll(".nav button").forEach(el => el.classList.toggle("active", el.dataset.view === view));
+      qs("pageTitle").textContent = viewMeta[view][0];
+      qs("pageSubtitle").textContent = viewMeta[view][1];
+      render();
+    }
+    document.querySelectorAll(".nav button").forEach(button => button.addEventListener("click", () => goView(button.dataset.view)));
+
+    function toast(text) {
+      const el = qs("toast");
+      el.textContent = text;
+      el.classList.add("show");
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => el.classList.remove("show"), 2200);
+    }
+
+    function addRequirement() {
+      const title = qs("reqTitle").value.trim();
+      const customer = qs("reqCustomer").value.trim();
+      const content = qs("reqContent").value.trim();
+      if (!title || !customer || !content) return toast("请先补全需求标题、客户和描述");
+      const id = "r" + Date.now();
+      state.requirements.unshift({ id, title, customer, content, status: "待拆解", priority: "中" });
+      state.selectedRequirementId = id;
+      addActivity(`新增需求「${title}」`);
+      toast("需求已保存，已进入需求池");
+      render();
+    }
+
+    function fillSampleRequirement() {
+      qs("reqTitle").value = "项目成果目录权限自动开通";
+      qs("reqCustomer").value = "内部项目部";
+      qs("reqContent").value = "任务分配给员工后，系统自动创建或登记飞书目录，并给负责人开通访问权限；成果文件提交后通知项目经理验收。";
+    }
+
+    function selectRequirement(id) { state.selectedRequirementId = id; toast("已选择需求，可进入任务拆解"); render(); }
+
+    function decomposeSelectedRequirement() {
+      const req = requirement(state.selectedRequirementId);
+      if (!req) return;
+      if (state.tasks.some(t => t.requirementId === req.id)) return toast("该需求已经有拆解任务");
+      [
+        ["需求范围确认与验收标准", "u1", 10],
+        ["页面/流程原型设计", "u4", 20],
+        ["后端接口与数据表开发", "u3", 15],
+        ["前端页面与状态联动", "u2", 15],
+        ["联调测试与成果文件提交", "u1", 5]
+      ].forEach((item, index) => {
+        state.tasks.push({ id: "t" + Date.now() + index, requirementId: req.id, name: item[0], ownerId: item[1], status: "todo", progress: item[2], due: `2026-06-${10 + index}`, permission: "待授权", hours: 0, workspaceUrl: "" });
+      });
+      req.status = "已拆解";
+      addActivity(`需求「${req.title}」已拆解为 5 个任务`);
+      toast("已生成 5 个任务，可以进入任务指派");
+      render();
+    }
+
+    function assignTask(taskId, ownerId) {
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+      task.ownerId = ownerId;
+      task.permission = "已授权";
+      task.workspaceUrl = task.workspaceUrl || `https://www.feishu.cn/drive/folder/task-${task.id}`;
+      addActivity(`${person(ownerId).name} 收到飞书消息，可点击进入任务目录「${task.name}」`);
+      toast("任务已授权，员工已收到飞书目录消息");
+      render();
+    }
+
+    function updateStatus(taskId, status) {
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+      task.status = status;
+      task.progress = { todo: 0, doing: 45, blocked: task.progress || 30, review: 85, done: 100 }[status];
+      if (status === "done") {
+        task.hours = Math.max(task.hours, 8);
+        task.resultFile ||= `${task.name}-成果文件.zip`;
+      }
+      addActivity(`任务「${task.name}」状态更新为「${statusMap[status].label}」`);
+      toast("任务状态已更新，统计和结算依据已刷新");
+      render();
+    }
+
+    function submitResult(taskId) {
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+      task.status = "review";
+      task.progress = 90;
+      task.permission = "已授权";
+      task.resultFile = `${task.name}-成果文件.zip`;
+      addActivity(`任务「${task.name}」已提交成果文件`);
+      toast("成果文件已提交，可进入结算挂靠");
+      render();
+    }
+
+    function attachTaskToSettlement(taskId, settlementItemId) {
+      const item = state.settlementItems.find(s => s.id === settlementItemId);
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!item || !task) return;
+      state.settlementItems.forEach(s => s.taskIds = s.taskIds.filter(id => id !== taskId));
+      item.taskIds.push(taskId);
+      item.status = "待项目确认";
+      state.selectedSettlementItemId = item.id;
+      addActivity(`任务「${task.name}」已挂靠到结算子项「${item.name}」`);
+      toast("已挂靠到结算单子项");
+      render();
+    }
+
+    function selectSettlementItem(id) { state.selectedSettlementItemId = id; render(); }
+    function confirmSettlementItem(id) {
+      const item = state.settlementItems.find(s => s.id === id);
+      if (!item) return;
+      item.status = "项目已确认";
+      addActivity(`结算子项「${item.name}」已确认，可进入财务结算`);
+      toast("结算依据已确认");
+      render();
+    }
+
+    function stats() {
+      const total = state.tasks.length;
+      const done = state.tasks.filter(t => t.status === "done").length;
+      const blocked = state.tasks.filter(t => t.status === "blocked").length;
+      const assigned = state.tasks.filter(t => t.ownerId).length;
+      const linked = state.settlementItems.reduce((sum, item) => sum + item.taskIds.length, 0);
+      const completion = total ? Math.round(done / total * 100) : 0;
+      return { total, done, blocked, assigned, linked, completion };
+    }
+
+    function renderMetrics(id) {
+      const s = stats();
+      qs(id).innerHTML = [
+        ["需求数", state.requirements.length, "待拆解 " + state.requirements.filter(r => r.status === "待拆解").length],
+        ["任务数", s.total, "已指派 " + s.assigned],
+        ["完成率", s.completion + "%", "已完成 " + s.done],
+        ["结算挂靠", s.linked, "已挂靠任务"]
+      ].map(item => `<div class="panel metric"><small>${item[0]}</small><strong>${item[1]}</strong><small>${item[2]}</small></div>`).join("");
+    }
+
+    function renderRequirements() {
+      qs("requirementList").innerHTML = state.requirements.map(req => `
+        <div class="item ${req.id === state.selectedRequirementId ? "selected" : ""}">
+          <div class="item-head"><div><div class="title">${req.title}</div><div class="meta"><span>${req.customer}</span><span>优先级：${req.priority}</span></div></div><span class="tag ${req.status === "已拆解" ? "green" : "amber"}">${req.status}</span></div>
+          <div class="meta">${req.content}</div>
+          <div class="btns"><button class="btn" onclick="selectRequirement('${req.id}')">选择</button><button class="btn primary" onclick="selectRequirement('${req.id}'); goView('breakdown')">去拆解</button></div>
+        </div>`).join("");
+    }
+
+    function renderBreakdown() {
+      const req = requirement(state.selectedRequirementId);
+      qs("selectedRequirementBox").innerHTML = req ? `<div class="item selected"><div class="item-head"><div><div class="title">${req.title}</div><div class="meta"><span>${req.customer}</span><span>状态：${req.status}</span></div></div><span class="tag ${req.priority === "高" ? "red" : "amber"}">${req.priority}优先级</span></div><div class="meta">${req.content}</div></div>` : `<div class="hint">请先在需求录入页面选择一条需求。</div>`;
+      const tasks = state.tasks.filter(t => t.requirementId === state.selectedRequirementId);
+      qs("breakdownList").innerHTML = tasks.length ? tasks.map((task, index) => `<div class="item"><div class="item-head"><div class="title">${index + 1}. ${task.name}</div><span class="tag ${statusMap[task.status].tag}">${statusMap[task.status].label}</span></div><div class="meta"><span>负责人：${person(task.ownerId).name}</span><span>截止：${task.due}</span><span>目录：${task.permission}</span></div></div>`).join("") : `<div class="hint">还没有拆解任务，点击左侧按钮可模拟生成任务。</div>`;
+    }
+
+    function renderAssignTable() {
+      qs("assignTable").innerHTML = state.tasks.map(task => `
+        <tr><td><strong>${task.name}</strong></td><td>${requirement(task.requirementId)?.title || "-"}</td><td><select onchange="assignTask('${task.id}', this.value)">${people.map(p => `<option value="${p.id}" ${p.id === task.ownerId ? "selected" : ""}>${p.name} · ${p.role}</option>`).join("")}</select></td><td><span class="tag ${task.permission === "已授权" ? "green" : "amber"}">${task.permission}</span></td><td>${task.due}</td><td><button class="btn" onclick="assignTask('${task.id}', '${task.ownerId}')">授权目录</button></td></tr>`).join("");
+      const latestAuthorizedTask = [...state.tasks].reverse().find(task => task.permission === "已授权" && task.workspaceUrl);
+      qs("feishuMessagePreview").innerHTML = latestAuthorizedTask ? `
+        <div class="item selected">
+          <div class="item-head">
             <div>
-              <div style="font-size:12px;font-weight:500">QT-2024-018 · 商城改版项目</div>
-              <div style="font-size:11px;color:var(--color-text-tertiary)">杭州锋合科技 · AI自动生成</div>
+              <div class="title">飞书消息预览：任务工作目录已开通</div>
+              <div class="meta">
+                <span>接收人：${person(latestAuthorizedTask.ownerId).name}</span>
+                <span>任务：${latestAuthorizedTask.name}</span>
+              </div>
             </div>
-            <div style="text-align:right">
-              <div style="font-size:13px;font-weight:500">¥86,800</div>
-              <span class="badge badge-amber">待确认</span>
-            </div>
+            <span class="tag green">已发送</span>
           </div>
-          <div class="quote-row">
-            <div>
-              <div style="font-size:12px;font-weight:500">QT-2024-017 · CRM系统开发</div>
-              <div style="font-size:11px;color:var(--color-text-tertiary)">上海云帆网络</div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:13px;font-weight:500">¥142,000</div>
-              <span class="badge badge-green">已确认</span>
-            </div>
-          </div>
-          <div class="quote-row">
-            <div>
-              <div style="font-size:12px;font-weight:500">QT-2024-016 · 品牌视觉升级</div>
-              <div style="font-size:11px;color:var(--color-text-tertiary)">成都橙意设计</div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:13px;font-weight:500">¥38,500</div>
-              <span class="badge badge-blue">已结算</span>
-            </div>
+          <div class="hint">你收到一个新任务，工作目录权限已开通。请点击下方按钮进入目录，完成后把结果文件放入该目录。</div>
+          <div class="btns">
+            <button class="btn primary" onclick="openWorkspace('${latestAuthorizedTask.id}')">进入工作目录</button>
+            <button class="btn" onclick="goView('status')">去更新任务状态</button>
           </div>
         </div>
-      </div>
-    </div>
+      ` : `<div class="hint">点击任务行右侧“授权目录”后，这里会显示员工收到的飞书消息和工作目录入口。</div>`;
+    }
 
-    <!-- Feishu View -->
-    <div id="view-feishu" style="display:none">
-      <div class="topbar">
-        <span class="topbar-title">飞书集成配置</span>
-        <button class="btn btn-primary" onclick="sendPrompt('如何配置飞书机器人来实现任务通知和进度更新？')">配置指引 ↗</button>
-      </div>
-      <div class="content">
-        <div class="section-row">
-          <div class="card">
-            <div class="card-title">🔗 已连接功能</div>
-            <div class="task-item"><i class="ti ti-check" style="color:#1D9E75;font-size:16px" aria-hidden="true"></i><span class="task-name" style="font-size:12px">飞书文档 — 需求同步</span><span class="badge badge-green">已启用</span></div>
-            <div class="task-item"><i class="ti ti-check" style="color:#1D9E75;font-size:16px" aria-hidden="true"></i><span class="task-name" style="font-size:12px">飞书任务 — 双向同步</span><span class="badge badge-green">已启用</span></div>
-            <div class="task-item"><i class="ti ti-check" style="color:#1D9E75;font-size:16px" aria-hidden="true"></i><span class="task-name" style="font-size:12px">飞书机器人 — 任务通知</span><span class="badge badge-green">已启用</span></div>
-            <div class="task-item"><i class="ti ti-x" style="color:#A32D2D;font-size:16px" aria-hidden="true"></i><span class="task-name" style="font-size:12px">飞书日历 — 排期同步</span><span class="badge badge-amber">待配置</span></div>
-            <div class="task-item"><i class="ti ti-x" style="color:#A32D2D;font-size:16px" aria-hidden="true"></i><span class="task-name" style="font-size:12px">飞书审批 — 报价单审批</span><span class="badge badge-amber">待配置</span></div>
-          </div>
-          <div class="card">
-            <div class="card-title">📊 同步统计（今日）</div>
-            <div class="metric-card" style="margin-bottom:8px">
-              <div class="metric-label">文档同步</div>
-              <div class="metric-val" style="font-size:18px">23</div>
-            </div>
-            <div class="metric-card" style="margin-bottom:8px">
-              <div class="metric-label">任务推送</div>
-              <div class="metric-val" style="font-size:18px">47</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">消息通知</div>
-              <div class="metric-val" style="font-size:18px">156</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    function openWorkspace(taskId) {
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task?.workspaceUrl) return toast("该任务还没有工作目录");
+      window.open(task.workspaceUrl, "_blank");
+      toast("已模拟从飞书消息进入工作目录");
+    }
 
-    <!-- Reports View -->
-    <div id="view-reports" style="display:none">
-      <div class="topbar">
-        <span class="topbar-title">报表分析</span>
-        <button class="btn btn-primary" onclick="sendPrompt('帮我分析当前项目数据，给出经营建议')">✨ AI 分析报告</button>
-      </div>
-      <div class="content">
-        <div class="ai-box">
-          <div class="ai-header"><i class="ti ti-robot" style="font-size:16px" aria-hidden="true"></i> AI 经营洞察</div>
-          <div class="ai-msg">本月项目交付率 87%，同比提升 12%。UI设计类项目利润率最高（42%），建议增加此类业务占比。3 位员工连续高负载，建议考虑扩招或优化任务分配策略。</div>
-        </div>
-        <div class="metrics">
-          <div class="metric-card"><div class="metric-label">平均项目周期</div><div class="metric-val">38<span style="font-size:13px">天</span></div><div class="metric-sub metric-up">↓ 5天 更高效</div></div>
-          <div class="metric-card"><div class="metric-label">人均产值</div><div class="metric-val">¥32K</div><div class="metric-sub metric-up">↑ 8%</div></div>
-          <div class="metric-card"><div class="metric-label">客户复购率</div><div class="metric-val">68%</div><div class="metric-sub metric-up">健康水平</div></div>
-          <div class="metric-card"><div class="metric-label">AI任务建议采纳</div><div class="metric-val">79%</div><div class="metric-sub">本月数据</div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+    function renderKanban() {
+      const lanes = [["todo", "待开始"], ["doing", "进行中"], ["blocked", "阻塞"], ["review", "待验收"], ["done", "已完成"]];
+      qs("kanban").innerHTML = lanes.map(([key, label]) => {
+        const tasks = state.tasks.filter(t => t.status === key);
+        return `<div class="lane"><h3>${label} · ${tasks.length}</h3>${tasks.map(task => {
+          const owner = person(task.ownerId);
+          return `<div class="task-card"><strong>${task.name}</strong><div class="meta">${requirement(task.requirementId)?.title || ""}</div><div class="people"><span class="avatar ${owner.color}">${owner.name.slice(0, 1)}</span><span>${owner.name} · ${owner.role}</span></div><div class="progress"><div class="bar" style="width:${task.progress}%"></div></div><div class="meta"><span>进度 ${task.progress}%</span><span>截止 ${task.due}</span></div><select onchange="updateStatus('${task.id}', this.value)">${Object.entries(statusMap).map(([value, meta]) => `<option value="${value}" ${value === task.status ? "selected" : ""}>${meta.label}</option>`).join("")}</select><div class="btns"><button class="btn" onclick="submitResult('${task.id}')">提交成果</button><button class="btn danger" onclick="updateStatus('${task.id}', 'blocked')">标记阻塞</button></div></div>`;
+        }).join("") || `<div class="hint">暂无任务</div>`}</div>`;
+      }).join("");
+    }
 
-<script>
-const views = ['dashboard','requirements','tasks','finance','feishu','reports'];
-const navMap = {'dashboard':0,'requirements':1,'tasks':2,'finance':3,'feishu':4,'reports':5};
-function switchView(v) {
-  views.forEach(id => {
-    document.getElementById('view-'+id).style.display = id===v?'block':'none';
-  });
-  const items = document.querySelectorAll('.nav-item');
-  items.forEach(el => el.classList.remove('active'));
-  items[navMap[v]].classList.add('active');
-}
-</script>
+    function settlementTag(status) {
+      if (status === "项目已确认") return "green";
+      if (status === "待项目确认") return "amber";
+      if (status === "待挂靠任务") return "red";
+      return "blue";
+    }
+
+    function renderSettlement() {
+      const completedTasks = state.tasks.filter(t => t.status === "done" || t.status === "review");
+      qs("completedTaskList").innerHTML = completedTasks.length ? completedTasks.map(task => {
+        const linked = state.settlementItems.find(item => item.taskIds.includes(task.id));
+        return `<div class="item"><div class="item-head"><div><div class="title">${task.name}</div><div class="meta"><span>负责人：${person(task.ownerId).name}</span><span>工时：${task.hours || 0}h</span><span>成果：${task.resultFile || "未登记"}</span></div></div><span class="tag ${linked ? "green" : "amber"}">${linked ? "已挂靠" : "待挂靠"}</span></div><div class="btns">${state.settlementItems.map(item => `<button class="btn" onclick="attachTaskToSettlement('${task.id}', '${item.id}')">挂到「${item.name}」</button>`).join("")}</div></div>`;
+      }).join("") : `<div class="hint">暂无已完成或待验收任务。先到任务状态管理里完成任务或提交成果。</div>`;
+
+      const selected = state.settlementItems.find(item => item.id === state.selectedSettlementItemId) || state.settlementItems[0];
+      const linkedTasks = selected.taskIds.map(id => state.tasks.find(task => task.id === id)).filter(Boolean);
+      const totalHours = linkedTasks.reduce((sum, task) => sum + Number(task.hours || 0), 0);
+      const files = linkedTasks.map(task => task.resultFile).filter(Boolean);
+      qs("settlementDetail").innerHTML = `<div class="item selected"><div class="item-head"><div><div class="title">${selected.name}</div><div class="meta"><span>结算单：${selected.quotationNo}</span><span>金额：¥${selected.amount.toLocaleString()}</span></div></div><span class="tag ${settlementTag(selected.status)}">${selected.status}</span></div><div class="hint">挂靠任务：${linkedTasks.length ? linkedTasks.map(task => task.name).join("、") : "暂无"}</div><div class="hint">成果文件：${files.length ? files.join("、") : "暂无，需要员工先提交成果文件"}</div><div class="hint">核对工时：${totalHours}h。财务按报价子项金额结算，项目部按任务和成果解释结算依据。</div><div class="btns"><button class="btn primary" onclick="confirmSettlementItem('${selected.id}')">项目确认结算依据</button><button class="btn" onclick="toast('已模拟发送给财务复核')">发送财务复核</button></div></div>`;
+
+      qs("settlementTable").innerHTML = state.settlementItems.map(item => {
+        const tasks = item.taskIds.map(id => state.tasks.find(task => task.id === id)).filter(Boolean);
+        const files = tasks.map(task => task.resultFile).filter(Boolean);
+        const hours = tasks.reduce((sum, task) => sum + Number(task.hours || 0), 0);
+        return `<tr onclick="selectSettlementItem('${item.id}')"><td><strong>${item.name}</strong><br><span class="meta">${item.quotationNo}</span></td><td>${tasks.length ? tasks.map(task => task.name).join("<br>") : "未挂靠"}</td><td>${files.length ? files.join("<br>") : "未提交"}</td><td>${hours}h</td><td>¥${item.amount.toLocaleString()}</td><td><span class="tag ${settlementTag(item.status)}">${item.status}</span></td></tr>`;
+      }).join("");
+    }
+
+    function renderAnalytics() {
+      renderMetrics("analyticsMetrics");
+      const counts = Object.keys(statusMap).map(key => ({ key, label: statusMap[key].label, count: state.tasks.filter(t => t.status === key).length }));
+      const max = Math.max(1, ...counts.map(item => item.count));
+      qs("statusChart").innerHTML = counts.map(item => `<div class="bar-col"><div class="bar-shape" style="height:${30 + item.count / max * 160}px"></div><strong>${item.count}</strong><span>${item.label}</span></div>`).join("");
+      qs("peopleLoad").innerHTML = people.map(p => {
+        const tasks = state.tasks.filter(t => t.ownerId === p.id);
+        const doing = tasks.filter(t => t.status !== "done").length;
+        const load = Math.min(100, doing * 25);
+        return `<div class="item"><div class="item-head"><div class="people"><span class="avatar ${p.color}">${p.name.slice(0, 1)}</span><strong>${p.name} · ${p.role}</strong></div><span class="tag ${load >= 75 ? "red" : load >= 50 ? "amber" : "green"}">${load}% 负载</span></div><div class="progress"><div class="bar" style="width:${load}%"></div></div><div class="meta"><span>任务 ${tasks.length}</span><span>未完成 ${doing}</span></div></div>`;
+      }).join("");
+    }
+
+    function renderActivity() {
+      qs("activityList").innerHTML = state.activities.map(item => `<div class="item"><div class="title">${item}</div><div class="meta"><span>刚刚</span><span>已触发站内/飞书通知</span></div></div>`).join("");
+    }
+
+    function render() {
+      renderMetrics("metricCards");
+      renderActivity();
+      renderRequirements();
+      renderBreakdown();
+      renderAssignTable();
+      renderKanban();
+      renderSettlement();
+      renderAnalytics();
+    }
+
+    render();
+  </script>
+</body>
+</html>

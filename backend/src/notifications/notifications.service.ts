@@ -8,6 +8,7 @@ import { FeishuService } from '../integrations/feishu/feishu.service';
 import { ProjectEntity } from '../projects/entities/project.entity';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
 import { RequirementEntity } from '../requirements/entities/requirement.entity';
+import { TaskDirectoryEntity } from '../tasks/entities/task-directory.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
 import { TaskResultFileEntity } from '../tasks/entities/task-result-file.entity';
 import { UserEntity } from '../users/entities/user.entity';
@@ -133,6 +134,33 @@ export class NotificationsService {
       content:
         message ??
         `你收到一个新任务 ${task.task_no}，请查看任务详情并及时更新进度。`,
+      objectType: 'task',
+      objectId: task.id,
+      channels: ['in_app', 'feishu_app'],
+    });
+  }
+
+  async notifyTaskWorkspaceProvisioned(
+    task: TaskEntity,
+    workspace: TaskDirectoryEntity,
+  ) {
+    if (!workspace.assignee_user_id) {
+      return null;
+    }
+
+    const directoryUrl =
+      workspace.directory_url ??
+      (workspace.feishu_folder_token
+        ? `https://www.feishu.cn/drive/folder/${workspace.feishu_folder_token}`
+        : null);
+
+    return this.sendToUsers([workspace.assignee_user_id], {
+      title: `任务工作目录已开通：${task.task_name}`,
+      content: [
+        `任务 ${task.task_no} 的工作目录权限已开通。`,
+        directoryUrl ? `点击进入工作目录：${directoryUrl}` : '请在任务详情中查看工作目录。',
+        '完成后的结果文件请放入该目录，并在系统中登记成果文件。',
+      ].join('\n'),
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],

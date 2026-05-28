@@ -153,7 +153,7 @@ export class TasksService {
       };
     }
 
-    const workspace = await this.provisionWorkspace(id, {
+    const workspaceResult = await this.provisionWorkspace(id, {
       assigneeUserId: dto.assigneeUserId,
       feishuFolderToken: dto.feishuFolderToken,
       directoryUrl: dto.directoryUrl,
@@ -161,8 +161,9 @@ export class TasksService {
 
     return {
       task,
-      workspace,
-      notification,
+      workspace: workspaceResult.workspace,
+      assignmentNotification: notification,
+      workspaceNotification: workspaceResult.notification,
     };
   }
 
@@ -278,7 +279,16 @@ export class TasksService {
       }),
     );
 
-    return saved;
+    const notification =
+      await this.notificationsService.notifyTaskWorkspaceProvisioned(
+        task,
+        saved,
+      );
+
+    return {
+      workspace: saved,
+      notification,
+    };
   }
 
   async listResultFiles(id: string) {
