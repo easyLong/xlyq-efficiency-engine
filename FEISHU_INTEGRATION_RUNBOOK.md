@@ -18,8 +18,9 @@
 - `contact:contact.base:readonly`
 - `contact:department.organize:readonly`
 - `contact:contact:readonly_as_app`
+- `contact:user.employee_id:readonly`
 
-如果希望同步员工姓名、邮箱、手机号等资料，还需要继续补充对应字段权限。当前环境已可同步 `open_id`，但如果飞书只返回 `open_id`，说明员工展示信息权限还不完整。
+如果希望通过员工工号或 `user_id` 发送消息，需要开通 `contact:user.employee_id:readonly`。如果希望同步员工姓名、邮箱、手机号等资料，还需要继续补充对应字段权限。当前环境已可同步 `open_id`，但如果飞书只返回 `open_id`，说明员工展示信息权限还不完整。
 
 ## 联调步骤
 

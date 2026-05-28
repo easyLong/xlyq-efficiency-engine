@@ -75,6 +75,7 @@ export class FeishuService {
         'contact:contact.base:readonly',
         'contact:department.organize:readonly',
         'contact:contact:readonly_as_app',
+        'contact:user.employee_id:readonly',
         'im:message',
       ],
       mvpMode: 'feishu-contact-sync-and-notification-ready',
