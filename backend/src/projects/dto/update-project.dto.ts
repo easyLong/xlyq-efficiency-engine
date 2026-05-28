@@ -10,7 +10,7 @@ export class UpdateProjectDto {
   customerId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   ownerUserId?: string;
 
   @IsOptional()

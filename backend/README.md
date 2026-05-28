@@ -1,5 +1,13 @@
 # 效能引擎后端
 
+## 当前运行能力
+
+- NestJS 后端同时提供 REST API 和 `public/` 静态 MVP 页面。
+- `GET /` 进入管理端 MVP 页面，包含登录、需求录入、AI 文件录入、历史需求任务编辑/删除、任务指派、统计分析和消息记录。
+- `GET /asset-sheet.html` 是员工填写资产 URL 的本地兜底资产表。
+- OpenAI 兼容模型通过 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL` 接入，用于 AI 文件拆分和客户/项目大类匹配。
+- 飞书在线资产表依赖 `drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create` 权限；权限不足时自动降级为本地资产表。
+
 这是效能引擎项目的后端 MVP，基于 NestJS、TypeORM 和 MySQL 实现，负责承接项目管理、需求管理、任务管理、飞书集成、消息通知、报价适配和基础统计。
 
 ## 技术栈

@@ -1,5 +1,42 @@
 # 飞书联调说明
 
+## 当前联调结论
+
+- 飞书企业自建应用的个人消息投递已跑通，任务指派后可以向员工 `open_id` 发送卡片消息。
+- 指派并创建资产入口时，系统只发送一条飞书消息，消息内包含“填写资产地址”按钮。
+- 飞书在线表格创建需要应用权限：`drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create`。权限未开通时，飞书接口会返回 `Access denied`，系统会自动降级为本地资产表。
+- 本地资产表 URL 由 `APP_PUBLIC_BASE_URL` 生成。若配置为 `http://localhost:3000`，只有本机浏览器可访问，飞书移动端员工无法打开；生产或真实联调请配置公网 HTTPS 地址。
+
+## 必配环境变量
+
+```env
+FEISHU_APP_ID=
+FEISHU_APP_SECRET=
+FEISHU_DEFAULT_DEPARTMENT_ID=0
+APP_PUBLIC_BASE_URL=https://your-public-domain.example.com
+```
+
+如需使用机器人群通知，再配置：
+
+```env
+FEISHU_BOT_WEBHOOK_URL=
+FEISHU_EVENT_VERIFICATION_TOKEN=
+```
+
+## 必开飞书权限
+
+- `im:message`
+- `contact:contact.base:readonly`
+- `contact:department.organize:readonly`
+- `contact:contact:readonly_as_app`
+- `contact:user.employee_id:readonly`
+- `contact:user.name:readonly`
+- `drive:drive`
+- `sheets:spreadsheet`
+- `sheets:spreadsheet:create`
+
+开通权限后需要在飞书开放平台发布/启用应用权限变更，再重新测试资产表创建。
+
 本文档用于验证 MVP 的真实飞书消息闭环：同步员工、绑定接收人、指派任务、开通任务工作目录、员工在飞书中点击按钮进入目录。
 
 ## 当前能力
@@ -59,32 +96,40 @@ Invoke-RestMethod `
 5. 给指定用户发送一条飞书卡片测试消息：
 
 ```powershell
+$body = @{
+  recipientUserId = "<userId>"
+  title = "效能引擎联调测试"
+  content = "如果你看到这条消息，说明飞书应用消息已打通。"
+  channels = @("in_app", "feishu_app")
+  actionUrl = "https://www.feishu.cn"
+  actionText = "打开测试链接"
+} | ConvertTo-Json -Depth 5
+
+$utf8Body = [System.Text.Encoding]::UTF8.GetBytes($body)
+
 Invoke-RestMethod `
   -Uri http://localhost:3000/api/v1/notifications/send `
   -Method Post `
-  -ContentType 'application/json' `
-  -Body '{
-    "recipientUserId":"<userId>",
-    "title":"效能引擎联调测试",
-    "content":"如果你看到这条消息，说明飞书应用消息已打通。",
-    "channels":["in_app","feishu_app"],
-    "actionUrl":"https://www.feishu.cn",
-    "actionText":"打开测试链接"
-  }'
+  -ContentType 'application/json; charset=utf-8' `
+  -Body $utf8Body
 ```
 
 6. 指派任务并开通工作目录：
 
 ```powershell
+$body = @{
+  assigneeUserId = "<userId>"
+  provisionWorkspace = $true
+  directoryUrl = "https://www.feishu.cn/drive/folder/<folderToken>"
+} | ConvertTo-Json -Depth 5
+
+$utf8Body = [System.Text.Encoding]::UTF8.GetBytes($body)
+
 Invoke-RestMethod `
   -Uri http://localhost:3000/api/v1/tasks/<taskId>/assign `
   -Method Post `
-  -ContentType 'application/json' `
-  -Body '{
-    "assigneeUserId":"<userId>",
-    "provisionWorkspace":true,
-    "directoryUrl":"https://www.feishu.cn/drive/folder/<folderToken>"
-  }'
+  -ContentType 'application/json; charset=utf-8' `
+  -Body $utf8Body
 ```
 
 员工会收到两类通知：

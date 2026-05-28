@@ -1,8 +1,8 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class ProvisionTaskWorkspaceDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
   assigneeUserId?: string;
 
   @IsOptional()

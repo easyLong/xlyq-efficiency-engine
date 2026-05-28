@@ -1,7 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { CustomerEntity } from '../customers/entities/customer.entity';
+import { ProjectEntity } from '../projects/entities/project.entity';
+import { TaskDirectoryEntity } from '../tasks/entities/task-directory.entity';
+import { TaskResultFileEntity } from '../tasks/entities/task-result-file.entity';
+import { TaskEntity } from '../tasks/entities/task.entity';
+import { UserEntity } from '../users/entities/user.entity';
 import { RequirementItemEntity } from './entities/requirement-item.entity';
 import { RequirementEntity } from './entities/requirement.entity';
 import {
@@ -12,11 +17,16 @@ import { RequirementsService } from './requirements.service';
 
 @Module({
   imports: [
-    NotificationsModule,
     TypeOrmModule.forFeature([
       RequirementEntity,
       RequirementItemEntity,
       AiExecutionLogEntity,
+      TaskEntity,
+      TaskDirectoryEntity,
+      TaskResultFileEntity,
+      CustomerEntity,
+      ProjectEntity,
+      UserEntity,
     ]),
   ],
   controllers: [RequirementsController, RequirementItemsController],

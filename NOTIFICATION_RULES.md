@@ -1,5 +1,19 @@
 # 消息通知规则
 
+## 当前 MVP 通知口径
+
+- 任务指派并开通资产入口：发送一条飞书卡片消息给任务负责人，标题为“新任务已指派”，按钮为“填写资产地址”。
+- 仅指派、不开通资产入口：发送普通任务通知，提示负责人按资产表入口填写资产地址。
+- 任务状态变化：通知负责人和项目负责人，说明当前状态和补充说明。
+- 任务退回修改：通知负责人退回原因。
+- 资产地址缺失扫描：可手动扫描待验收/已完成但没有资产地址的任务，并提醒负责人补充资产 URL。
+
+## 暂不启用
+
+- 工时未提交提醒不纳入当前 MVP。
+- 定时通知任务尚未接入调度器，当前保留手动扫描接口。
+- 通知去重和频控尚未实现，后续上线定时扫描前需要补充。
+
 本文档定义效能引擎 MVP 阶段的消息通知规则。第一版采用“站内消息落库 + 飞书应用消息优先 + 必要时飞书机器人群通知”的机制。
 
 ## 渠道约定
@@ -8,19 +22,27 @@
 - `feishu_app`：飞书企业自建应用消息，适合通知具体员工。
 - `feishu_bot`：飞书机器人群消息，适合重要节点或群内广播。
 
+## 第一版员工消息时机
+
+员工只在需要行动或确认时收到消息：
+
+- 被指派新任务。
+- 在线资产表权限开通。
+- 任务即将逾期或已经逾期。
+- 在线资产表创建或权限异常。
+- 任务验收退回，需要修改资产地址或任务内容。
+
 ## P0 自动通知
 
 | 场景 | 触发方式 | 接收人 | 渠道 |
 | --- | --- | --- | --- |
 | 任务分配 | 调用 `POST /tasks/{id}/assign` | 任务负责人 | `in_app`、`feishu_app` |
+| 在线资产表开通 | 指派任务时 `provisionWorkspace=true`，或调用 `POST /tasks/{id}/workspace/provision` | 任务负责人 | `in_app`、`feishu_app`，飞书卡片含“填写资产地址”按钮 |
 | 任务状态变更 | 调用 `POST /tasks/{id}/status` | 任务负责人、项目经理 | `in_app`、`feishu_app` |
 | 任务阻塞 | 状态变更为 `blocked` | 任务负责人、项目经理 | `in_app`、`feishu_app` |
 | 任务待验收 | 状态变更为 `pending_review` | 任务负责人、项目经理 | `in_app`、`feishu_app` |
 | 任务完成 | 状态变更为 `completed` | 任务负责人、项目经理 | `in_app`、`feishu_app` |
-| 成果文件提交 | 调用 `POST /tasks/{id}/result-files` | 任务负责人、项目经理 | `in_app`、`feishu_app` |
-| 新需求创建 | 调用 `POST /requirements` | 项目经理 | `in_app`、`feishu_app` |
-| 需求变更 | 调用 `PATCH /requirements/{id}` 或需求解析确认 | 项目经理 | `in_app`、`feishu_app` |
-| 需求项确认 | 调用 `POST /requirement-items/{id}/confirm` | 项目经理 | `in_app`、`feishu_app` |
+| 任务退回修改 | 调用 `POST /tasks/{id}/return-revision` | 任务负责人 | `in_app`、`feishu_app` |
 
 ## P0 扫描通知
 
@@ -29,7 +51,6 @@
 | 场景 | 接口 | 接收人 | 说明 |
 | --- | --- | --- | --- |
 | 任务即将逾期 / 已逾期 | `POST /notifications/task-deadline-scan` | 任务负责人、项目经理 | 默认扫描未来 1 天内截止和已经逾期的未完成任务 |
-| 工时未提交 | `POST /notifications/worklog-reminders` | 任务负责人 | 默认扫描当天未填写工时的进行中任务 |
 | 飞书同步失败 | `POST /notifications/feishu-sync-failure-scan` | 本地管理员 | 默认扫描最近 24 小时失败的飞书同步日志 |
 
 ## 防打扰原则

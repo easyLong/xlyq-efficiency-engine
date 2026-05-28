@@ -1,5 +1,17 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { AiMatchRequirementContextDto } from './dto/ai-match-requirement-context.dto';
+import { AiSplitRequirementsDto } from './dto/ai-split-requirements.dto';
 import { CreateRequirementDto } from './dto/create-requirement.dto';
+import { CreateRequirementWithTaskDto } from './dto/create-requirement-with-task.dto';
 import { CreateRequirementItemDto } from './dto/create-requirement-item.dto';
 import { UpdateRequirementDto } from './dto/update-requirement.dto';
 import { UpdateRequirementItemDto } from './dto/update-requirement-item.dto';
@@ -29,9 +41,29 @@ export class RequirementsController {
     return this.requirementsService.create(dto);
   }
 
+  @Post('with-task')
+  createWithTask(@Body() dto: CreateRequirementWithTaskDto) {
+    return this.requirementsService.createWithTask(dto);
+  }
+
+  @Post('ai-split-with-tasks')
+  aiSplitWithTasks(@Body() dto: AiSplitRequirementsDto) {
+    return this.requirementsService.aiSplitWithTasks(dto);
+  }
+
+  @Post('ai-match-context')
+  aiMatchContext(@Body() dto: AiMatchRequirementContextDto) {
+    return this.requirementsService.aiMatchContext(dto);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateRequirementDto) {
     return this.requirementsService.update(id, dto);
+  }
+
+  @Delete(':id/bundle')
+  removeBundle(@Param('id') id: string) {
+    return this.requirementsService.removeBundle(id);
   }
 
   @Post(':id/parse')

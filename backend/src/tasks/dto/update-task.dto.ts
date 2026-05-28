@@ -18,7 +18,7 @@ export class UpdateTaskDto {
   priority?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   assigneeUserId?: string;
 
   @IsOptional()

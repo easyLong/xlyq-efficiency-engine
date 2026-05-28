@@ -8,7 +8,8 @@ export class CreateProjectDto {
   @IsUUID()
   customerId!: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   ownerUserId!: string;
 
   @IsOptional()

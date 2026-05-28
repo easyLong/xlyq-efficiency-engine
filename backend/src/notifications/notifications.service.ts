@@ -13,6 +13,7 @@ import { TaskEntity } from '../tasks/entities/task.entity';
 import { TaskResultFileEntity } from '../tasks/entities/task-result-file.entity';
 import { UserEntity } from '../users/entities/user.entity';
 import { ScanFeishuSyncFailuresDto } from './dto/scan-feishu-sync-failures.dto';
+import { ScanResultFileMissingDto } from './dto/scan-result-file-missing.dto';
 import { ScanTaskDeadlinesDto } from './dto/scan-task-deadlines.dto';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { SendWorklogRemindersDto } from './dto/send-worklog-reminders.dto';
@@ -29,6 +30,8 @@ export class NotificationsService {
     private readonly projectsRepository: Repository<ProjectEntity>,
     @InjectRepository(TaskEntity)
     private readonly tasksRepository: Repository<TaskEntity>,
+    @InjectRepository(TaskResultFileEntity)
+    private readonly taskResultFilesRepository: Repository<TaskResultFileEntity>,
     @InjectRepository(WorklogEntity)
     private readonly worklogsRepository: Repository<WorklogEntity>,
     @InjectRepository(FeishuSyncLogEntity)
@@ -136,7 +139,7 @@ export class NotificationsService {
       title: `新任务：${task.task_name}`,
       content:
         message ??
-        `你收到一个新任务 ${task.task_no}，请查看任务详情并及时更新进度。`,
+        `你收到一个新任务 ${task.task_no}，请按消息中的资产表入口填写资产地址。`,
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
@@ -158,17 +161,19 @@ export class NotificationsService {
         : null);
 
     return this.sendToUsers([workspace.assignee_user_id], {
-      title: `任务工作目录已开通：${task.task_name}`,
+      title: `新任务已指派：${task.task_name}`,
       content: [
-        `任务 ${task.task_no} 的工作目录权限已开通。`,
-        directoryUrl ? `点击进入工作目录：${directoryUrl}` : '请在任务详情中查看工作目录。',
-        '完成后的结果文件请放入该目录，并在系统中登记成果文件。',
+        `你收到一个新任务 ${task.task_no}。`,
+        directoryUrl
+          ? `点击填写资产地址：${directoryUrl}`
+          : '请在任务详情中查看资产登记表。',
+        '请只在表格的“资产地址”列粘贴交付物 URL，系统会自动读取并统计。',
       ].join('\n'),
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
       actionUrl: directoryUrl ?? undefined,
-      actionText: '进入工作目录',
+      actionText: '填写资产地址',
     });
   }
 
@@ -179,14 +184,42 @@ export class NotificationsService {
     }
 
     const statusTitleMap: Record<string, string> = {
+      todo: '任务待开始',
+      in_progress: '任务进行中',
       blocked: '任务阻塞',
       pending_review: '任务待验收',
       completed: '任务已完成',
     };
+    const statusLabel =
+      statusTitleMap[task.status] ?? `任务状态更新为 ${task.status}`;
 
     return this.sendToUsers(recipients, {
-      title: `${statusTitleMap[task.status] ?? '任务状态更新'}：${task.task_name}`,
-      content: `任务 ${task.task_no} 当前状态为 ${task.status}，进度 ${task.progress_percent}%。${task.blocked_reason ? `阻塞原因：${task.blocked_reason}` : ''}`,
+      title: `${statusLabel}：${task.task_name}`,
+      content: [
+        `任务 ${task.task_no} 当前状态：${statusLabel}。`,
+        '当前 MVP 以在线资产表中的资产地址数量作为统计口径。',
+        task.blocked_reason ? `补充说明：${task.blocked_reason}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      objectType: 'task',
+      objectId: task.id,
+      channels: ['in_app', 'feishu_app'],
+    });
+  }
+
+  async notifyTaskReturnedForRevision(task: TaskEntity, reason: string) {
+    if (!task.assignee_user_id) {
+      return null;
+    }
+
+    return this.sendToUsers([task.assignee_user_id], {
+      title: `任务需修改：${task.task_name}`,
+      content: [
+        `任务 ${task.task_no} 验收未通过，需要按反馈修改后重新提交。`,
+        `退回原因：${reason}`,
+        '请修改在线资产表中的资产地址或任务内容后重新提交。',
+      ].join('\n'),
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
@@ -199,8 +232,8 @@ export class NotificationsService {
   ) {
     const recipients = await this.getTaskStakeholders(task);
     return this.sendToUsers(recipients, {
-      title: `成果文件已提交：${task.task_name}`,
-      content: `任务 ${task.task_no} 新增成果文件「${file.file_name}」，请及时查看和验收。`,
+      title: `资产地址已登记：${task.task_name}`,
+      content: `任务 ${task.task_no} 新增资产地址「${file.file_name}」，请及时查看和验收。`,
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
@@ -252,9 +285,7 @@ export class NotificationsService {
   async scanTaskDeadlines(dto: ScanTaskDeadlinesDto) {
     const now = new Date();
     const daysAhead = Number(dto.daysAhead ?? 1);
-    const dueBefore = new Date(
-      now.getTime() + daysAhead * 24 * 60 * 60 * 1000,
-    );
+    const dueBefore = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
 
     const qb = this.tasksRepository
       .createQueryBuilder('task')
@@ -291,49 +322,60 @@ export class NotificationsService {
   }
 
   async sendWorklogReminders(dto: SendWorklogRemindersDto) {
-    const workDate = dto.workDate ?? new Date().toISOString().slice(0, 10);
-    const tasksQb = this.tasksRepository
+    void dto;
+    return {
+      disabled: true,
+      reason: 'Worklog reminders are excluded from MVP notification v1.',
+      scannedTaskCount: 0,
+      reminderCount: 0,
+    };
+  }
+
+  async scanResultFileMissing(dto: ScanResultFileMissingDto) {
+    const statuses = (dto.statuses ?? 'pending_review,completed')
+      .split(',')
+      .map((status) => status.trim())
+      .filter(Boolean);
+
+    const qb = this.tasksRepository
       .createQueryBuilder('task')
-      .where('task.status IN (:...statuses)', {
-        statuses: ['todo', 'in_progress', 'blocked', 'pending_review'],
-      })
+      .where('task.status IN (:...statuses)', { statuses })
       .andWhere('task.assignee_user_id IS NOT NULL');
 
     if (dto.projectId) {
-      tasksQb.andWhere('task.project_id = :projectId', {
-        projectId: dto.projectId,
-      });
+      qb.andWhere('task.project_id = :projectId', { projectId: dto.projectId });
     }
 
-    const tasks = await tasksQb.getMany();
-    let reminderCount = 0;
+    const tasks = await qb.orderBy('task.updated_at', 'DESC').getMany();
+    let notificationCount = 0;
+    let missingTaskCount = 0;
 
     for (const task of tasks) {
-      const count = await this.worklogsRepository.count({
-        where: {
-          task_id: task.id,
-          user_id: task.assignee_user_id!,
-          work_date: workDate,
-        },
+      const fileCount = await this.taskResultFilesRepository.count({
+        where: { task_id: task.id },
       });
-      if (count > 0) {
+      if (fileCount > 0) {
         continue;
       }
 
+      missingTaskCount += 1;
       const messages = await this.sendToUsers([task.assignee_user_id!], {
-        title: `工时待提交：${task.task_name}`,
-        content: `你今天还没有为任务 ${task.task_no} 填写工时，请及时补充。`,
+        title: `资产地址待填写：${task.task_name}`,
+        content: [
+          `任务 ${task.task_no} 当前状态为 ${task.status}，但系统还没有同步到资产地址。`,
+          '请进入在线资产表填写资产地址，方便项目验收和结算挂靠。',
+        ].join('\n'),
         objectType: 'task',
         objectId: task.id,
         channels: ['in_app', 'feishu_app'],
       });
-      reminderCount += messages.length;
+      notificationCount += messages.length;
     }
 
     return {
-      workDate,
       scannedTaskCount: tasks.length,
-      reminderCount,
+      missingTaskCount,
+      notificationCount,
     };
   }
 

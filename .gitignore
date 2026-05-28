@@ -27,3 +27,4 @@ backend/.env
 # Misc
 *.tmp
 *.bak
+backups/

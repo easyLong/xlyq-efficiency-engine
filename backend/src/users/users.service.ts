@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { NotFoundException, ConflictException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
+import { LoginDto } from './dto/login.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { RoleEntity } from './entities/role.entity';
 import { UserEntity } from './entities/user.entity';
@@ -28,6 +29,21 @@ export class UsersService {
     return this.usersRepository.findOne({
       where: { username: 'bool' },
     });
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.usersRepository.findOne({
+      where: { username: dto.username, status: 'active' },
+    });
+    if (!user) {
+      throw new NotFoundException('Active user not found');
+    }
+
+    return {
+      accessToken: `mvp-${user.id}`,
+      tokenType: 'MVP',
+      user,
+    };
   }
 
   async findRoles() {

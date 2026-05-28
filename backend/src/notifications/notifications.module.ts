@@ -5,6 +5,7 @@ import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync
 import { FeishuModule } from '../integrations/feishu/feishu.module';
 import { ProjectEntity } from '../projects/entities/project.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
+import { TaskResultFileEntity } from '../tasks/entities/task-result-file.entity';
 import { UserEntity } from '../users/entities/user.entity';
 import { NotificationMessageEntity } from './entities/notification-message.entity';
 import { NotificationsController } from './notifications.controller';
@@ -18,6 +19,7 @@ import { NotificationsService } from './notifications.service';
       UserEntity,
       ProjectEntity,
       TaskEntity,
+      TaskResultFileEntity,
       WorklogEntity,
       FeishuSyncLogEntity,
     ]),

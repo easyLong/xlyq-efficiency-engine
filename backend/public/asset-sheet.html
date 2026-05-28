@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>任务资产登记表</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: #18231d;
+      background: linear-gradient(135deg, #f7f4e9, #eef4e9);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+    }
+    .page { width: min(1080px, calc(100% - 32px)); margin: 28px auto; display: grid; gap: 16px; }
+    .panel {
+      background: rgba(255,255,255,.88);
+      border: 1px solid #d8dfcf;
+      border-radius: 22px;
+      box-shadow: 0 18px 50px rgba(58, 77, 55, .12);
+      padding: 18px;
+    }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    p { margin: 0; color: #667163; }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    button {
+      border: 1px solid #2f6b45;
+      background: #2f6b45;
+      color: #fff;
+      border-radius: 14px;
+      min-height: 40px;
+      padding: 9px 14px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    button.secondary { background: #f7f4e9; color: #18231d; border-color: #cdd8c6; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #d8dfcf; padding: 10px 8px; text-align: left; }
+    th { color: #687366; background: #faf8ee; }
+    td:first-child { width: 90px; font-weight: 800; color: #2f6b45; }
+    input {
+      width: 100%;
+      border: 1px solid #d5ddcd;
+      border-radius: 12px;
+      background: #fffdf7;
+      color: #18231d;
+      padding: 10px 12px;
+      outline: none;
+    }
+    input:focus { border-color: #356d45; box-shadow: 0 0 0 4px rgba(53,109,69,.12); }
+    .muted { color: #6a7567; font-size: 13px; }
+    .status { margin-top: 12px; font-weight: 800; }
+    .status.ok { color: #2f6b45; }
+    .status.error { color: #9b3f2c; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="panel toolbar">
+      <div>
+        <h1 id="title">任务资产登记表</h1>
+        <p>字段：编号、资产地址。编号会从 1 开始自动递增。</p>
+      </div>
+      <div class="actions">
+        <button onclick="addRow()">新增一行</button>
+        <button id="saveButton" class="secondary" onclick="saveRows()">保存并同步统计</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <table>
+        <thead>
+          <tr>
+            <th>编号</th>
+            <th>资产地址</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p class="muted">本地兜底表会先保存在当前浏览器，并同步到效能引擎后台；飞书表格权限开通后，消息按钮会优先进入真实飞书在线表格。</p>
+      <p id="saveStatus" class="status muted">填写资产地址后点击“保存并同步统计”。</p>
+    </section>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const taskId = params.get("taskId") || "default";
+    const taskNo = params.get("taskNo") || "任务";
+    const storageKey = `asset-sheet:${taskId}`;
+    const rowsEl = document.getElementById("rows");
+    document.getElementById("title").textContent = `${taskNo} 资产登记表`;
+
+    function loadRows() {
+      const rows = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      return rows.length ? rows : [{ assetUrl: "" }];
+    }
+
+    function renderRows() {
+      const rows = loadRows();
+      rowsEl.innerHTML = rows.map((row, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td><input value="${escapeHtml(row.assetUrl || "")}" oninput="updateRow(${index}, this.value)" placeholder="粘贴飞书文件、图片、压缩包或交付物地址" /></td>
+        </tr>
+      `).join("");
+    }
+
+    function updateRow(index, value) {
+      const rows = loadRows();
+      rows[index] = { assetUrl: value };
+      localStorage.setItem(storageKey, JSON.stringify(rows));
+    }
+
+    function addRow() {
+      const rows = loadRows();
+      rows.push({ assetUrl: "" });
+      localStorage.setItem(storageKey, JSON.stringify(rows));
+      renderRows();
+    }
+
+    async function loadServerRows() {
+      if (taskId === "default" || localStorage.getItem(storageKey)) return;
+      try {
+        const response = await fetch(`/api/v1/tasks/${taskId}/result-files`);
+        if (!response.ok) return;
+        const files = await response.json();
+        const rows = files
+          .filter(file => file.source === "local_asset_sheet")
+          .map(file => ({ assetUrl: file.file_url }))
+          .filter(row => row.assetUrl);
+        if (rows.length > 0) {
+          localStorage.setItem(storageKey, JSON.stringify(rows));
+          renderRows();
+        }
+      } catch (error) {
+        setStatus(`读取已保存资产失败：${error.message}`, "error");
+      }
+    }
+
+    async function saveRows() {
+      const rows = loadRows();
+      localStorage.setItem(storageKey, JSON.stringify(rows));
+      const assets = rows
+        .map(row => ({ assetUrl: (row.assetUrl || "").trim() }))
+        .filter(row => row.assetUrl);
+
+      const button = document.getElementById("saveButton");
+      button.disabled = true;
+      setStatus("正在同步到统计分析...", "");
+      try {
+        const response = await fetch(`/api/v1/tasks/${taskId}/asset-sheet/local-assets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify({ assets }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "同步失败");
+        setStatus(`已保存，统计分析将显示 ${result.assetCount || 0} 个资产。`, "ok");
+      } catch (error) {
+        setStatus(`已保存到本地，但同步后台失败：${error.message}`, "error");
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function setStatus(message, type) {
+      const status = document.getElementById("saveStatus");
+      status.textContent = message;
+      status.className = `status ${type || "muted"}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    renderRows();
+    loadServerRows();
+  </script>
+</body>
+</html>

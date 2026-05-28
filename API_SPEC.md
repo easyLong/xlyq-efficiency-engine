@@ -1,5 +1,31 @@
 # 效能引擎后端接口设计 API 清单
 
+## 最新 MVP 重点接口
+
+### 静态页面
+
+- `GET /`：MVP 登录、需求录入、任务指派、统计分析页面。
+- `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>`：本地兜底资产登记表，员工填写资产地址 URL。
+
+### 需求与任务
+
+- `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务。
+- `POST /api/v1/requirements/ai-match-context`：根据文件内容匹配客户和项目大类。
+- `POST /api/v1/requirements/ai-split-with-tasks`：使用 OpenAI 兼容模型拆分需求，并为每条需求生成任务。
+- `PATCH /api/v1/requirements/{id}`：人工编辑历史需求任务，自动同步需求项和任务标题/描述/优先级。
+- `DELETE /api/v1/requirements/{id}/bundle`：软删除需求、需求项、任务、工作目录和资产记录。
+- `POST /api/v1/tasks/{id}/assign`：指派任务；`provisionWorkspace=true` 时创建资产入口并发送一条带按钮的飞书消息。
+- `POST /api/v1/tasks/{id}/asset-sheet/local-assets`：本地资产表保存资产 URL，系统去重统计，并将任务推进到待验收。
+- `POST /api/v1/tasks/{id}/asset-sheet/sync`：读取飞书在线表资产 URL 并同步统计。
+- `GET /api/v1/tasks/board?liveAssetCount=true&customerId=<customerId>`：任务看板，支持实时资产数和基金客户筛选。
+
+### 飞书与通知
+
+- `GET /api/v1/integrations/feishu/config`：查看飞书配置、推荐权限、资产表模式和本地入口公网可达性。
+- `POST /api/v1/integrations/feishu/contacts/sync-users`：同步飞书员工到本地用户。
+- `GET /api/v1/integrations/feishu/sync-logs`：查看飞书消息、表格创建、授权、同步日志。
+- `POST /api/v1/notifications/result-file-missing-scan`：扫描缺失资产 URL 的任务并提醒负责人。
+
 ## 1. 文档目标
 
 本文档定义效能引擎 V1 的后端 REST API 清单，供前后端联调、权限设计和服务拆分使用。
@@ -179,6 +205,24 @@
   - `sourceType`
   - `rawContent`
 
+### `POST /requirements/with-task`
+- 说明：快速创建需求、确认一个需求项，并自动生成一个待指派任务；用于当前 MVP“一个需求对应一个任务”的录入页
+- 关键字段：`projectId`、`customerId`、`title`、`rawContent`、`priority`、`estimatedHours`
+- 返回：`requirement`、`item`、`task`
+
+### `POST /requirements/ai-split-with-tasks`
+- 说明：加载需求文件内容后，自动拆分为多条需求，并为每条需求生成一个待指派任务
+- 关键字段：`projectId`、`customerId`、`rawContent`、`fileName`、`priority`、`estimatedHours`
+- 返回：`mode`、`aiLogId`、`count`、`items[]`，其中每项包含 `requirement`、`item`、`task`
+- 当前策略：优先使用 `.env` 中 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL` 调用 OpenAI 兼容 `chat/completions`；模型未配置或失败时回退本地规则拆分器
+- 拆分口径：只提取客户真实需求；确认事项、跟进记录、进度反馈、催办和负责人安排不生成任务
+
+### `POST /requirements/ai-match-context`
+- 说明：AI 文件录入时，根据文件内容匹配客户和项目大类
+- 关键字段：`rawContent`、`fileName`
+- 返回：`customerId`、`customerName`、`projectType`、`projectTypeLabel`、`confidence`、`reason`、`mode`
+- 当前策略：优先使用 OpenAI 兼容模型从客户池和项目大类选项中匹配；模型失败时回退客户名称和项目关键词规则
+
 ### `GET /requirements/{requirementId}`
 - 说明：需求详情
 
@@ -240,33 +284,45 @@
 - 说明：更新任务
 
 ### `POST /tasks/{taskId}/assign`
-- 说明：指派任务，可选同步创建任务成果目录授权记录
+- 说明：指派任务，可选同步创建在线资产表和授权记录
 - 入参：`assigneeUserId`、`provisionWorkspace`、`feishuFolderToken`、`directoryUrl`
 
 ### `GET /tasks/{taskId}/workspace`
-- 说明：获取任务成果目录和权限状态
+- 说明：获取任务在线资产表入口和权限状态
 
 ### `POST /tasks/{taskId}/workspace/provision`
-- 说明：创建或更新任务成果目录授权记录
+- 说明：创建或更新任务在线资产表授权记录
 - 入参：`assigneeUserId`、`feishuFolderToken`、`directoryUrl`
 
+### `POST /tasks/{taskId}/asset-sheet/sync`
+- 说明：从飞书资产登记表读取“编号、资产地址”，并同步为任务资产记录
+
 ### `GET /tasks/{taskId}/result-files`
-- 说明：获取任务结果文件列表
+- 说明：获取任务资产记录列表，兼容旧版结果文件表
+
+### `POST /tasks/{taskId}/asset-sheet/local-assets`
+- 说明：本地兜底资产表保存时，把员工填写的资产地址同步到后台统计
+- 入参：`assets[]`，每项包含 `assetUrl`
 
 ### `POST /tasks/{taskId}/result-files`
-- 说明：登记任务结果文件
+- 说明：兼容旧版手动登记结果文件流程，当前 MVP 主链路不再使用
 - 入参：`fileName`、`fileUrl`、`feishuFileToken`、`uploadedByUserId`、`remark`
 
 ### `POST /tasks/{taskId}/status`
 - 说明：修改任务状态
 - 入参：`status`、`blockedReason`
 
+### `POST /tasks/{taskId}/return-revision`
+- 说明：验收退回修改，任务回到进行中，并通知任务负责人
+- 入参：`reason`、`progressPercent`
+
 ### `POST /tasks/{taskId}/ai-assignment-suggestion`
 - 说明：生成 AI 智能分配建议
 
 ### `GET /tasks/board`
 - 说明：看板视图
-- 查询：`projectId`
+- 查询：`projectId`、`liveAssetCount`
+- 说明：`liveAssetCount=true` 时，会直接读取已开通飞书在线资产表中的非空资产地址 URL 个数，并同步为后台资产记录；读取失败时回退到后台缓存数量
 
 ### `GET /tasks/my`
 - 说明：我的任务
@@ -570,7 +626,7 @@
 
 ### `POST /notifications/send`
 - 说明：发送业务消息，默认写站内消息并尝试发送飞书应用消息
-- 入参：`recipientUserId`、`title`、`content`、`objectType`、`objectId`、`channels`、`botText`
+- 入参：`recipientUserId`、`title`、`content`、`objectType`、`objectId`、`channels`、`botText`、`actionUrl`、`actionText`
 - 渠道：`in_app`、`feishu_app`、`feishu_bot`
 
 ### `POST /notifications/task-assignment`
@@ -584,9 +640,9 @@
 - 说明：扫描即将逾期和已逾期任务并发送提醒
 - 入参：`projectId`、`daysAhead`
 
-### `POST /notifications/worklog-reminders`
-- 说明：扫描未提交工时的任务并提醒负责人
-- 入参：`projectId`、`workDate`
+### `POST /notifications/result-file-missing-scan`
+- 说明：兼容旧版结果文件流程，当前 MVP 主链路不再使用
+- 入参：`projectId`、`statuses`，`statuses` 默认 `pending_review,completed`
 
 ### `POST /notifications/feishu-sync-failure-scan`
 - 说明：扫描飞书同步失败日志并提醒管理员

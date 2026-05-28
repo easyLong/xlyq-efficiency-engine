@@ -1,23 +1,25 @@
 import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
-export class RegisterTaskResultFileDto {
-  @IsString()
-  @IsNotEmpty()
-  fileName!: string;
+export class CreateRequirementWithTaskDto {
+  @IsUUID()
+  projectId!: string;
+
+  @IsUUID()
+  customerId!: string;
 
   @IsString()
   @IsNotEmpty()
-  fileUrl!: string;
+  title!: string;
 
   @IsOptional()
   @IsString()
-  feishuFileToken?: string;
+  rawContent?: string;
 
   @IsOptional()
   @IsString()
-  uploadedByUserId?: string;
+  priority?: string;
 
   @IsOptional()
   @IsString()
-  remark?: string;
+  estimatedHours?: string;
 }

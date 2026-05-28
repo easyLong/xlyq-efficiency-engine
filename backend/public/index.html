@@ -1,0 +1,1267 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>效能引擎 MVP 工作台</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: #18231d;
+      background:
+        radial-gradient(circle at 8% 8%, rgba(70, 122, 79, .20), transparent 28%),
+        radial-gradient(circle at 85% 18%, rgba(222, 151, 68, .20), transparent 26%),
+        linear-gradient(135deg, #f7f4e9 0%, #eef4e9 50%, #f8fbf4 100%);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+    }
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { min-height: 100vh; display: grid; grid-template-columns: 280px 1fr; }
+    .side {
+      background: #16221b;
+      color: #f8f5e8;
+      padding: 26px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      box-shadow: 18px 0 48px rgba(20, 36, 28, .20);
+    }
+    .brand h1 { margin: 0; font-size: 25px; letter-spacing: .04em; }
+    .brand p { margin: 8px 0 0; color: rgba(248,245,232,.68); line-height: 1.7; font-size: 13px; }
+    .user-card { padding: 14px; border-radius: 18px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); }
+    .user-card strong { display: block; margin-bottom: 5px; }
+    .nav { display: grid; gap: 8px; }
+    .nav button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 14px;
+      color: rgba(248,245,232,.74);
+      background: transparent;
+      text-align: left;
+    }
+    .nav button.active { color: #16221b; background: #f5d38d; font-weight: 800; }
+    .main { padding: 28px; min-width: 0; }
+    .top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 22px; }
+    .top h2 { margin: 0 0 7px; font-size: 30px; }
+    .top p { margin: 0; color: #667163; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #d8dfcf; background: rgba(255,255,255,.72); border-radius: 999px; padding: 9px 13px; color: #596657; font-size: 13px; }
+    .grid { display: grid; gap: 16px; }
+    .cols-2 { grid-template-columns: minmax(0, .9fr) minmax(360px, 1.1fr); }
+    .cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .workbench-grid { grid-template-columns: minmax(0, 1.05fr) minmax(420px, .95fr); align-items: start; }
+    .intake-grid { grid-template-columns: minmax(0, .78fr) minmax(340px, .22fr); align-items: start; }
+    .pool-layout { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: start; }
+    .pool-hero {
+      background:
+        linear-gradient(135deg, rgba(22,34,27,.96), rgba(47,107,69,.92)),
+        radial-gradient(circle at 80% 10%, rgba(245,211,141,.38), transparent 34%);
+      color: #f8f5e8;
+      overflow: hidden;
+    }
+    .pool-hero h3 { margin: 4px 0 8px; font-size: 28px; }
+    .pool-hero .muted { color: rgba(248,245,232,.74); }
+    .pool-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .pool-actions .btn { background: #f5d38d; border-color: #f5d38d; color: #16221b; }
+    .board-panel { min-width: 0; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .side-stack { display: grid; gap: 16px; position: sticky; top: 24px; }
+    .panel {
+      background: rgba(255,255,255,.82);
+      border: 1px solid #d8dfcf;
+      border-radius: 22px;
+      box-shadow: 0 18px 50px rgba(58, 77, 55, .12);
+      padding: 18px;
+      backdrop-filter: blur(12px);
+    }
+    .panel h3 { margin: 0 0 14px; font-size: 17px; }
+    .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .card-head h3 { margin: 0; font-size: 20px; }
+    .kicker { color: #7a6a38; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .task-card {
+      background:
+        linear-gradient(145deg, rgba(255,255,255,.94), rgba(246,242,225,.90)),
+        radial-gradient(circle at 90% 0%, rgba(245, 211, 141, .40), transparent 30%);
+      border-color: #d8c28a;
+    }
+    .task-summary { display: grid; gap: 10px; margin-bottom: 16px; }
+    .task-title { font-size: 18px; color: #18231d; font-weight: 800; line-height: 1.45; }
+    .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .span-all { grid-column: 1 / -1; }
+    .section-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+    .section-title h3 { margin: 0; font-size: 20px; }
+    .summary-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .mini-metric { border: 1px solid #d8dfcf; background: #fffdf7; border-radius: 16px; padding: 12px; }
+    .mini-metric span { display: block; color: #687366; font-size: 12px; margin-bottom: 5px; }
+    .mini-metric strong { font-size: 22px; }
+    .status-filter { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .status-filter button { border: 1px solid #d8dfcf; border-radius: 999px; padding: 7px 11px; background: #fffdf7; color: #50604e; }
+    .status-filter button.active { background: #2f6b45; border-color: #2f6b45; color: #fff; }
+    .intake-tabs { display: inline-flex; gap: 7px; padding: 6px; background: #edf3e8; border: 1px solid #d8dfcf; border-radius: 16px; }
+    .intake-tabs button { border: 0; border-radius: 12px; padding: 9px 13px; background: transparent; color: #50604e; font-weight: 800; }
+    .intake-tabs button.active { background: #2f6b45; color: #fff; box-shadow: 0 8px 18px rgba(47,107,69,.18); }
+    .tab-panel { display: grid; gap: 12px; }
+    .requirement-row { cursor: pointer; transition: background .15s ease, transform .15s ease; }
+    .requirement-row:hover { background: #fff9e8; }
+    .requirement-row.active { background: #eef6eb; box-shadow: inset 4px 0 0 #2f6b45; }
+    .row-title { font-weight: 800; color: #18231d; }
+    .row-sub { color: #6a7567; font-size: 12px; margin-top: 4px; line-height: 1.55; }
+    .inline-assign { display: grid; grid-template-columns: 88px minmax(150px, 1fr); gap: 8px; align-items: center; min-width: 260px; }
+    .inline-assign select { padding: 9px 10px; border-radius: 12px; }
+    .inline-assign .btn { width: 88px; min-height: 36px; padding: 8px 0; white-space: nowrap; }
+    .status-stack { display: flex; gap: 6px; flex-wrap: wrap; min-width: 128px; }
+    .done-text { color: #2f6b45; font-weight: 800; }
+    .empty-list { padding: 22px; text-align: center; color: #6a7567; border: 1px dashed #cbd8c3; border-radius: 16px; background: #fbf8ed; }
+    .empty-state {
+      min-height: 178px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      border: 1px dashed #cbd8c3;
+      border-radius: 18px;
+      background: #fbf8ed;
+      padding: 18px;
+    }
+    .empty-state strong { display: block; margin-bottom: 6px; color: #263426; }
+    .assignment-box { border-top: 1px solid #ddd2ab; padding-top: 16px; }
+    .hint-card { background: #18231d; color: #f8f5e8; }
+    .hint-card .muted { color: rgba(248,245,232,.72); }
+    .login {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 30px;
+    }
+    .login-card { width: min(880px, 100%); display: grid; grid-template-columns: .95fr 1.05fr; overflow: hidden; padding: 0; }
+    .login-hero { background: #16221b; color: #f8f5e8; padding: 34px; }
+    .login-hero h1 { margin: 0 0 12px; font-size: 34px; }
+    .login-hero p { color: rgba(248,245,232,.70); line-height: 1.8; }
+    .login-form { padding: 34px; }
+    label { display: grid; gap: 7px; color: #687366; font-size: 13px; margin-bottom: 12px; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid #d5ddcd;
+      border-radius: 14px;
+      background: #fffdf7;
+      color: #18231d;
+      padding: 12px 13px;
+      outline: none;
+    }
+    textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
+    input:focus, textarea:focus, select:focus { border-color: #356d45; box-shadow: 0 0 0 4px rgba(53,109,69,.12); }
+    .btns { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      border: 1px solid #cdd8c6;
+      background: #f7f4e9;
+      color: #18231d;
+      border-radius: 14px;
+      min-height: 40px;
+      padding: 10px 14px;
+      font-weight: 700;
+    }
+    .btn.primary { background: #2f6b45; color: #fff; border-color: #2f6b45; }
+    .btn.warn { background: #f5d38d; border-color: #dfb96d; }
+    .btn.danger { background: #fff0eb; color: #a13b22; border-color: #efb29e; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .metric { min-height: 118px; display: flex; flex-direction: column; justify-content: space-between; }
+    .metric span { color: #687366; font-size: 13px; }
+    .metric strong { font-size: 32px; }
+    .timeline { display: grid; gap: 10px; }
+    .step {
+      border: 1px solid #d8dfcf;
+      background: #fffdf7;
+      border-radius: 16px;
+      padding: 13px;
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+    .dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #dce7d7; font-weight: 800; }
+    .step.done .dot { background: #2f6b45; color: #fff; }
+    .step strong { display: block; margin-bottom: 4px; }
+    .muted { color: #6a7567; font-size: 13px; line-height: 1.65; }
+    .log { max-height: 420px; overflow: auto; display: grid; gap: 8px; }
+    .log-item { background: #16221b; color: #f8f5e8; border-radius: 13px; padding: 11px; font-size: 12px; line-height: 1.6; }
+    .table-wrap { overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #d8dfcf; padding: 11px 8px; text-align: left; vertical-align: top; }
+    th { color: #687366; background: #faf8ee; }
+    .tag { display: inline-flex; border-radius: 999px; padding: 3px 8px; background: #e9efe5; color: #356d45; font-size: 12px; }
+    .preview-box { border: 1px dashed #bfd0b8; background: #fbf8ed; border-radius: 16px; padding: 12px; }
+    .preview-box strong { display: block; color: #263426; margin-bottom: 4px; }
+    .file-tools { display: grid; gap: 10px; border: 1px solid #d8dfcf; background: #fffdf7; border-radius: 18px; padding: 13px; }
+    .file-tools-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+    .split-preview { display: grid; gap: 7px; }
+    .split-preview-item { border: 1px solid #d8dfcf; background: #fbf8ed; border-radius: 13px; padding: 9px 11px; }
+    .split-preview-item strong { display: block; margin-bottom: 3px; }
+    .match-box { border: 1px solid #d8c28a; background: #fff8e6; border-radius: 14px; padding: 11px 12px; }
+    .edit-actions { grid-template-columns: 76px 76px; min-width: 160px; }
+    .edit-actions .btn { width: 76px; }
+    .edit-row td { background: #fbf8ed; }
+    .edit-panel { display: grid; grid-template-columns: minmax(240px, 1fr) 160px; gap: 12px; align-items: end; }
+    .edit-panel .wide { grid-column: 1 / -1; }
+    .edit-panel textarea { min-height: 96px; }
+    .edit-panel-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .toast { position: fixed; right: 22px; bottom: 22px; background: #16221b; color: #fff; border-radius: 14px; padding: 13px 15px; opacity: 0; transform: translateY(14px); transition: .2s; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .hidden { display: none !important; }
+    @media (max-width: 980px) {
+      .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip { grid-template-columns: 1fr; }
+      .edit-panel { grid-template-columns: 1fr; }
+      .side, .side-stack { position: static; }
+      .top { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loginView" class="login">
+    <div class="panel login-card">
+      <div class="login-hero">
+        <h1>效能引擎</h1>
+        <p>从登录开始，走完“需求录入 -> 一个需求生成一个任务 -> 指派员工 -> 飞书通知 -> 在线资产表填写 -> 统计分析”的 MVP 全链路。</p>
+        <p class="muted">当前是 MVP 登录：使用系统已有用户进入，不做密码校验，后续可替换为正式账号密码或飞书登录。</p>
+      </div>
+      <div class="login-form">
+        <h2>登录工作台</h2>
+        <label>选择登录用户
+          <select id="loginUser"></select>
+        </label>
+        <label>或输入用户名
+          <input id="loginUsername" placeholder="例如 demo.pm.v2" />
+        </label>
+        <div class="btns">
+          <button class="btn primary" onclick="login()">进入系统</button>
+          <button class="btn" onclick="loadBootstrap()">刷新用户</button>
+        </div>
+        <p class="muted" id="loginHint">正在加载用户...</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="appView" class="shell hidden">
+    <aside class="side">
+      <div class="brand">
+        <h1>效能引擎</h1>
+        <p>项目管理 MVP 工作台</p>
+      </div>
+      <div class="user-card">
+        <strong id="currentUser">未登录</strong>
+        <span class="muted" id="currentUserMeta"></span>
+      </div>
+      <nav class="nav">
+        <button class="active" data-view="requirements" onclick="switchView('requirements')">需求与指派</button>
+        <button data-view="dashboard" onclick="switchView('dashboard')">统计分析</button>
+        <button data-view="messages" onclick="switchView('messages')">消息记录</button>
+      </nav>
+      <button class="btn warn" onclick="logout()">退出登录</button>
+    </aside>
+
+    <main class="main">
+      <div class="top">
+        <div>
+          <h2 id="pageTitle">需求与指派</h2>
+          <p id="pageSub">录入客户需求后自动生成任务，并在下方历史列表中完成指派。</p>
+        </div>
+        <div class="pill" id="healthPill">后端连接中...</div>
+      </div>
+
+      <section id="view-requirements" class="grid">
+        <div class="panel">
+          <div class="section-title">
+            <div>
+              <div class="kicker">New Requirement</div>
+              <h3>需求录入</h3>
+            </div>
+            <span class="tag">保存后自动生成待指派任务</span>
+          </div>
+          <div class="grid">
+            <input type="hidden" id="projectSelect" />
+            <div class="intake-tabs">
+              <button id="manualTabButton" class="active" onclick="switchIntakeMode('manual')">手动录入</button>
+              <button id="aiTabButton" onclick="switchIntakeMode('ai')">AI文件录入</button>
+            </div>
+
+            <div id="manualIntakePanel" class="tab-panel">
+              <div class="form-grid">
+                <label>客户
+                  <select id="customerSelect" onchange="syncProjectSelection(false)"></select>
+                </label>
+                <label>项目大类
+                  <select id="projectTypeSelect" onchange="syncProjectSelection(false)"></select>
+                </label>
+              </div>
+              <div id="projectPreview" class="preview-box muted">请选择客户和项目大类。</div>
+              <label>需求标题
+                <input id="requirementTitle" />
+              </label>
+              <label>需求内容
+                <textarea id="requirementContent"></textarea>
+              </label>
+              <div class="btns">
+                <button id="createRequirementButton" class="btn primary" onclick="createRequirement()">保存需求并生成任务</button>
+                <button class="btn" onclick="clearRequirementForm()">清空表单</button>
+              </div>
+            </div>
+
+            <div id="aiIntakePanel" class="tab-panel hidden">
+              <label>文件标题
+                <input id="aiRequirementTitle" placeholder="加载文件后自动带出，可手动修改" />
+              </label>
+              <label>文件内容 / 需求原文
+                <textarea id="aiRequirementContent" placeholder="可以加载文件，也可以直接粘贴客户需求原文" oninput="resetAiMatch()"></textarea>
+              </label>
+              <div class="file-tools">
+                <div class="file-tools-row">
+                  <label>加载需求文件
+                    <input id="requirementFile" type="file" accept=".txt,.md,.csv,.json" onchange="loadRequirementFile()" />
+                  </label>
+                  <button id="aiMatchButton" class="btn" onclick="aiMatchRequirementContext()">AI匹配客户和大类</button>
+                </div>
+                <div id="aiMatchBox" class="match-box muted">AI 会先分析文件内容，自动匹配客户和项目大类。</div>
+                <div id="aiSplitPreview" class="muted">支持 txt、md、csv、json 等文本文件；加载后会进入 AI 拆分，不影响手动录入。</div>
+              </div>
+              <div class="btns">
+                <button id="aiSplitButton" class="btn warn" onclick="aiSplitRequirementFile()">AI拆分并生成任务</button>
+                <button class="btn" onclick="clearRequirementForm()">清空表单</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="requirementMetrics" class="summary-strip"></div>
+
+        <div class="panel board-panel">
+          <div class="section-title">
+            <div>
+              <div class="kicker">History</div>
+              <h3>历史需求任务状态</h3>
+            </div>
+            <span class="tag">待指派任务可在操作列处理</span>
+          </div>
+          <div id="requirementFilters" class="status-filter"></div>
+          <div id="requirementsBoard" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="view-dashboard" class="grid hidden">
+        <div class="panel">
+          <div class="section-title">
+            <div>
+              <h3>资产统计</h3>
+              <p>自动读取在线资产表/本地资产表，按资产链接去重统计。</p>
+            </div>
+            <label>
+              基金筛选
+              <select id="analyticsCustomerSelect" onchange="refreshAnalytics()"></select>
+            </label>
+          </div>
+        </div>
+        <div id="metrics" class="grid cols-4"></div>
+        <div class="panel">
+          <h3>任务资产明细</h3>
+          <div id="boardBox" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="view-messages" class="grid hidden">
+        <div class="panel">
+          <h3>员工消息记录</h3>
+          <div id="messagesBox" class="table-wrap"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const apiBase = "/api/v1";
+    const projectTypes = [
+      {
+        value: "periodic_report",
+        label: "定期报告制作",
+        budgetAmount: "300000",
+        description: "基金月报、季报、年报、临时报告制作与交付。",
+      },
+      {
+        value: "marketing_material",
+        label: "营销材料设计",
+        budgetAmount: "180000",
+        description: "基金路演材料、海报、长图、产品手册等营销物料。",
+      },
+      {
+        value: "data_disclosure",
+        label: "数据披露与核对",
+        budgetAmount: "220000",
+        description: "净值、持仓、业绩、风险指标等披露数据整理与复核。",
+      },
+      {
+        value: "compliance_content",
+        label: "合规内容支持",
+        budgetAmount: "160000",
+        description: "合规文案、免责声明、材料合规调整与留痕。",
+      },
+      {
+        value: "web_investor_education",
+        label: "官网与投教运营",
+        budgetAmount: "260000",
+        description: "官网内容维护、投教专题、活动页和运营内容更新。",
+      },
+    ];
+    const state = {
+      user: null,
+      users: [],
+      projects: [],
+      customers: [],
+      requirements: [],
+      requirementItems: [],
+      tasks: [],
+      requirementFilter: "all",
+      currentProject: null,
+      requirement: null,
+      item: null,
+      task: null,
+      workspace: null,
+      logs: [],
+      refreshTimer: null,
+      loadedFileName: null,
+      intakeMode: "manual",
+      aiContextMatch: null,
+      aiMatchSourceText: "",
+      analyticsCustomerId: "all",
+      editingRequirementId: null,
+    };
+    const stepDefs = [
+      ["requirement", "需求已录入", "手动保存客户需求"],
+      ["task", "任务已生成", "一个需求对应一个任务"],
+      ["workspace", "任务已指派", "员工收到飞书消息并进入在线资产表"],
+      ["completed", "统计已更新", "系统同步资产表后刷新看板统计"],
+    ];
+
+    function qs(id) { return document.getElementById(id); }
+    function toast(message) {
+      qs("toast").textContent = message;
+      qs("toast").classList.add("show");
+      setTimeout(() => qs("toast").classList.remove("show"), 2300);
+    }
+    function addLog(title, data) {
+      state.logs.unshift({ title, time: new Date().toLocaleTimeString(), data });
+      renderLogs();
+      renderState();
+    }
+    async function request(path, options = {}) {
+      const init = { ...options, headers: { ...(options.headers || {}) } };
+      if (init.body && typeof init.body !== "string") {
+        init.headers["Content-Type"] = "application/json; charset=utf-8";
+        init.body = JSON.stringify(init.body);
+      }
+      const res = await fetch(apiBase + path, init);
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : null;
+      if (!res.ok) throw new Error(data?.message || text || res.statusText);
+      return data;
+    }
+    async function loadBootstrap() {
+      const [users, projects, customers, requirements, requirementItems, tasks, health] = await Promise.all([
+        request("/users"),
+        request("/projects"),
+        request("/customers"),
+        request("/requirements"),
+        request("/requirement-items"),
+        request("/tasks"),
+        request("/health"),
+      ]);
+      state.users = unwrap(users);
+      state.projects = unwrap(projects);
+      state.customers = unwrap(customers);
+      state.requirements = unwrap(requirements);
+      state.requirementItems = unwrap(requirementItems);
+      state.tasks = unwrap(tasks);
+      qs("healthPill").textContent = `后端 ${health.status} / 数据库 ${health.database}`;
+      renderBootstrap();
+      qs("loginHint").textContent = "请选择用户登录。";
+    }
+    function unwrap(value) {
+      if (Array.isArray(value)) return value;
+      if (Array.isArray(value?.value)) return value.value;
+      return value ? [value] : [];
+    }
+    function renderBootstrap() {
+      qs("loginUser").innerHTML = state.users.map(u => `<option value="${u.username}">${u.display_name || u.username} · ${u.username}</option>`).join("");
+      const fundCustomers = state.customers.filter(c => c.industry === "公募基金");
+      const customers = [...(fundCustomers.length ? fundCustomers : state.customers)].sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
+      qs("customerSelect").innerHTML = customers.map(c => `<option value="${c.id}">${c.customer_code || "客户"} · ${c.customer_name}</option>`).join("");
+      renderAnalyticsFilters(customers);
+      qs("projectTypeSelect").innerHTML = projectTypes.map(t => `<option value="${t.value}">${t.label}</option>`).join("");
+      syncProjectSelection(false);
+      const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+      qs("requirementTitle").value ||= `MVP全链路测试需求-${stamp}`;
+      qs("requirementContent").value ||= "客户希望在效能引擎中录入需求后，项目经理可以自动生成任务并指派给员工。员工收到飞书消息后进入在线资产表，只填写资产地址，管理者可以查看统计分析。";
+      qs("aiRequirementTitle").value ||= `AI需求文件-${stamp}`;
+      renderRequirementBoard();
+    }
+    function renderAnalyticsFilters(customers) {
+      const select = qs("analyticsCustomerSelect");
+      if (!select) return;
+      select.innerHTML = [
+        `<option value="all">全部基金客户</option>`,
+        ...customers.map(c => `<option value="${c.id}">${c.customer_code || "基金"} · ${c.customer_name}</option>`),
+      ].join("");
+      select.value = state.analyticsCustomerId;
+    }
+    async function login() {
+      const username = qs("loginUsername").value.trim() || qs("loginUser").value;
+      const result = await request("/auth/login", { method: "POST", body: { username } });
+      state.user = result.user;
+      localStorage.setItem("mvpUser", JSON.stringify(state.user));
+      qs("loginView").classList.add("hidden");
+      qs("appView").classList.remove("hidden");
+      qs("currentUser").textContent = state.user.display_name || state.user.username;
+      qs("currentUserMeta").textContent = `${state.user.username} · ${state.user.source}`;
+      addLog("登录成功", result.user);
+      await refreshAnalytics();
+      renderSteps();
+      startAutoRefresh();
+    }
+    function logout() {
+      localStorage.removeItem("mvpUser");
+      location.reload();
+    }
+    function startAutoRefresh() {
+      if (state.refreshTimer) clearInterval(state.refreshTimer);
+      state.refreshTimer = setInterval(() => {
+        const appVisible = !qs("appView").classList.contains("hidden");
+        const onRequirementPage = !qs("view-requirements").classList.contains("hidden");
+        const onDashboardPage = !qs("view-dashboard").classList.contains("hidden");
+        if (appVisible && onRequirementPage) refreshRequirementBoard();
+        if (appVisible && onDashboardPage) refreshAnalytics();
+      }, 30000);
+    }
+    function switchView(view) {
+      document.querySelectorAll(".nav button").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
+      ["requirements", "dashboard", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
+      const titles = {
+        requirements: ["需求与指派", "录入客户需求后自动生成任务，并在同一页完成员工指派。"],
+        dashboard: ["统计分析", "查看任务看板、完成情况和项目统计。"],
+        messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
+      };
+      qs("pageTitle").textContent = titles[view][0];
+      qs("pageSub").textContent = titles[view][1];
+      if (view === "dashboard") refreshAnalytics();
+      if (view === "messages") refreshMessages();
+    }
+    function selectedCustomer() {
+      return state.customers.find(c => c.id === qs("customerSelect").value);
+    }
+    function selectedProjectType() {
+      return projectTypes.find(t => t.value === qs("projectTypeSelect").value) || projectTypes[0];
+    }
+    function projectTypeLabel(type) {
+      return projectTypes.find(t => t.value === type)?.label || type || "未分类";
+    }
+    function taskStatusLabel(status) {
+      const labels = {
+        todo: "待指派",
+        pending: "待指派",
+        assigned: "已指派",
+        in_progress: "进行中",
+        blocked: "受阻",
+        pending_review: "待验收",
+        completed: "已完成",
+        cancelled: "已取消",
+        returned: "已退回",
+      };
+      return labels[status] || status || "未生成";
+    }
+    function customerName(id) {
+      return state.customers.find(c => c.id === id)?.customer_name || "-";
+    }
+    function projectName(id) {
+      return state.projects.find(p => p.id === id)?.project_name || "-";
+    }
+    function projectForTask(task) {
+      return state.projects.find(p => p.id === task?.project_id) || null;
+    }
+    function customerNameForTask(task) {
+      const project = projectForTask(task);
+      return project ? customerName(project.customer_id) : "-";
+    }
+    function assigneeName(id) {
+      const user = state.users.find(u => u.id === id);
+      return user ? userDisplayName(user) : "-";
+    }
+    function isTechnicalFeishuId(value) {
+      return /^ou_[a-z0-9]+$/i.test(value || "");
+    }
+    function userDisplayName(user) {
+      const candidates = [user.display_name, user.username, user.email, user.mobile]
+        .filter(Boolean)
+        .filter(value => !isTechnicalFeishuId(value));
+      if (candidates.length > 0) return candidates[0];
+      if (user.feishu_open_id) return `飞书用户 ${user.feishu_open_id.slice(-6)}`;
+      return user.username || "未命名用户";
+    }
+    function assetCountText(task) {
+      const count = Number(task?.asset_count ?? task?.assetCount ?? 0);
+      return count > 0 ? `${count} 个资产` : "未开始";
+    }
+    async function syncTaskAssets(taskId) {
+      try {
+        const result = await request(`/tasks/${taskId}/asset-sheet/sync`, { method: "POST" });
+        if (result.skipped) {
+          toast("本地资产表已在员工保存时同步，飞书表格未就绪");
+        } else {
+          toast(`已同步 ${result.assetCount || 0} 个资产`);
+        }
+        await refreshAnalytics();
+      } catch (error) {
+        toast(error.message);
+      }
+    }
+    function feishuUserOptions(selectedId) {
+      const users = state.users.filter(u => u.feishu_open_id);
+      if (users.length === 0) return `<option value="">暂无飞书用户</option>`;
+      return [`<option value="">选择员工</option>`, ...users.map(u => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${userDisplayName(u)}</option>`)].join("");
+    }
+    function defaultWorkspaceUrl(task) {
+      const key = (task?.task_no || `task-${Date.now()}`).toLowerCase().replace(/[^a-z0-9-]/g, "-");
+      return `https://www.feishu.cn/drive/folder/${key}`;
+    }
+    function switchIntakeMode(mode) {
+      state.intakeMode = mode;
+      qs("manualTabButton").classList.toggle("active", mode === "manual");
+      qs("aiTabButton").classList.toggle("active", mode === "ai");
+      qs("manualIntakePanel").classList.toggle("hidden", mode !== "manual");
+      qs("aiIntakePanel").classList.toggle("hidden", mode !== "ai");
+    }
+    function clearRequirementForm() {
+      if (state.intakeMode === "ai") {
+        qs("aiRequirementTitle").value = "";
+        qs("aiRequirementContent").value = "";
+        qs("requirementFile").value = "";
+        state.loadedFileName = null;
+        state.aiContextMatch = null;
+        state.aiMatchSourceText = "";
+        renderAiMatchBox(null);
+        renderAiSplitPreview([]);
+      } else {
+        qs("requirementTitle").value = "";
+        qs("requirementContent").value = "";
+      }
+      syncProjectSelection(false);
+      toast("表单已清空");
+    }
+    async function loadRequirementFile() {
+      const file = qs("requirementFile").files?.[0];
+      if (!file) return;
+      state.loadedFileName = file.name;
+      try {
+        const content = await file.text();
+        qs("aiRequirementTitle").value ||= file.name.replace(/\.[^.]+$/, "");
+        qs("aiRequirementContent").value = content;
+        state.aiContextMatch = null;
+        state.aiMatchSourceText = "";
+        renderAiMatchBox(null);
+        renderAiSplitPreview(clientSplitRequirementContent(content));
+        toast("文件已加载，可点击 AI 拆分");
+      } catch (error) {
+        toast(`文件读取失败：${error.message}`);
+      }
+    }
+    function clientSplitRequirementContent(content) {
+      const normalized = String(content || "").replace(/\r\n/g, "\n").trim();
+      if (!normalized) return [];
+      const explicitBlocks = normalized
+        .split(/\n(?=\s*(?:[-*]|[0-9]+[.、)]|[一二三四五六七八九十]+[、.]))/g)
+        .map(item => item.trim())
+        .filter(Boolean);
+      const blocks = (explicitBlocks.length > 1 ? explicitBlocks : normalized.split(/\n{2,}/g))
+        .map(item => item.replace(/^\s*(?:[-*]|[0-9]+[.、)]|[一二三四五六七八九十]+[、.])\s*/, "").trim())
+        .filter(Boolean)
+        .filter(item => !isNonRequirementPreviewBlock(item))
+        .slice(0, 5);
+      return blocks.map((block, index) => ({
+        title: compactPreviewTitle(block, index + 1),
+        content: block,
+      }));
+    }
+    function isNonRequirementPreviewBlock(value) {
+      const text = String(value || "").replace(/\s+/g, "");
+      const demandSignals = /需求|需要|请做|制作|输出|出具|撰写|写|生成|设计|整理|更新|提供|补充|做\d*期|word版本|方案|文案|报告|长图|海报|数据|核对/.test(text);
+      const nonRequirementSignals = /确认|待确认|跟进|进度|进展|出了吗|出来了吗|做好了吗|做完|完成了|上午做完|下午出|谁去跟进|安排一下|催一下|辛苦|收到|可以吗|行吗|复核一下|看下/.test(text);
+      return nonRequirementSignals && !demandSignals;
+    }
+    function compactPreviewTitle(value, index) {
+      const title = String(value || "").split("\n").find(Boolean)?.replace(/^需求[:：]\s*/, "").trim() || `AI拆分需求-${index}`;
+      return title.length > 56 ? `${title.slice(0, 56)}...` : title;
+    }
+    function renderAiSplitPreview(items) {
+      const preview = qs("aiSplitPreview");
+      if (!items.length) {
+        preview.className = "muted";
+        preview.innerHTML = "支持 txt、md、csv、json 等文本文件；加载后会填入需求内容，可一键拆成多条待指派任务。";
+        return;
+      }
+      preview.className = "split-preview";
+      preview.innerHTML = [
+        `<div class="muted">预计可拆出 ${items.length}${items.length === 5 ? " 个以上" : " 个"}需求任务，最终以后端 AI 拆分结果为准。</div>`,
+        ...items.map(item => `<div class="split-preview-item"><strong>${escapeHtml(item.title)}</strong><span class="muted">${escapeHtml(item.content).slice(0, 120)}</span></div>`),
+      ].join("");
+    }
+    function resetAiMatch() {
+      state.aiContextMatch = null;
+      state.aiMatchSourceText = "";
+      renderAiMatchBox(null);
+      renderAiSplitPreview(clientSplitRequirementContent(qs("aiRequirementContent").value));
+    }
+    function renderAiMatchBox(match) {
+      const box = qs("aiMatchBox");
+      if (!match) {
+        box.className = "match-box muted";
+        box.innerHTML = "AI 会先分析文件内容，自动匹配客户和项目大类。";
+        return;
+      }
+      box.className = "match-box";
+      box.innerHTML = `
+        <strong>已匹配：${escapeHtml(match.customerName || "-")} / ${escapeHtml(match.projectTypeLabel || projectTypeLabel(match.projectType))}</strong><br>
+        <span class="muted">置信度：${Math.round(Number(match.confidence || 0) * 100)}%；${escapeHtml(match.reason || "")}</span>
+      `;
+    }
+    async function aiMatchRequirementContext(showToast = true) {
+      const content = qs("aiRequirementContent").value.trim();
+      if (!content) {
+        if (showToast) toast("请先加载文件或填写需求内容");
+        return null;
+      }
+      const button = qs("aiMatchButton");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "匹配中...";
+      }
+      try {
+        const match = await request("/requirements/ai-match-context", {
+          method: "POST",
+          body: {
+            rawContent: content,
+            fileName: state.loadedFileName || qs("aiRequirementTitle").value || "手工粘贴内容",
+          },
+        });
+        state.aiContextMatch = match;
+        state.aiMatchSourceText = content;
+        if (match.customerId) qs("customerSelect").value = match.customerId;
+        if (match.projectType) qs("projectTypeSelect").value = match.projectType;
+        await syncProjectSelection(false);
+        renderAiMatchBox(match);
+        if (showToast) toast("已匹配客户和项目大类");
+        return match;
+      } catch (error) {
+        if (showToast) toast(error.message);
+        return null;
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "AI匹配客户和大类";
+        }
+      }
+    }
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll("'", "&#39;");
+    }
+    function priorityLabel(value) {
+      return { high: "高", medium: "中", low: "低" }[value] || value || "-";
+    }
+    function itemForRequirement(requirementId) {
+      return state.requirementItems.find(item => item.requirement_id === requirementId);
+    }
+    function taskForRequirement(requirementId) {
+      const item = itemForRequirement(requirementId);
+      return item ? state.tasks.find(task => task.requirement_item_id === item.id) : null;
+    }
+    function displayTaskStatus(task) {
+      if (!task) return "未生成";
+      if (task.status === "todo" && task.assignee_user_id) return "已指派";
+      return taskStatusLabel(task.status);
+    }
+    function requirementRows() {
+      return state.requirements.map(requirement => {
+        const item = itemForRequirement(requirement.id);
+        const task = taskForRequirement(requirement.id);
+        return {
+          requirement,
+          item,
+          task,
+          customer: customerName(requirement.customer_id),
+          project: projectName(requirement.project_id),
+          taskStatus: displayTaskStatus(task),
+        };
+      });
+    }
+    function setRequirementFilter(filter) {
+      state.requirementFilter = filter;
+      renderRequirementBoard();
+    }
+    async function refreshRequirementBoard() {
+      const [requirements, requirementItems, tasks, projects, users] = await Promise.all([
+        request("/requirements"),
+        request("/requirement-items"),
+        request("/tasks"),
+        request("/projects"),
+        request("/users"),
+      ]);
+      state.requirements = unwrap(requirements);
+      state.requirementItems = unwrap(requirementItems);
+      state.tasks = unwrap(tasks);
+      state.projects = unwrap(projects);
+      state.users = unwrap(users);
+      renderRequirementBoard();
+    }
+    function renderRequirementBoard() {
+      const rows = requirementRows();
+      const metrics = {
+        total: rows.length,
+        pending: rows.filter(row => !row.task || row.taskStatus === "待指派").length,
+        assigned: rows.filter(row => row.taskStatus === "已指派" || row.taskStatus === "进行中").length,
+        completed: rows.filter(row => row.taskStatus === "已完成").length,
+      };
+      const metricsEl = qs("requirementMetrics");
+      if (metricsEl) {
+        metricsEl.innerHTML = [
+          ["全部需求", metrics.total],
+          ["待指派", metrics.pending],
+          ["处理中", metrics.assigned],
+          ["已完成", metrics.completed],
+        ].map(([label, value]) => `<div class="mini-metric"><span>${label}</span><strong>${value}</strong></div>`).join("");
+      }
+
+      const filters = [
+        ["all", "全部"],
+        ["pending", "待指派"],
+        ["assigned", "处理中"],
+        ["completed", "已完成"],
+      ];
+      const filtersEl = qs("requirementFilters");
+      if (filtersEl) {
+        filtersEl.innerHTML = filters.map(([key, label]) => `<button class="${state.requirementFilter === key ? "active" : ""}" onclick="setRequirementFilter('${key}')">${label}</button>`).join("");
+      }
+
+      const filteredRows = rows.filter(row => {
+        if (state.requirementFilter === "pending") return !row.task || row.taskStatus === "待指派";
+        if (state.requirementFilter === "assigned") return row.taskStatus === "已指派" || row.taskStatus === "进行中";
+        if (state.requirementFilter === "completed") return row.taskStatus === "已完成";
+        return true;
+      });
+      const boardEl = qs("requirementsBoard");
+      if (!boardEl) return;
+      if (filteredRows.length === 0) {
+        boardEl.innerHTML = `<div class="empty-list">还没有符合条件的需求。录入新需求后会自动出现在这里。</div>`;
+        return;
+      }
+      boardEl.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>需求</th>
+              <th>客户 / 项目</th>
+              <th>状态</th>
+              <th>负责人</th>
+              <th>创建时间</th>
+              <th>指派操作</th>
+              <th>编辑</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredRows.map(row => `
+              <tr class="requirement-row">
+                <td>
+                  <div class="row-title">${row.requirement.title}</div>
+                  <div class="row-sub">${row.requirement.requirement_code || row.requirement.id}</div>
+                </td>
+                <td>
+                  ${row.customer}<br>
+                  <span class="row-sub">${row.project}</span>
+                </td>
+                <td>
+                  <div class="status-stack">
+                    <span class="tag">需求：${row.requirement.status}</span>
+                    <span class="tag">任务：${row.taskStatus}</span>
+                  </div>
+                </td>
+                <td>${assigneeName(row.task?.assignee_user_id)}</td>
+                <td>${new Date(row.requirement.created_at).toLocaleString()}</td>
+                <td>${renderAssignAction(row)}</td>
+                <td>${renderRequirementEditAction(row)}</td>
+              </tr>
+              ${state.editingRequirementId === row.requirement.id ? renderRequirementEditRow(row) : ""}
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+    function renderRequirementEditAction(row) {
+      return `
+        <div class="inline-assign edit-actions" onclick="event.stopPropagation()">
+          <button class="btn" onclick="startEditRequirement('${row.requirement.id}')">编辑</button>
+          <button class="btn danger" onclick="deleteRequirementBundle('${row.requirement.id}')">删除</button>
+        </div>
+      `;
+    }
+    function renderRequirementEditRow(row) {
+      const requirement = row.requirement;
+      return `
+        <tr class="edit-row">
+          <td colspan="7">
+            <div class="edit-panel">
+              <label>
+                需求标题
+                <input id="edit-title-${requirement.id}" value="${escapeAttr(requirement.title || "")}" />
+              </label>
+              <label>
+                优先级
+                <select id="edit-priority-${requirement.id}">
+                  ${["high", "medium", "low"].map(priority => `<option value="${priority}" ${requirement.priority === priority ? "selected" : ""}>${priorityLabel(priority)}</option>`).join("")}
+                </select>
+              </label>
+              <label class="wide">
+                需求内容
+                <textarea id="edit-content-${requirement.id}" rows="4">${escapeHtml(requirement.raw_content || requirement.summary || "")}</textarea>
+              </label>
+              <div class="edit-panel-actions">
+                <button class="btn primary" onclick="saveRequirementEdit('${requirement.id}')">保存修改</button>
+                <button class="btn" onclick="cancelRequirementEdit()">取消</button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+    function renderAssignAction(row) {
+      if (!row.task) return `<span class="muted">任务生成中</span>`;
+      if (row.taskStatus === "已完成") return `<span class="done-text">已完成</span>`;
+      return `
+        <div class="inline-assign" onclick="event.stopPropagation()">
+          <button class="btn primary" onclick="assignTaskFromBoard('${row.requirement.id}', '${row.task.id}')">${row.task.assignee_user_id ? "重新指派" : "指派"}</button>
+          <select id="assignee-${row.task.id}">${feishuUserOptions(row.task.assignee_user_id)}</select>
+        </div>
+      `;
+    }
+    function startEditRequirement(requirementId) {
+      state.editingRequirementId = requirementId;
+      renderRequirementBoard();
+      setTimeout(() => qs(`edit-title-${requirementId}`)?.focus(), 0);
+    }
+    function cancelRequirementEdit() {
+      state.editingRequirementId = null;
+      renderRequirementBoard();
+    }
+    async function saveRequirementEdit(requirementId) {
+      const title = qs(`edit-title-${requirementId}`)?.value.trim();
+      const rawContent = qs(`edit-content-${requirementId}`)?.value.trim();
+      const priority = qs(`edit-priority-${requirementId}`)?.value;
+      if (!title) return toast("需求标题不能为空");
+      if (!rawContent) return toast("需求内容不能为空");
+
+      const result = await request(`/requirements/${requirementId}`, {
+        method: "PATCH",
+        body: { title, rawContent, priority },
+      });
+      if (result.requirement) {
+        state.requirements = state.requirements.map(item => item.id === requirementId ? result.requirement : item);
+      }
+      if (result.item) {
+        state.requirementItems = state.requirementItems.map(item => item.id === result.item.id ? result.item : item);
+      }
+      if (result.task) {
+        state.tasks = state.tasks.map(item => item.id === result.task.id ? result.task : item);
+      }
+      state.editingRequirementId = null;
+      addLog("历史需求任务已修改", result);
+      toast("已保存修改");
+      renderRequirementBoard();
+      refreshAnalytics();
+    }
+    async function deleteRequirementBundle(requirementId) {
+      const requirement = state.requirements.find(item => item.id === requirementId);
+      const confirmed = window.confirm(`确认删除「${requirement?.title || "这条需求"}」吗？相关任务、资产表记录也会从系统列表中删除。`);
+      if (!confirmed) return;
+      const result = await request(`/requirements/${requirementId}/bundle`, { method: "DELETE" });
+      const itemIds = state.requirementItems.filter(item => item.requirement_id === requirementId).map(item => item.id);
+      const taskIds = state.tasks.filter(task => itemIds.includes(task.requirement_item_id)).map(task => task.id);
+      state.requirements = state.requirements.filter(item => item.id !== requirementId);
+      state.requirementItems = state.requirementItems.filter(item => item.requirement_id !== requirementId);
+      state.tasks = state.tasks.filter(task => !taskIds.includes(task.id));
+      if (state.requirement?.id === requirementId) state.requirement = null;
+      if (state.item && itemIds.includes(state.item.id)) state.item = null;
+      if (state.task && taskIds.includes(state.task.id)) state.task = null;
+      state.editingRequirementId = null;
+      addLog("历史需求任务已删除", result);
+      toast("已删除需求任务");
+      renderRequirementBoard();
+      refreshAnalytics();
+    }
+    async function syncProjectSelection(createIfMissing) {
+      const customer = selectedCustomer();
+      const type = selectedProjectType();
+      if (!customer || !type) return null;
+
+      let project = state.projects.find(p => p.customer_id === customer.id && p.project_type === type.value);
+      if (!project && createIfMissing) {
+        const ownerUserId = state.user?.id || state.users.find(u => u.username === "demo.pm.v2")?.id || state.users[0]?.id;
+        project = await request("/projects", {
+          method: "POST",
+          body: {
+            projectName: `${customer.customer_name}${type.label}项目`,
+            customerId: customer.id,
+            ownerUserId,
+            projectType: type.value,
+            priority: "high",
+            budgetAmount: type.budgetAmount,
+            plannedEndDate: "2026-12-31",
+            description: type.description,
+          },
+        });
+        state.projects.unshift(project);
+        addLog("已自动创建客户项目", project);
+      }
+
+      state.currentProject = project || null;
+      qs("projectSelect").value = project?.id || "";
+      renderProjectPreview(customer, type, project);
+      return project;
+    }
+    function renderProjectPreview(customer = selectedCustomer(), type = selectedProjectType(), project = state.currentProject) {
+      const projectText = project
+        ? `已匹配项目：${project.project_name}（${project.project_code}）`
+        : `保存需求时会自动创建：${customer?.customer_name || ""}${type?.label || ""}项目`;
+      qs("projectPreview").innerHTML = `
+        <strong>${customer?.customer_name || "未选择客户"} / ${type?.label || "未选择大类"}</strong>
+        <span>${projectText}</span><br>
+        <span>客户池：${state.customers.filter(c => c.industry === "公募基金").length} 家基金客户；项目大类：${projectTypes.length} 类。</span>
+      `;
+    }
+    async function createRequirement() {
+      const project = await syncProjectSelection(true);
+      if (!project) return toast("请先选择客户和项目大类");
+      const title = qs("requirementTitle").value.trim();
+      const content = qs("requirementContent").value.trim();
+      if (!title) return toast("请填写需求标题");
+      if (!content) return toast("请填写需求内容");
+      const button = qs("createRequirementButton");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "正在保存...";
+      }
+      state.requirement = null;
+      state.item = null;
+      state.task = null;
+      state.workspace = null;
+      try {
+        const result = await request("/requirements/with-task", {
+          method: "POST",
+          body: {
+            projectId: project.id,
+            customerId: qs("customerSelect").value,
+            title,
+            rawContent: content,
+            priority: "high",
+            estimatedHours: "6",
+          },
+        });
+        state.requirement = result.requirement;
+        state.item = result.item;
+        state.task = result.task;
+        state.requirements.unshift(state.requirement);
+        state.requirementItems = [state.item, ...state.requirementItems.filter(existing => existing.id !== state.item.id)];
+        state.tasks = [state.task, ...state.tasks.filter(existing => existing.id !== state.task.id)];
+        addLog("需求录入并生成任务成功", result);
+        qs("requirementTitle").value = "";
+        qs("requirementContent").value = "";
+        toast("需求已进入历史需求任务列表，状态为待指派");
+        renderSteps();
+        qs("requirementsBoard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "保存需求并生成任务";
+        }
+      }
+    }
+    async function aiSplitRequirementFile() {
+      const content = qs("aiRequirementContent").value.trim();
+      if (!content) return toast("请先加载文件或填写需求内容");
+      const match = state.aiContextMatch && state.aiMatchSourceText === content
+        ? state.aiContextMatch
+        : await aiMatchRequirementContext(false);
+      if (!match?.customerId || !match?.projectType) {
+        renderAiMatchBox(match);
+        return toast("AI未能匹配客户和项目大类，请补充文件中的客户和需求信息后重试");
+      }
+      qs("customerSelect").value = match.customerId;
+      qs("projectTypeSelect").value = match.projectType;
+      const project = await syncProjectSelection(true);
+      if (!project) return toast("AI匹配结果无法创建项目，请重试");
+      const button = qs("aiSplitButton");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "AI拆分中...";
+      }
+      try {
+        const result = await request("/requirements/ai-split-with-tasks", {
+          method: "POST",
+          body: {
+            projectId: project.id,
+            customerId: qs("customerSelect").value,
+            rawContent: content,
+            fileName: state.loadedFileName || qs("aiRequirementTitle").value || "手工粘贴内容",
+            priority: "high",
+            estimatedHours: "6",
+          },
+        });
+        const items = result.items || [];
+        state.requirements = [...items.map(item => item.requirement), ...state.requirements];
+        state.requirementItems = [...items.map(item => item.item), ...state.requirementItems];
+        state.tasks = [...items.map(item => item.task), ...state.tasks];
+        if (items[0]) {
+          state.requirement = items[0].requirement;
+          state.item = items[0].item;
+          state.task = items[0].task;
+        }
+        addLog("AI已拆分文件并生成任务", result);
+        renderAiSplitPreview(items.map(item => ({
+          title: item.requirement.title,
+          content: item.requirement.raw_content || item.requirement.summary || "",
+        })).slice(0, 5));
+        const modeText = result.mode === "openai_compatible" ? "模型" : "规则兜底";
+        toast(`${modeText}已拆分生成 ${result.count || items.length} 个待指派任务`);
+        renderSteps();
+        qs("requirementsBoard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "AI拆分并生成任务";
+        }
+      }
+    }
+    async function assignTaskFromBoard(requirementId, taskId) {
+      const assigneeSelect = qs(`assignee-${taskId}`);
+      const assigneeUserId = assigneeSelect?.value;
+      if (!assigneeUserId) return toast("请先选择员工");
+      const task = state.tasks.find(item => item.id === taskId);
+      if (!task) return toast("任务不存在，请刷新列表");
+      const result = await request(`/tasks/${taskId}/assign`, {
+        method: "POST",
+        body: {
+          assigneeUserId,
+          provisionWorkspace: true,
+          directoryUrl: defaultWorkspaceUrl(task),
+        },
+      });
+      state.task = result.task;
+      state.workspace = result.workspace;
+      state.tasks = state.tasks.map(item => item.id === taskId ? state.task : item);
+      state.requirement = state.requirements.find(item => item.id === requirementId) || null;
+      state.item = state.requirement ? itemForRequirement(state.requirement.id) : null;
+      addLog("任务已从列表指派，飞书消息已发送", result);
+      toast("已指派并发送飞书消息");
+      renderRequirementBoard();
+      refreshMessages();
+    }
+    async function refreshAnalytics() {
+      const customerId = qs("analyticsCustomerSelect")?.value || "all";
+      state.analyticsCustomerId = customerId;
+      const query = new URLSearchParams({ liveAssetCount: "true" });
+      if (customerId !== "all") query.set("customerId", customerId);
+      const board = await request(`/tasks/board?${query.toString()}`);
+      const rows = Object.entries(board).flatMap(([status, tasks]) => (tasks || []).map(t => ({ status, ...t })));
+      const totalAssets = rows.reduce((sum, task) => sum + Number(task.asset_count || task.assetCount || 0), 0);
+      const assignedTasks = rows.filter(task => task.assignee_user_id).length;
+      const startedTasks = rows.filter(task => Number(task.asset_count || task.assetCount || 0) > 0).length;
+      const customerCount = new Set(rows.map(task => projectForTask(task)?.customer_id).filter(Boolean)).size;
+      const scopeText = customerId === "all" ? "全部基金" : customerName(customerId);
+      qs("metrics").innerHTML = [
+        ["资产链接数", totalAssets, "自动读取资产表 URL 并去重"],
+        ["需求任务数", rows.length, scopeText],
+        ["已指派任务", assignedTasks, "员工已收到或可收到工作入口"],
+        ["已开始任务", startedTasks, `覆盖 ${customerCount} 家基金客户`],
+      ].map(([label, value, hint]) => `<div class="panel metric"><span>${label}</span><strong>${value}</strong><span>${hint}</span></div>`).join("");
+      qs("boardBox").innerHTML = `<table><thead><tr><th>基金客户</th><th>项目</th><th>任务</th><th>负责人</th><th>状态</th><th>资产个数</th></tr></thead><tbody>${rows.map(t => `<tr><td>${customerNameForTask(t)}</td><td>${projectName(t.project_id)}</td><td>${t.task_no}<br>${t.task_name}</td><td>${assigneeName(t.assignee_user_id)}</td><td><span class="tag">${taskStatusLabel(t.status)}</span></td><td>${assetCountText(t)}</td></tr>`).join("") || `<tr><td colspan="6" class="muted">暂无任务数据</td></tr>`}</tbody></table>`;
+    }
+    async function refreshMessages() {
+      const assigneeId = state.task?.assignee_user_id || "";
+      const messages = unwrap(await request(`/notifications?recipientUserId=${assigneeId}`));
+      qs("messagesBox").innerHTML = `<table><thead><tr><th>时间</th><th>标题</th><th>状态</th><th>飞书结果</th></tr></thead><tbody>${messages.map(m => `<tr><td>${m.sent_at || m.created_at}</td><td>${m.title}<br><span class="muted">${m.content || ""}</span></td><td>${m.status}</td><td>${m.delivery_result_json?.feishu_app?.status || "-"}</td></tr>`).join("")}</tbody></table>`;
+    }
+    function renderSteps() {
+      const done = {
+        requirement: !!state.requirement,
+        item: !!state.item,
+        task: !!state.task,
+        workspace: !!state.workspace,
+        completed: state.task?.status === "completed",
+      };
+      const html = stepDefs.map(([key, title, desc], index) => `<div class="step ${done[key] ? "done" : ""}"><div class="dot">${done[key] ? "✓" : index + 1}</div><div><strong>${title}</strong><span class="muted">${desc}</span></div></div>`).join("");
+      ["steps", "stepsAssignment"].forEach(id => {
+        const el = qs(id);
+        if (el) el.innerHTML = html;
+      });
+      renderRequirementBoard();
+      renderState();
+    }
+    function renderState() {
+      const text = JSON.stringify({
+        requirementId: state.requirement?.id,
+        requirementTitle: state.requirement?.title,
+        itemId: state.item?.id,
+        itemTitle: state.item?.item_title,
+        taskId: state.task?.id,
+        taskNo: state.task?.task_no,
+        taskName: state.task?.task_name,
+        taskStatus: state.task?.status,
+        workspaceUrl: state.workspace?.directory_url,
+      }, null, 2);
+      ["stateBox", "stateBoxAssignment"].forEach(id => {
+        const el = qs(id);
+        if (el) el.textContent = text;
+      });
+    }
+    function renderLogs() {
+      const html = state.logs.map(log => `<div class="log-item"><strong>${log.time} · ${log.title}</strong><br><span>${JSON.stringify(log.data).slice(0, 420)}</span></div>`).join("");
+      ["logs"].forEach(id => {
+        const el = qs(id);
+        if (el) el.innerHTML = html;
+      });
+    }
+    window.addEventListener("DOMContentLoaded", async () => {
+      try {
+        await loadBootstrap();
+        const saved = localStorage.getItem("mvpUser");
+        if (saved) {
+          state.user = JSON.parse(saved);
+          qs("loginView").classList.add("hidden");
+          qs("appView").classList.remove("hidden");
+          qs("currentUser").textContent = state.user.display_name || state.user.username;
+          qs("currentUserMeta").textContent = `${state.user.username} · ${state.user.source}`;
+          renderSteps();
+          await refreshAnalytics();
+          startAutoRefresh();
+        }
+      } catch (error) {
+        qs("loginHint").textContent = error.message;
+        toast(error.message);
+      }
+    });
+  </script>
+</body>
+</html>

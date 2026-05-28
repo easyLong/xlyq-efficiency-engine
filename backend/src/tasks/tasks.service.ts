@@ -1,14 +1,22 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
+import { FeishuService } from '../integrations/feishu/feishu.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ProjectEntity } from '../projects/entities/project.entity';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
+import { ReturnTaskRevisionDto } from './dto/return-task-revision.dto';
+import { SaveLocalAssetSheetDto } from './dto/save-local-asset-sheet.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskDirectoryEntity } from './entities/task-directory.entity';
@@ -28,6 +36,9 @@ export class TasksService {
     private readonly taskResultFilesRepository: Repository<TaskResultFileEntity>,
     @InjectRepository(FeishuSyncLogEntity)
     private readonly feishuSyncLogsRepository: Repository<FeishuSyncLogEntity>,
+    @InjectRepository(ProjectEntity)
+    private readonly projectsRepository: Repository<ProjectEntity>,
+    private readonly feishuService: FeishuService,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -52,15 +63,104 @@ export class TasksService {
     return task;
   }
 
-  async board(projectId?: string) {
-    const tasks = await this.findAll(projectId);
+  async board(projectId?: string, liveAssetCount = false, customerId?: string) {
+    const tasks = await this.findBoardTasks(projectId, customerId);
+    const assetCountByTaskId = await this.countAssetsByTaskIds(
+      tasks.map((task) => task.id),
+    );
+    if (liveAssetCount) {
+      await this.refreshOnlineAssetCounts(tasks, assetCountByTaskId);
+    }
+    const rows = tasks.map((task) => ({
+      ...task,
+      asset_count: assetCountByTaskId.get(task.id) ?? 0,
+    }));
+
     return {
-      todo: tasks.filter((task) => task.status === 'todo'),
-      in_progress: tasks.filter((task) => task.status === 'in_progress'),
-      blocked: tasks.filter((task) => task.status === 'blocked'),
-      pending_review: tasks.filter((task) => task.status === 'pending_review'),
-      completed: tasks.filter((task) => task.status === 'completed'),
+      todo: rows.filter((task) => task.status === 'todo'),
+      in_progress: rows.filter((task) => task.status === 'in_progress'),
+      blocked: rows.filter((task) => task.status === 'blocked'),
+      pending_review: rows.filter((task) => task.status === 'pending_review'),
+      completed: rows.filter((task) => task.status === 'completed'),
     };
+  }
+
+  private async findBoardTasks(projectId?: string, customerId?: string) {
+    if (!customerId) {
+      return this.findAll(projectId);
+    }
+
+    const projects = await this.projectsRepository.find({
+      select: { id: true },
+      where: {
+        customer_id: customerId,
+        ...(projectId ? { id: projectId } : {}),
+      },
+    });
+    const projectIds = projects.map((project) => project.id);
+    if (projectIds.length === 0) {
+      return [];
+    }
+
+    return this.tasksRepository.find({
+      where: { project_id: In(projectIds) },
+      order: { created_at: 'DESC' },
+      take: 100,
+    });
+  }
+
+  private async refreshOnlineAssetCounts(
+    tasks: TaskEntity[],
+    assetCountByTaskId: Map<string, number>,
+  ) {
+    if (tasks.length === 0) {
+      return;
+    }
+
+    const workspaces = await this.taskDirectoriesRepository.find({
+      where: { task_id: In(tasks.map((task) => task.id)) },
+    });
+    const workspaceByTaskId = new Map(
+      workspaces.map((workspace) => [workspace.task_id, workspace]),
+    );
+
+    await Promise.all(
+      tasks.map(async (task) => {
+        const workspace = workspaceByTaskId.get(task.id);
+        if (
+          workspace?.permission_status !== 'sheet_ready' ||
+          !workspace.feishu_folder_token
+        ) {
+          return;
+        }
+
+        try {
+          const result = await this.syncAssetSheet(task.id);
+          if (!result.skipped) {
+            assetCountByTaskId.set(task.id, result.assetCount ?? 0);
+          }
+        } catch {
+          // Keep the cached DB count if Feishu is temporarily unavailable.
+        }
+      }),
+    );
+  }
+
+  private async countAssetsByTaskIds(taskIds: string[]) {
+    if (taskIds.length === 0) {
+      return new Map<string, number>();
+    }
+
+    const rows = await this.taskResultFilesRepository
+      .createQueryBuilder('file')
+      .select('file.task_id', 'taskId')
+      .addSelect('COUNT(DISTINCT file.file_url)', 'assetCount')
+      .where('file.task_id IN (:...taskIds)', { taskIds })
+      .andWhere('file.deleted_at IS NULL')
+      .groupBy('file.task_id')
+      .getRawMany<{ taskId: string; assetCount: string }>();
+
+    return new Map(rows.map((row) => [row.taskId, Number(row.assetCount)]));
   }
 
   async create(dto: CreateTaskDto) {
@@ -143,10 +243,9 @@ export class TasksService {
 
   async assign(id: string, dto: AssignTaskDto) {
     const task = await this.update(id, { assigneeUserId: dto.assigneeUserId });
-    const notification = await this.notificationsService.notifyTaskAssigned(
-      task,
-    );
     if (!dto.provisionWorkspace) {
+      const notification =
+        await this.notificationsService.notifyTaskAssigned(task);
       return {
         task,
         notification,
@@ -162,7 +261,7 @@ export class TasksService {
     return {
       task,
       workspace: workspaceResult.workspace,
-      assignmentNotification: notification,
+      assignmentNotification: null,
       workspaceNotification: workspaceResult.notification,
     };
   }
@@ -181,6 +280,27 @@ export class TasksService {
       await this.notificationsService.notifyTaskStatusChanged(task);
     return {
       task,
+      notification,
+    };
+  }
+
+  async returnRevision(id: string, dto: ReturnTaskRevisionDto) {
+    const task = await this.findOne(id);
+    Object.assign(task, {
+      status: 'in_progress',
+      progress_percent: Number(dto.progressPercent ?? 60),
+      blocked_reason: dto.reason,
+      actual_end_at: null,
+    });
+    const saved = await this.tasksRepository.save(task);
+    const notification =
+      await this.notificationsService.notifyTaskReturnedForRevision(
+        saved,
+        dto.reason,
+      );
+
+    return {
+      task: saved,
       notification,
     };
   }
@@ -223,6 +343,7 @@ export class TasksService {
       );
     }
 
+    const assetSheet = await this.prepareAssetSheet(task, dto);
     let workspace = await this.taskDirectoriesRepository.findOne({
       where: { task_id: id },
     });
@@ -233,12 +354,9 @@ export class TasksService {
         task_id: task.id,
         project_id: task.project_id,
         assignee_user_id: assigneeUserId,
-        feishu_folder_token: dto.feishuFolderToken ?? null,
-        directory_url:
-          dto.directoryUrl ??
-          (dto.feishuFolderToken
-            ? `https://www.feishu.cn/drive/folder/${dto.feishuFolderToken}`
-            : null),
+        feishu_folder_token:
+          assetSheet.spreadsheetToken ?? dto.feishuFolderToken ?? null,
+        directory_url: assetSheet.url,
         permission_status: 'pending_sync',
         last_synced_at: null,
       });
@@ -246,12 +364,17 @@ export class TasksService {
       Object.assign(workspace, {
         assignee_user_id: assigneeUserId,
         feishu_folder_token:
-          dto.feishuFolderToken ?? workspace.feishu_folder_token,
-        directory_url: dto.directoryUrl ?? workspace.directory_url,
+          assetSheet.spreadsheetToken ??
+          dto.feishuFolderToken ??
+          workspace.feishu_folder_token,
+        directory_url: assetSheet.url ?? workspace.directory_url,
       });
     }
 
-    workspace.permission_status = 'mock_granted';
+    workspace.permission_status =
+      assetSheet.source === 'feishu_sheet'
+        ? 'sheet_ready'
+        : 'local_sheet_ready';
     workspace.last_synced_at = new Date();
     const saved = await this.taskDirectoriesRepository.save(workspace);
 
@@ -260,18 +383,21 @@ export class TasksService {
         object_type: 'task',
         object_id: task.id,
         action_type: 'grant_folder_permission',
-        feishu_object_type: 'folder',
+        feishu_object_type: assetSheet.source,
         feishu_object_id: saved.feishu_folder_token,
         request_payload_json: {
           taskId: task.id,
           assigneeUserId,
-          directoryUrl: saved.directory_url,
+          assetSheetUrl: saved.directory_url,
+          columns: ['编号', '资产地址'],
+          autoNumberFrom: 1,
         },
         response_payload_json: {
-          mocked: true,
+          mocked: assetSheet.source === 'local_asset_sheet',
           permissionStatus: saved.permission_status,
+          assetSheet,
         },
-        status: 'mock_sent',
+        status: assetSheet.source === 'feishu_sheet' ? 'success' : 'mock_sent',
         error_code: null,
         error_message: null,
         triggered_at: new Date(),
@@ -289,6 +415,179 @@ export class TasksService {
       workspace: saved,
       notification,
     };
+  }
+
+  private async prepareAssetSheet(
+    task: TaskEntity,
+    dto: ProvisionTaskWorkspaceDto,
+  ) {
+    const fallbackUrl = dto.directoryUrl?.includes('/drive/folder/')
+      ? this.buildLocalAssetSheetUrl(task)
+      : (dto.directoryUrl ?? this.buildLocalAssetSheetUrl(task));
+    try {
+      const spreadsheet = await this.feishuService.createTaskAssetSpreadsheet({
+        title: `${task.task_no} 资产登记表`,
+        objectId: task.id,
+        folderToken: dto.feishuFolderToken,
+      });
+      await this.feishuService.grantSpreadsheetEditPermission({
+        spreadsheetToken: spreadsheet.spreadsheetToken,
+        userId: dto.assigneeUserId ?? task.assignee_user_id!,
+        objectId: task.id,
+      });
+      return {
+        source: 'feishu_sheet',
+        url: spreadsheet.spreadsheetUrl,
+        spreadsheetToken: spreadsheet.spreadsheetToken,
+        sheetId: spreadsheet.sheetId,
+      };
+    } catch (error) {
+      return {
+        source: 'local_asset_sheet',
+        url: fallbackUrl,
+        spreadsheetToken: null,
+        sheetId: null,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  private buildLocalAssetSheetUrl(task: TaskEntity) {
+    const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
+    return `${baseUrl.replace(/\/$/, '')}/asset-sheet.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}`;
+  }
+
+  async syncAssetSheet(id: string) {
+    const task = await this.findOne(id);
+    const workspace = await this.taskDirectoriesRepository.findOne({
+      where: { task_id: id },
+    });
+    if (!workspace) {
+      throw new NotFoundException('Task asset sheet not found');
+    }
+    if (
+      workspace.permission_status !== 'sheet_ready' ||
+      !workspace.feishu_folder_token
+    ) {
+      return {
+        task,
+        workspace,
+        syncedCount: 0,
+        skipped: true,
+        reason:
+          '任务当前使用本地资产表或飞书表格未就绪，无法由服务端读取飞书表格。',
+      };
+    }
+
+    const assets = this.uniqueAssets(
+      await this.feishuService.readAssetSheetRows({
+        spreadsheetToken: workspace.feishu_folder_token,
+        objectId: task.id,
+      }),
+    );
+    await this.taskResultFilesRepository.softDelete({
+      task_id: task.id,
+      source: 'feishu_asset_sheet',
+    });
+    const created: TaskResultFileEntity[] = [];
+
+    for (const asset of assets) {
+      const file = this.taskResultFilesRepository.create({
+        id: randomUUID(),
+        task_id: task.id,
+        project_id: task.project_id,
+        file_name: `资产-${asset.sequence}`,
+        file_url: asset.assetUrl,
+        feishu_file_token: null,
+        uploaded_by_user_id: task.assignee_user_id,
+        source: 'feishu_asset_sheet',
+        remark: `来自资产登记表第 ${asset.sequence} 行`,
+      });
+      created.push(await this.taskResultFilesRepository.save(file));
+    }
+    const savedTask = await this.markTaskPendingReviewIfAssetsSubmitted(
+      task,
+      assets.length,
+    );
+
+    return {
+      task: savedTask,
+      workspace,
+      assetCount: assets.length,
+      syncedCount: created.length,
+      created,
+    };
+  }
+
+  async saveLocalAssetSheet(id: string, dto: SaveLocalAssetSheetDto) {
+    const task = await this.findOne(id);
+    const assetUrls = Array.from(
+      new Set(
+        (dto.assets ?? [])
+          .map((asset) => asset.assetUrl.trim())
+          .filter((assetUrl) => assetUrl.length > 0),
+      ),
+    );
+
+    await this.taskResultFilesRepository.softDelete({
+      task_id: task.id,
+      source: 'local_asset_sheet',
+    });
+
+    const created: TaskResultFileEntity[] = [];
+    for (const [index, assetUrl] of assetUrls.entries()) {
+      const file = this.taskResultFilesRepository.create({
+        id: randomUUID(),
+        task_id: task.id,
+        project_id: task.project_id,
+        file_name: `资产-${index + 1}`,
+        file_url: assetUrl,
+        feishu_file_token: null,
+        uploaded_by_user_id: task.assignee_user_id,
+        source: 'local_asset_sheet',
+        remark: `来自本地兜底资产表第 ${index + 1} 行`,
+      });
+      created.push(await this.taskResultFilesRepository.save(file));
+    }
+    const savedTask = await this.markTaskPendingReviewIfAssetsSubmitted(
+      task,
+      created.length,
+    );
+
+    return {
+      task: savedTask,
+      assetCount: created.length,
+      syncedCount: created.length,
+      created,
+    };
+  }
+
+  private async markTaskPendingReviewIfAssetsSubmitted(
+    task: TaskEntity,
+    assetCount: number,
+  ) {
+    if (
+      assetCount <= 0 ||
+      task.status === 'completed' ||
+      task.status === 'pending_review'
+    ) {
+      return task;
+    }
+
+    task.status = 'pending_review';
+    task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 90);
+    return this.tasksRepository.save(task);
+  }
+
+  private uniqueAssets(assets: Array<{ sequence: number; assetUrl: string }>) {
+    const seen = new Set<string>();
+    return assets.filter((asset) => {
+      if (seen.has(asset.assetUrl)) {
+        return false;
+      }
+      seen.add(asset.assetUrl);
+      return true;
+    });
   }
 
   async listResultFiles(id: string) {

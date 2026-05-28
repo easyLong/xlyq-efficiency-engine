@@ -1,8 +1,18 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
+import { ReturnTaskRevisionDto } from './dto/return-task-revision.dto';
+import { SaveLocalAssetSheetDto } from './dto/save-local-asset-sheet.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TasksService } from './tasks.service';
@@ -20,8 +30,16 @@ export class TasksController {
   }
 
   @Get('board')
-  board(@Query('projectId') projectId?: string) {
-    return this.tasksService.board(projectId);
+  board(
+    @Query('projectId') projectId?: string,
+    @Query('liveAssetCount') liveAssetCount?: string,
+    @Query('customerId') customerId?: string,
+  ) {
+    return this.tasksService.board(
+      projectId,
+      liveAssetCount === 'true',
+      customerId,
+    );
   }
 
   @Get(':id')
@@ -67,6 +85,19 @@ export class TasksController {
     return this.tasksService.listResultFiles(id);
   }
 
+  @Post(':id/asset-sheet/sync')
+  syncAssetSheet(@Param('id') id: string) {
+    return this.tasksService.syncAssetSheet(id);
+  }
+
+  @Post(':id/asset-sheet/local-assets')
+  saveLocalAssetSheet(
+    @Param('id') id: string,
+    @Body() dto: SaveLocalAssetSheetDto,
+  ) {
+    return this.tasksService.saveLocalAssetSheet(id, dto);
+  }
+
   @Post(':id/result-files')
   registerResultFile(
     @Param('id') id: string,
@@ -78,6 +109,11 @@ export class TasksController {
   @Post(':id/status')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateTaskStatusDto) {
     return this.tasksService.updateStatus(id, dto);
+  }
+
+  @Post(':id/return-revision')
+  returnRevision(@Param('id') id: string, @Body() dto: ReturnTaskRevisionDto) {
+    return this.tasksService.returnRevision(id, dto);
   }
 
   @Post(':id/ai-assignment-suggestion')
