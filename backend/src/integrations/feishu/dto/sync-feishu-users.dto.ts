@@ -6,6 +6,5 @@ export class SyncFeishuUsersDto {
   departmentId?: string;
 
   @IsOptional()
-  @IsString()
-  pageSize?: string;
+  pageSize?: string | number;
 }

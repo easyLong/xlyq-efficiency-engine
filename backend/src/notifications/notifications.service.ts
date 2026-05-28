@@ -84,7 +84,10 @@ export class NotificationsService {
 
     if (channels.includes('feishu_app')) {
       try {
-        result.feishu_app = await this.sendFeishuAppMessage(message);
+        result.feishu_app = await this.sendFeishuAppMessage(message, {
+          actionUrl: dto.actionUrl,
+          actionText: dto.actionText,
+        });
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown Feishu app error';
@@ -164,6 +167,8 @@ export class NotificationsService {
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
+      actionUrl: directoryUrl ?? undefined,
+      actionText: '进入工作目录',
     });
   }
 
@@ -373,7 +378,10 @@ export class NotificationsService {
     return this.notificationsRepository.save(message);
   }
 
-  private async sendFeishuAppMessage(message: NotificationMessageEntity) {
+  private async sendFeishuAppMessage(
+    message: NotificationMessageEntity,
+    action?: { actionUrl?: string; actionText?: string },
+  ) {
     if (!message.recipient_user_id) {
       return { status: 'skipped', reason: 'recipientUserId is empty' };
     }
@@ -397,7 +405,10 @@ export class NotificationsService {
     return this.feishuService.sendAppMessage({
       receiveIdType,
       receiveId,
-      text: `${message.title}\n${message.content}`,
+      title: message.title,
+      text: message.content,
+      actionUrl: action?.actionUrl,
+      actionText: action?.actionText,
       objectType: message.object_type ?? undefined,
       objectId: message.object_id ?? undefined,
     });

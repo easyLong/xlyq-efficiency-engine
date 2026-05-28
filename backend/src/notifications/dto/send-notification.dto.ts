@@ -35,4 +35,12 @@ export class SendNotificationDto {
   @IsOptional()
   @IsString()
   botText?: string;
+
+  @IsOptional()
+  @IsString()
+  actionUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  actionText?: string;
 }

@@ -14,6 +14,18 @@ export class SendAppMessageDto {
 
   @IsOptional()
   @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  actionUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  actionText?: string;
+
+  @IsOptional()
+  @IsString()
   objectType?: string;
 
   @IsOptional()

@@ -72,8 +72,9 @@ export class FeishuService {
         this.configService.get<string>('FEISHU_BOT_WEBHOOK_URL'),
       ),
       recommendedScopes: [
-        'contact:user.base:readonly',
-        'contact:user.email:readonly',
+        'contact:contact.base:readonly',
+        'contact:department.organize:readonly',
+        'contact:contact:readonly_as_app',
         'im:message',
       ],
       mvpMode: 'feishu-contact-sync-and-notification-ready',
@@ -139,10 +140,19 @@ export class FeishuService {
   }
 
   async sendAppMessage(dto: SendAppMessageDto) {
-    const content = JSON.stringify({ text: dto.text });
+    const content = dto.actionUrl
+      ? JSON.stringify(
+          this.buildInteractiveCard({
+            title: dto.title ?? '项目通知',
+            text: dto.text,
+            actionUrl: dto.actionUrl,
+            actionText: dto.actionText ?? '查看详情',
+          }),
+        )
+      : JSON.stringify({ text: dto.text });
     const payload = {
       receive_id: dto.receiveId,
-      msg_type: 'text',
+      msg_type: dto.actionUrl ? 'interactive' : 'text',
       content,
     };
 
@@ -250,6 +260,8 @@ export class FeishuService {
 
     return {
       logId: log.id,
+      status: log.status,
+      errorMessage: log.error_message,
       syncedCount: synced.length,
       users: synced,
     };
@@ -405,6 +417,49 @@ export class FeishuService {
     ).slice(0, 64);
   }
 
+  private buildInteractiveCard(input: {
+    title: string;
+    text: string;
+    actionUrl: string;
+    actionText: string;
+  }) {
+    return {
+      config: {
+        wide_screen_mode: true,
+      },
+      header: {
+        template: 'green',
+        title: {
+          tag: 'plain_text',
+          content: input.title,
+        },
+      },
+      elements: [
+        {
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: input.text,
+          },
+        },
+        {
+          tag: 'action',
+          actions: [
+            {
+              tag: 'button',
+              text: {
+                tag: 'plain_text',
+                content: input.actionText,
+              },
+              type: 'primary',
+              url: input.actionUrl,
+            },
+          ],
+        },
+      ],
+    };
+  }
+
   private async createSyncLog(input: {
     objectType: string;
     objectId: string | null;
@@ -443,12 +498,20 @@ export class FeishuService {
       parsed = text;
     }
 
-    log.status = response.ok ? 'success' : 'failed';
     log.response_payload_json = {
       httpStatus: response.status,
       body: parsed,
     };
-    log.error_message = response.ok ? null : text;
+    const feishuCode =
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'code' in parsed &&
+      typeof parsed.code === 'number'
+        ? parsed.code
+        : 0;
+    const success = response.ok && feishuCode === 0;
+    log.status = success ? 'success' : 'failed';
+    log.error_message = success ? null : text;
     log.finished_at = new Date();
   }
 
