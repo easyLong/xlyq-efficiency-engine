@@ -25,6 +25,10 @@ import { TaskResultFileEntity } from './entities/task-result-file.entity';
 
 @Injectable()
 export class TasksService {
+  private readonly liveAssetSyncTtlMs = 2 * 60 * 1000;
+  private readonly liveAssetSyncConcurrency = 5;
+  private readonly defaultListLimit = 500;
+
   constructor(
     @InjectRepository(TaskEntity)
     private readonly tasksRepository: Repository<TaskEntity>,
@@ -51,7 +55,7 @@ export class TasksService {
     return this.tasksRepository.find({
       where,
       order: { created_at: 'DESC' },
-      take: 100,
+      take: this.defaultListLimit,
     });
   }
 
@@ -105,7 +109,7 @@ export class TasksService {
     return this.tasksRepository.find({
       where: { project_id: In(projectIds) },
       order: { created_at: 'DESC' },
-      take: 100,
+      take: this.defaultListLimit,
     });
   }
 
@@ -124,26 +128,48 @@ export class TasksService {
       workspaces.map((workspace) => [workspace.task_id, workspace]),
     );
 
-    await Promise.all(
-      tasks.map(async (task) => {
-        const workspace = workspaceByTaskId.get(task.id);
-        if (
-          workspace?.permission_status !== 'sheet_ready' ||
-          !workspace.feishu_folder_token
-        ) {
-          return;
-        }
+    const syncableTasks = tasks.filter((task) => {
+      const workspace = workspaceByTaskId.get(task.id);
+      return (
+        workspace?.permission_status === 'sheet_ready' &&
+        Boolean(workspace.feishu_folder_token) &&
+        !this.isRecentlySynced(workspace.last_synced_at)
+      );
+    });
 
-        try {
-          const result = await this.syncAssetSheet(task.id);
-          if (!result.skipped) {
-            assetCountByTaskId.set(task.id, result.assetCount ?? 0);
+    for (const batch of this.chunkArray(
+      syncableTasks,
+      this.liveAssetSyncConcurrency,
+    )) {
+      await Promise.all(
+        batch.map(async (task) => {
+          const workspace = workspaceByTaskId.get(task.id);
+          try {
+            const result = await this.syncAssetSheet(task.id);
+            if (!result.skipped) {
+              assetCountByTaskId.set(task.id, result.assetCount ?? 0);
+            }
+          } catch {
+            // Keep the cached DB count if Feishu is temporarily unavailable.
           }
-        } catch {
-          // Keep the cached DB count if Feishu is temporarily unavailable.
-        }
-      }),
-    );
+        }),
+      );
+    }
+  }
+
+  private isRecentlySynced(lastSyncedAt: Date | null) {
+    if (!lastSyncedAt) {
+      return false;
+    }
+    return Date.now() - lastSyncedAt.getTime() < this.liveAssetSyncTtlMs;
+  }
+
+  private chunkArray<T>(items: T[], size: number) {
+    const chunks: T[][] = [];
+    for (let index = 0; index < items.length; index += size) {
+      chunks.push(items.slice(index, index + size));
+    }
+    return chunks;
   }
 
   private async countAssetsByTaskIds(taskIds: string[]) {
@@ -164,15 +190,11 @@ export class TasksService {
   }
 
   async create(dto: CreateTaskDto) {
-    const count = await this.tasksRepository.count({
-      where: { project_id: dto.projectId },
-    });
-
     const task = this.tasksRepository.create({
       id: randomUUID(),
       project_id: dto.projectId,
       requirement_item_id: dto.requirementItemId ?? null,
-      task_no: `TASK-${String(count + 1).padStart(4, '0')}`,
+      task_no: await this.nextTaskNo(dto.projectId),
       task_name: dto.taskName,
       description: dto.description ?? null,
       status: 'todo',
@@ -186,6 +208,20 @@ export class TasksService {
     });
 
     return this.tasksRepository.save(task);
+  }
+
+  private async nextTaskNo(projectId: string) {
+    const rows = await this.tasksRepository
+      .createQueryBuilder('task')
+      .withDeleted()
+      .select('task.task_no', 'taskNo')
+      .where('task.project_id = :projectId', { projectId })
+      .getRawMany<{ taskNo: string }>();
+    const maxNo = rows.reduce((max, row) => {
+      const match = /^TASK-(\d+)$/.exec(row.taskNo ?? '');
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+    return `TASK-${String(maxNo + 1).padStart(4, '0')}`;
   }
 
   async createFromRequirementItem(itemId: string) {
@@ -375,7 +411,8 @@ export class TasksService {
       assetSheet.source === 'feishu_sheet'
         ? 'sheet_ready'
         : 'local_sheet_ready';
-    workspace.last_synced_at = new Date();
+    workspace.last_synced_at =
+      assetSheet.source === 'feishu_sheet' ? null : new Date();
     const saved = await this.taskDirectoriesRepository.save(workspace);
 
     await this.feishuSyncLogsRepository.save(
@@ -509,10 +546,12 @@ export class TasksService {
       task,
       assets.length,
     );
+    workspace.last_synced_at = new Date();
+    const savedWorkspace = await this.taskDirectoriesRepository.save(workspace);
 
     return {
       task: savedTask,
-      workspace,
+      workspace: savedWorkspace,
       assetCount: assets.length,
       syncedCount: created.length,
       created,

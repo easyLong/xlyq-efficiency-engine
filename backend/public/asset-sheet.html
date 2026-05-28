@@ -36,11 +36,13 @@
       cursor: pointer;
     }
     button.secondary { background: #f7f4e9; color: #18231d; border-color: #cdd8c6; }
+    button.link { background: transparent; color: #9b3f2c; border-color: transparent; padding: 6px 8px; min-height: 32px; }
     button:disabled { opacity: .55; cursor: not-allowed; }
     table { width: 100%; border-collapse: collapse; }
     th, td { border-bottom: 1px solid #d8dfcf; padding: 10px 8px; text-align: left; }
     th { color: #687366; background: #faf8ee; }
     td:first-child { width: 90px; font-weight: 800; color: #2f6b45; }
+    td:last-child { width: 82px; text-align: right; }
     input {
       width: 100%;
       border: 1px solid #d5ddcd;
@@ -76,6 +78,7 @@
           <tr>
             <th>编号</th>
             <th>资产地址</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
@@ -103,7 +106,8 @@
       rowsEl.innerHTML = rows.map((row, index) => `
         <tr>
           <td>${index + 1}</td>
-          <td><input value="${escapeHtml(row.assetUrl || "")}" oninput="updateRow(${index}, this.value)" placeholder="粘贴飞书文件、图片、压缩包或交付物地址" /></td>
+          <td><input value="${escapeHtml(row.assetUrl || "")}" oninput="updateRow(${index}, this.value)" onpaste="handleAssetPaste(event, ${index})" placeholder="粘贴飞书文件、图片、压缩包或交付物地址；可一次粘贴多行" /></td>
+          <td><button class="link" onclick="removeRow(${index})">删除</button></td>
         </tr>
       `).join("");
     }
@@ -119,6 +123,28 @@
       rows.push({ assetUrl: "" });
       localStorage.setItem(storageKey, JSON.stringify(rows));
       renderRows();
+    }
+
+    function removeRow(index) {
+      const rows = loadRows();
+      rows.splice(index, 1);
+      localStorage.setItem(storageKey, JSON.stringify(rows.length ? rows : [{ assetUrl: "" }]));
+      renderRows();
+    }
+
+    function handleAssetPaste(event, index) {
+      const text = event.clipboardData?.getData("text") || "";
+      const pastedAssets = text
+        .split(/\s+/)
+        .map(item => item.trim())
+        .filter(Boolean);
+      if (pastedAssets.length <= 1) return;
+      event.preventDefault();
+      const rows = loadRows();
+      rows.splice(index, 1, ...pastedAssets.map(assetUrl => ({ assetUrl })));
+      localStorage.setItem(storageKey, JSON.stringify(rows));
+      renderRows();
+      setStatus(`已自动填入 ${pastedAssets.length} 个资产地址，确认后点击保存同步统计。`, "ok");
     }
 
     async function loadServerRows() {

@@ -1,11 +1,13 @@
+import os
+
 import pymysql
 
 
-HOST = "rm-wz9uqix4n8s738dq18o.mysql.rds.aliyuncs.com"
-PORT = 3306
-USER = "bool"
-PASSWORD = "v#@JrWCEH9g3"
-DATABASE = "post_supplement_lib"
+HOST = os.getenv("DB_HOST", "127.0.0.1")
+PORT = int(os.getenv("DB_PORT", "3306"))
+USER = os.getenv("DB_USER", "root")
+PASSWORD = os.getenv("DB_PASSWORD", "")
+DATABASE = os.getenv("DB_NAME", "xlyq_efficiency_engine")
 
 
 ROLES = [

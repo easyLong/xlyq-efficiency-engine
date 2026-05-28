@@ -25,6 +25,8 @@ import { RequirementEntity } from './entities/requirement.entity';
 
 @Injectable()
 export class RequirementsService {
+  private readonly defaultListLimit = 500;
+
   private readonly projectTypes = [
     {
       value: 'periodic_report',
@@ -96,7 +98,7 @@ export class RequirementsService {
     return this.requirementsRepository.find({
       where: projectId ? { project_id: projectId } : {},
       order: { created_at: 'DESC' },
-      take: 100,
+      take: this.defaultListLimit,
     });
   }
 
@@ -118,15 +120,9 @@ export class RequirementsService {
   }
 
   async create(dto: CreateRequirementDto) {
-    const code = `REQ-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(
-      Math.random() * 1000,
-    )
-      .toString()
-      .padStart(3, '0')}`;
-
     const requirement = this.requirementsRepository.create({
       id: randomUUID(),
-      requirement_code: code,
+      requirement_code: await this.nextRequirementCode(),
       project_id: dto.projectId,
       customer_id: dto.customerId,
       title: dto.title,
@@ -164,7 +160,7 @@ export class RequirementsService {
     const customers = await this.customersRepository.find({
       where: { status: 'active' },
       order: { customer_code: 'ASC' },
-      take: 100,
+      take: this.defaultListLimit,
     });
     const batchFallbackMatch = this.matchContextByRules(
       requirementContent,
@@ -349,19 +345,33 @@ export class RequirementsService {
 
   async update(id: string, dto: UpdateRequirementDto) {
     const requirement = await this.findOne(id);
+    const targetProjectId = dto.projectId ?? requirement.project_id;
+    const targetCustomerId = dto.customerId ?? requirement.customer_id;
+
+    if (targetProjectId) {
+      const project = await this.projectsRepository.findOne({
+        where: { id: targetProjectId },
+      });
+      if (!project) {
+        throw new NotFoundException('Project not found');
+      }
+      if (targetCustomerId && project.customer_id !== targetCustomerId) {
+        throw new BadRequestException('Project does not belong to customer');
+      }
+    }
 
     Object.assign(requirement, {
       title: dto.title ?? requirement.title,
       status: dto.status ?? requirement.status,
       priority: dto.priority ?? requirement.priority,
-      customer_id: dto.customerId ?? requirement.customer_id,
+      project_id: targetProjectId,
+      customer_id: targetCustomerId,
       raw_content: dto.rawContent ?? requirement.raw_content,
       summary: dto.summary ?? requirement.summary,
     });
 
-    const savedRequirement = await this.requirementsRepository.save(
-      requirement,
-    );
+    const savedRequirement =
+      await this.requirementsRepository.save(requirement);
 
     const items = await this.requirementItemsRepository.find({
       where: { requirement_id: id },
@@ -369,16 +379,27 @@ export class RequirementsService {
       take: 1,
     });
     const item = items[0];
-    if (item && (dto.title || dto.rawContent || dto.priority)) {
+    const shouldSyncItem =
+      dto.title !== undefined ||
+      dto.rawContent !== undefined ||
+      dto.priority !== undefined;
+    const shouldSyncTask = shouldSyncItem || dto.projectId !== undefined;
+    if (item && shouldSyncItem) {
       item.item_title = dto.title ?? item.item_title;
       item.item_description = dto.rawContent ?? item.item_description;
       item.priority = dto.priority ?? item.priority;
       await this.requirementItemsRepository.save(item);
+    }
 
+    if (item && shouldSyncTask) {
       const task = await this.tasksRepository.findOne({
         where: { requirement_item_id: item.id },
       });
       if (task) {
+        if (dto.projectId && dto.projectId !== task.project_id) {
+          task.task_no = await this.nextTaskNo(dto.projectId);
+          task.project_id = dto.projectId;
+        }
         task.task_name = dto.title ?? task.task_name;
         task.description = dto.rawContent ?? task.description;
         task.priority = dto.priority ?? task.priority;
@@ -477,10 +498,7 @@ export class RequirementsService {
 
   async createItem(requirementId: string, dto: CreateRequirementItemDto) {
     const requirement = await this.findOne(requirementId);
-    const count = await this.requirementItemsRepository.count({
-      where: { requirement_id: requirementId },
-    });
-    const itemNo = `${requirement.requirement_code}-ITEM-${String(count + 1).padStart(3, '0')}`;
+    const itemNo = await this.nextRequirementItemNo(requirement);
 
     const item = this.requirementItemsRepository.create({
       id: randomUUID(),
@@ -581,11 +599,7 @@ export class RequirementsService {
       reason: string;
     };
   }) {
-    const code = `REQ-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(
-      Math.random() * 1000,
-    )
-      .toString()
-      .padStart(3, '0')}`;
+    const code = await this.nextRequirementCode();
 
     const requirement = await this.requirementsRepository.save(
       this.requirementsRepository.create({
@@ -620,15 +634,12 @@ export class RequirementsService {
       }),
     );
 
-    const count = await this.tasksRepository.count({
-      where: { project_id: requirement.project_id },
-    });
     const task = await this.tasksRepository.save(
       this.tasksRepository.create({
         id: randomUUID(),
         project_id: requirement.project_id,
         requirement_item_id: item.id,
-        task_no: `TASK-${String(count + 1).padStart(4, '0')}`,
+        task_no: await this.nextTaskNo(requirement.project_id),
         task_name: item.item_title,
         description: item.item_description ?? null,
         status: 'todo',
@@ -648,6 +659,60 @@ export class RequirementsService {
       task,
       ...(input.match ? { match: input.match } : {}),
     };
+  }
+
+  private async nextTaskNo(projectId: string) {
+    const rows = await this.tasksRepository
+      .createQueryBuilder('task')
+      .withDeleted()
+      .select('task.task_no', 'taskNo')
+      .where('task.project_id = :projectId', { projectId })
+      .getRawMany<{ taskNo: string }>();
+    const maxNo = rows.reduce((max, row) => {
+      const match = /^TASK-(\d+)$/.exec(row.taskNo ?? '');
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+    return `TASK-${String(maxNo + 1).padStart(4, '0')}`;
+  }
+
+  private async nextRequirementCode() {
+    const prefix = `REQ-${this.todayStamp()}-`;
+    const rows = await this.requirementsRepository
+      .createQueryBuilder('requirement')
+      .withDeleted()
+      .select('requirement.requirement_code', 'requirementCode')
+      .where('requirement.requirement_code LIKE :prefix', {
+        prefix: `${prefix}%`,
+      })
+      .getRawMany<{ requirementCode: string }>();
+    const maxNo = rows.reduce((max, row) => {
+      const match = new RegExp(`^${prefix}(\\d+)$`).exec(
+        row.requirementCode ?? '',
+      );
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+    return `${prefix}${String(maxNo + 1).padStart(4, '0')}`;
+  }
+
+  private async nextRequirementItemNo(requirement: RequirementEntity) {
+    const prefix = `${requirement.requirement_code}-ITEM-`;
+    const rows = await this.requirementItemsRepository
+      .createQueryBuilder('item')
+      .withDeleted()
+      .select('item.item_no', 'itemNo')
+      .where('item.requirement_id = :requirementId', {
+        requirementId: requirement.id,
+      })
+      .getRawMany<{ itemNo: string }>();
+    const maxNo = rows.reduce((max, row) => {
+      const match = new RegExp(`^${prefix}(\\d+)$`).exec(row.itemNo ?? '');
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+    return `${prefix}${String(maxNo + 1).padStart(3, '0')}`;
+  }
+
+  private todayStamp() {
+    return new Date().toISOString().slice(0, 10).replace(/-/g, '');
   }
 
   private async ensureProjectForAiRequirement(input: {

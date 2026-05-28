@@ -65,6 +65,8 @@ FEISHU_EVENT_VERIFICATION_TOKEN=
 FEISHU_DEFAULT_DEPARTMENT_ID=0
 ```
 
+根目录 `scripts/` 下的数据库初始化脚本复用同一组 `DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME` 环境变量，不再硬编码数据库账号密码。
+
 ## 启动
 
 ```bash

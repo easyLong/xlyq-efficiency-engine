@@ -18,6 +18,10 @@ export class UpdateRequirementDto {
   customerId?: string;
 
   @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
+  @IsOptional()
   @IsString()
   rawContent?: string;
 

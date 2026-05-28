@@ -4,7 +4,7 @@
 
 ### 静态页面
 
-- `GET /`：MVP 登录、需求录入、任务指派、统计分析页面。
+- `GET /`：MVP 登录、需求录入、任务指派、报价单、报价适配、结算单、统计分析页面。
 - `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>`：本地兜底资产登记表，员工填写资产地址 URL。
 
 ### 需求与任务
@@ -25,6 +25,18 @@
 - `POST /api/v1/integrations/feishu/contacts/sync-users`：同步飞书员工到本地用户。
 - `GET /api/v1/integrations/feishu/sync-logs`：查看飞书消息、表格创建、授权、同步日志。
 - `POST /api/v1/notifications/result-file-missing-scan`：扫描缺失资产 URL 的任务并提醒负责人。
+
+### 报价、适配与结算
+
+- `POST /api/v1/quotations/parse-text`：预览解析报价单文本，返回将生成的细粒度报价子项。
+- `POST /api/v1/quotations/import-text`：导入报价单文本并生成报价单与报价子项。
+- `GET /api/v1/quotations/{id}/items`：查看报价单子项。
+- `DELETE /api/v1/quotations/{id}`：软删除报价单及其子项。
+- `GET /api/v1/quote-mappings/quarter-workbench?customerId=<id>&quarter=YYYY-Qn`：按基金和季度加载需求报价适配工作台。
+- `GET /api/v1/quote-mappings/quarter-workbenches?customerIds=<id1,id2>&quarter=YYYY-Qn`：批量加载多基金季度适配工作台，用于统计分析和结算页减少多次请求。
+- `POST /api/v1/quote-mappings/quarter-suggest`：按基金、季度和报价单生成需求项到报价子项的自动适配建议。
+- `PATCH /api/v1/quote-mappings/{mappingId}`：保存或确认单条需求报价适配。
+- `DELETE /api/v1/quote-mappings/{mappingId}`：删除单条需求报价适配。
 
 ## 1. 文档目标
 
@@ -397,6 +409,22 @@
 - 入参：`projectId`
 - 返回：`aiLogId`、`mappingSuggestions`
 
+### `GET /quote-mappings/quarter-workbench`
+- 说明：按基金客户和季度加载需求报价适配工作台
+- 查询：`customerId`、`quarter`、`quotationId?`
+- 返回：季度内需求项、可选报价单、当前报价子项、已有映射、汇总指标
+
+### `GET /quote-mappings/quarter-workbenches`
+- 说明：批量加载多个基金客户的季度适配工作台，避免统计分析/结算页按基金逐个请求
+- 查询：`customerIds` 逗号分隔、`quarter`
+- 返回：`workbenches[]`、跨基金 `summary`
+- 校验：`customerIds` 不能为空，`quarter` 必须是 `YYYY-Qn`，例如 `2026-Q2`
+
+### `POST /quote-mappings/quarter-suggest`
+- 说明：按基金、季度和报价单自动建议需求项与报价子项的映射
+- 入参：`customerId`、`quarter`、`quotationId`、`requirementItemIds?`
+- 返回：`aiLogId`、`suggestions`、`workbench`
+
 ### `GET /quote-mappings`
 - 说明：映射列表
 - 查询：`projectId`、`requirementItemId`、`mappingStatus`
@@ -406,6 +434,9 @@
 
 ### `PATCH /quote-mappings/{mappingId}`
 - 说明：修改映射
+
+### `DELETE /quote-mappings/{mappingId}`
+- 说明：删除映射，并同步需求项和报价子项挂靠状态
 
 ### `POST /quote-mappings/{mappingId}/confirm`
 - 说明：财务确认映射
@@ -426,6 +457,16 @@
 ### `POST /quotations`
 - 说明：手工创建报价单
 
+### `POST /quotations/parse-text`
+- 说明：预览解析报价单文本，不落库
+- 入参：`rawContent`、`fileName?`
+- 返回：`items`、`totalAmount`、`summary`
+
+### `POST /quotations/import-text`
+- 说明：导入报价单文本并生成报价单与最细粒度报价子项
+- 入参：`projectId`、`customerId`、`rawContent`、`fileName?`
+- 返回：`quotation`、`items`、`summary`
+
 ### `POST /quotations/from-mappings`
 - 说明：根据映射结果生成报价单草稿
 - 入参：`projectId`、`mappingIds[]`
@@ -435,6 +476,9 @@
 
 ### `PATCH /quotations/{quotationId}`
 - 说明：更新报价单头信息
+
+### `DELETE /quotations/{quotationId}`
+- 说明：软删除报价单及报价子项
 
 ### `POST /quotations/{quotationId}/items`
 - 说明：新增报价项

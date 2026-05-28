@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
 import { CreateQuotationItemDto } from './dto/create-quotation-item.dto';
+import { ImportQuotationTextDto } from './dto/import-quotation-text.dto';
+import { ParseQuotationTextDto } from './dto/parse-quotation-text.dto';
 import { ReviewQuotationDto } from './dto/review-quotation.dto';
 import { UpdateQuotationDto } from './dto/update-quotation.dto';
 import { UpdateQuotationItemDto } from './dto/update-quotation-item.dto';
@@ -28,9 +30,24 @@ export class QuotationsController {
     return this.quotationsService.create(dto);
   }
 
+  @Post('import-text')
+  importText(@Body() dto: ImportQuotationTextDto) {
+    return this.quotationsService.importText(dto);
+  }
+
+  @Post('parse-text')
+  parseText(@Body() dto: ParseQuotationTextDto) {
+    return this.quotationsService.parseText(dto);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateQuotationDto) {
     return this.quotationsService.update(id, dto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.quotationsService.remove(id);
   }
 
   @Get(':id/items')
