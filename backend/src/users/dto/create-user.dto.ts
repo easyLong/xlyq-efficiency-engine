@@ -24,4 +24,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   source?: string;
+
+  @IsOptional()
+  @IsString()
+  feishuOpenId?: string;
 }

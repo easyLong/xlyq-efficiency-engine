@@ -61,7 +61,7 @@ export class UsersService {
       avatar_url: dto.avatarUrl ?? null,
       status: 'active',
       source: dto.source ?? 'local',
-      feishu_open_id: null,
+      feishu_open_id: dto.feishuOpenId ?? null,
     });
     return this.usersRepository.save(user);
   }
@@ -74,6 +74,7 @@ export class UsersService {
       mobile: dto.mobile ?? user.mobile,
       avatar_url: dto.avatarUrl ?? user.avatar_url,
       status: dto.status ?? user.status,
+      feishu_open_id: dto.feishuOpenId ?? user.feishu_open_id,
     });
     return this.usersRepository.save(user);
   }
