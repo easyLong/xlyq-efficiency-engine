@@ -344,7 +344,7 @@ export class FeishuService {
     const requestPayload = {
       title: input.title,
       folderToken: input.folderToken ?? null,
-      columns: ['编号', '资产地址'],
+      columns: ['编号', '资产地址', '图片地址（可多张）', '交付链接'],
     };
     const log = await this.createSyncLog({
       objectType: 'task',
@@ -424,7 +424,7 @@ export class FeishuService {
         spreadsheetUrl,
         sheetId,
         template: {
-          headers: ['编号', '资产地址'],
+          headers: ['编号', '资产地址', '图片地址（可多张）', '交付链接'],
           autoNumberFormula: '=ROW()-1',
           preparedRows: 500,
         },
@@ -507,7 +507,7 @@ export class FeishuService {
       feishuObjectType: 'sheet',
       feishuObjectId: input.spreadsheetToken,
       requestPayload: {
-        columns: ['编号', '资产地址'],
+        columns: ['编号', '资产地址', '图片地址（可多张）', '交付链接'],
       },
     });
 
@@ -521,7 +521,7 @@ export class FeishuService {
         throw new Error('Asset sheet has no sheetId');
       }
 
-      const range = `${sheetId}!A2:B501`;
+      const range = `${sheetId}!A2:D501`;
       const url = new URL(
         `https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/${input.spreadsheetToken}/values_batch_get`,
       );
@@ -551,8 +551,18 @@ export class FeishuService {
         .map((row, index) => ({
           sequence: index + 1,
           assetUrl: String(row[1] ?? '').trim(),
+          imageUrls: String(row[2] ?? '')
+            .split(/\s+/)
+            .map((value) => value.trim())
+            .filter(Boolean),
+          linkUrl: String(row[3] ?? '').trim(),
         }))
-        .filter((row) => row.assetUrl.length > 0);
+        .filter(
+          (row) =>
+            row.assetUrl.length > 0 ||
+            row.imageUrls.length > 0 ||
+            row.linkUrl.length > 0,
+        );
 
       log.status = 'success';
       log.response_payload_json = {
@@ -716,8 +726,8 @@ export class FeishuService {
     sheetId: string,
   ) {
     const rows = [
-      ['编号', '资产地址'],
-      ...Array.from({ length: 500 }, () => ['=ROW()-1', '']),
+      ['编号', '资产地址', '图片地址（可多张）', '交付链接'],
+      ...Array.from({ length: 500 }, () => ['=ROW()-1', '', '', '']),
     ];
     const response = await fetch(
       `https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/${spreadsheetToken}/values`,
@@ -729,7 +739,7 @@ export class FeishuService {
         },
         body: JSON.stringify({
           valueRange: {
-            range: `${sheetId}!A1:B501`,
+            range: `${sheetId}!A1:D501`,
             values: rows,
           },
         }),

@@ -20,10 +20,10 @@ export class DashboardService {
   ) {}
 
   async overview() {
+    const now = new Date();
     const [
       inProgressProjects,
       pendingTasks,
-      overdueTasks,
       pendingMappings,
       pendingQuotations,
       quotationAmount,
@@ -31,12 +31,6 @@ export class DashboardService {
       this.projectsRepository.count({ where: { status: 'in_progress' } }),
       this.tasksRepository.count({
         where: { status: Not('completed') },
-      }),
-      this.tasksRepository.count({
-        where: {
-          status: Not('completed'),
-          planned_end_at: Not(IsNull()),
-        },
       }),
       this.mappingsRepository.count({
         where: { mapping_status: 'pending_confirm' },
@@ -52,11 +46,17 @@ export class DashboardService {
         })
         .getRawOne(),
     ]);
+    const trueOverdueTasks = await this.tasksRepository
+      .createQueryBuilder('task')
+      .where('task.status != :completed', { completed: 'completed' })
+      .andWhere('task.planned_end_at IS NOT NULL')
+      .andWhere('task.planned_end_at < :now', { now })
+      .getCount();
 
     return {
       inProgressProjects,
       pendingTasks,
-      overdueTasks,
+      overdueTasks: trueOverdueTasks,
       pendingMappings,
       pendingQuotations,
       totalQuotationAmount: Number(quotationAmount?.total ?? 0),

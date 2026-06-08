@@ -2,21 +2,27 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { randomUUID } from 'node:crypto';
-import { In, Repository } from 'typeorm';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { extname, join } from 'node:path';
+import { DataSource, In, Repository } from 'typeorm';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
 import { FeishuService } from '../integrations/feishu/feishu.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectEntity } from '../projects/entities/project.entity';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
+import { RequirementEntity } from '../requirements/entities/requirement.entity';
+import { UserEntity } from '../users/entities/user.entity';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
 import { ReturnTaskRevisionDto } from './dto/return-task-revision.dto';
 import { SaveLocalAssetSheetDto } from './dto/save-local-asset-sheet.dto';
+import { UploadLocalAssetImageDto } from './dto/upload-local-asset-image.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskDirectoryEntity } from './entities/task-directory.entity';
@@ -28,12 +34,16 @@ export class TasksService {
   private readonly liveAssetSyncTtlMs = 2 * 60 * 1000;
   private readonly liveAssetSyncConcurrency = 5;
   private readonly defaultListLimit = 500;
+  private readonly maxLocalImageCount = 80;
+  private readonly maxLocalAssetCount = 200;
 
   constructor(
     @InjectRepository(TaskEntity)
     private readonly tasksRepository: Repository<TaskEntity>,
     @InjectRepository(RequirementItemEntity)
     private readonly requirementItemsRepository: Repository<RequirementItemEntity>,
+    @InjectRepository(RequirementEntity)
+    private readonly requirementsRepository: Repository<RequirementEntity>,
     @InjectRepository(TaskDirectoryEntity)
     private readonly taskDirectoriesRepository: Repository<TaskDirectoryEntity>,
     @InjectRepository(TaskResultFileEntity)
@@ -42,6 +52,9 @@ export class TasksService {
     private readonly feishuSyncLogsRepository: Repository<FeishuSyncLogEntity>,
     @InjectRepository(ProjectEntity)
     private readonly projectsRepository: Repository<ProjectEntity>,
+    @InjectRepository(UserEntity)
+    private readonly usersRepository: Repository<UserEntity>,
+    private readonly dataSource: DataSource,
     private readonly feishuService: FeishuService,
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -183,6 +196,9 @@ export class TasksService {
       .addSelect('COUNT(DISTINCT file.file_url)', 'assetCount')
       .where('file.task_id IN (:...taskIds)', { taskIds })
       .andWhere('file.deleted_at IS NULL')
+      .andWhere('file.source IN (:...billableSources)', {
+        billableSources: this.billableAssetSources(),
+      })
       .groupBy('file.task_id')
       .getRawMany<{ taskId: string; assetCount: string }>();
 
@@ -366,8 +382,77 @@ export class TasksService {
   }
 
   async getWorkspace(id: string) {
-    await this.findOne(id);
-    return this.taskDirectoriesRepository.findOne({ where: { task_id: id } });
+    const task = await this.findOne(id);
+    const workspace = await this.taskDirectoriesRepository.findOne({
+      where: { task_id: id },
+    });
+    if (!workspace) {
+      return null;
+    }
+    return {
+      ...workspace,
+      directory_url: this.ensureSignedLocalAssetSheetUrl(
+        task,
+        workspace.directory_url,
+      ),
+    };
+  }
+
+  async getAssetSheetContext(id: string, token?: string) {
+    const task = await this.findOne(id);
+    this.assertAssetSheetAccess(task, token);
+    const [project, requirementItem, assignee, workspace, files] =
+      await Promise.all([
+        this.projectsRepository.findOne({ where: { id: task.project_id } }),
+        task.requirement_item_id
+          ? this.requirementItemsRepository.findOne({
+              where: { id: task.requirement_item_id },
+            })
+          : Promise.resolve(null),
+        task.assignee_user_id
+          ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
+          : Promise.resolve(null),
+        this.taskDirectoriesRepository.findOne({ where: { task_id: id } }),
+        this.listResultFiles(id),
+      ]);
+    const requirement = requirementItem
+      ? await this.requirementsRepository.findOne({
+          where: { id: requirementItem.requirement_id },
+        })
+      : null;
+
+    const localImages = files.filter(
+      (file) => file.source === 'local_asset_sheet_image',
+    );
+    const localLink = files.find(
+      (file) => file.source === 'local_asset_sheet_link',
+    );
+    const legacyLocalAssets = files.filter(
+      (file) => file.source === 'local_asset_sheet',
+    );
+
+    return {
+      task,
+      project,
+      requirement,
+      requirementItem,
+      assignee: assignee
+        ? {
+            id: assignee.id,
+            username: assignee.username,
+            display_name: assignee.display_name,
+            avatar_url: assignee.avatar_url,
+          }
+        : null,
+      workspace,
+      files,
+      delivery: {
+        imageUrls: (localImages.length ? localImages : legacyLocalAssets).map(
+          (file) => file.file_url,
+        ),
+        linkUrl: localLink?.file_url ?? '',
+      },
+    };
   }
 
   async provisionWorkspace(id: string, dto: ProvisionTaskWorkspaceDto) {
@@ -426,7 +511,7 @@ export class TasksService {
           taskId: task.id,
           assigneeUserId,
           assetSheetUrl: saved.directory_url,
-          columns: ['编号', '资产地址'],
+          columns: ['编号', '资产地址', '图片地址（可多张）', '交付链接'],
           autoNumberFrom: 1,
         },
         response_payload_json: {
@@ -491,7 +576,23 @@ export class TasksService {
 
   private buildLocalAssetSheetUrl(task: TaskEntity) {
     const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
-    return `${baseUrl.replace(/\/$/, '')}/asset-sheet.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}`;
+    const token = this.assetSheetToken(task);
+    return `${baseUrl.replace(/\/$/, '')}/asset-sheet.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}&token=${encodeURIComponent(token)}`;
+  }
+
+  private ensureSignedLocalAssetSheetUrl(task: TaskEntity, url: string | null) {
+    if (!url || !url.includes('/asset-sheet.html')) {
+      return url;
+    }
+    try {
+      const parsed = new URL(url);
+      parsed.searchParams.set('taskId', task.id);
+      parsed.searchParams.set('taskNo', task.task_no);
+      parsed.searchParams.set('token', this.assetSheetToken(task));
+      return parsed.toString();
+    } catch {
+      return this.buildLocalAssetSheetUrl(task);
+    }
   }
 
   async syncAssetSheet(id: string) {
@@ -524,27 +625,51 @@ export class TasksService {
     );
     await this.taskResultFilesRepository.softDelete({
       task_id: task.id,
-      source: 'feishu_asset_sheet',
+      source: In([
+        'feishu_asset_sheet',
+        'feishu_asset_sheet_image',
+        'feishu_asset_sheet_link',
+      ]),
     });
     const created: TaskResultFileEntity[] = [];
 
     for (const asset of assets) {
-      const file = this.taskResultFilesRepository.create({
-        id: randomUUID(),
-        task_id: task.id,
-        project_id: task.project_id,
-        file_name: `资产-${asset.sequence}`,
-        file_url: asset.assetUrl,
-        feishu_file_token: null,
-        uploaded_by_user_id: task.assignee_user_id,
-        source: 'feishu_asset_sheet',
-        remark: `来自资产登记表第 ${asset.sequence} 行`,
-      });
-      created.push(await this.taskResultFilesRepository.save(file));
+      if (asset.assetUrl) {
+        created.push(
+          await this.createTaskResultFile(task, {
+            fileName: `资产-${asset.sequence}`,
+            fileUrl: asset.assetUrl,
+            source: 'feishu_asset_sheet',
+            remark: `来自资产登记表第 ${asset.sequence} 行`,
+          }),
+        );
+      }
+      for (const [imageIndex, imageUrl] of (
+        asset.imageUrls ?? []
+      ).entries()) {
+        created.push(
+          await this.createTaskResultFile(task, {
+            fileName: `图片-${asset.sequence}-${imageIndex + 1}`,
+            fileUrl: imageUrl,
+            source: 'feishu_asset_sheet_image',
+            remark: `来自资产登记表第 ${asset.sequence} 行图片区`,
+          }),
+        );
+      }
+      if (asset.linkUrl) {
+        created.push(
+          await this.createTaskResultFile(task, {
+            fileName: `交付链接-${asset.sequence}`,
+            fileUrl: asset.linkUrl,
+            source: 'feishu_asset_sheet_link',
+            remark: `来自资产登记表第 ${asset.sequence} 行单链接区`,
+          }),
+        );
+      }
     }
     const savedTask = await this.markTaskPendingReviewIfAssetsSubmitted(
       task,
-      assets.length,
+      this.billableAssetCount(created),
     );
     workspace.last_synced_at = new Date();
     const savedWorkspace = await this.taskDirectoriesRepository.save(workspace);
@@ -552,53 +677,282 @@ export class TasksService {
     return {
       task: savedTask,
       workspace: savedWorkspace,
-      assetCount: assets.length,
+      assetCount: this.billableAssetCount(created),
       syncedCount: created.length,
       created,
     };
   }
 
-  async saveLocalAssetSheet(id: string, dto: SaveLocalAssetSheetDto) {
+  async saveLocalAssetSheet(
+    id: string,
+    dto: SaveLocalAssetSheetDto,
+    token?: string,
+  ) {
     const task = await this.findOne(id);
-    const assetUrls = Array.from(
+    this.assertAssetSheetAccess(task, token);
+    const assetUrls = this.uniqueTextValues(
       new Set(
         (dto.assets ?? [])
           .map((asset) => asset.assetUrl.trim())
           .filter((assetUrl) => assetUrl.length > 0),
       ),
     );
+    const imageUrls = this.uniqueTextValues(dto.imageUrls ?? []);
+    const linkUrl = (dto.linkUrl ?? '').trim();
+    this.assertDeliveryUrls(assetUrls, imageUrls, linkUrl);
 
-    await this.taskResultFilesRepository.softDelete({
-      task_id: task.id,
-      source: 'local_asset_sheet',
-    });
+    const { created, savedTask } = await this.dataSource.transaction(
+      async (manager) => {
+        const fileRepository = manager.getRepository(TaskResultFileEntity);
+        const taskRepository = manager.getRepository(TaskEntity);
+        await fileRepository.softDelete({
+          task_id: task.id,
+          source: In([
+            'local_asset_sheet',
+            'local_asset_sheet_image',
+            'local_asset_sheet_link',
+          ]),
+        });
 
-    const created: TaskResultFileEntity[] = [];
-    for (const [index, assetUrl] of assetUrls.entries()) {
-      const file = this.taskResultFilesRepository.create({
-        id: randomUUID(),
-        task_id: task.id,
-        project_id: task.project_id,
-        file_name: `资产-${index + 1}`,
-        file_url: assetUrl,
-        feishu_file_token: null,
-        uploaded_by_user_id: task.assignee_user_id,
-        source: 'local_asset_sheet',
-        remark: `来自本地兜底资产表第 ${index + 1} 行`,
-      });
-      created.push(await this.taskResultFilesRepository.save(file));
-    }
-    const savedTask = await this.markTaskPendingReviewIfAssetsSubmitted(
-      task,
-      created.length,
+        const created: TaskResultFileEntity[] = [];
+        const createFile = async (input: {
+          fileName: string;
+          fileUrl: string;
+          source: string;
+          remark: string;
+        }) => {
+          const file = fileRepository.create({
+            id: randomUUID(),
+            task_id: task.id,
+            project_id: task.project_id,
+            file_name: input.fileName,
+            file_url: input.fileUrl,
+            feishu_file_token: null,
+            uploaded_by_user_id: task.assignee_user_id,
+            source: input.source,
+            remark: input.remark,
+          });
+          created.push(await fileRepository.save(file));
+        };
+
+        for (const [index, assetUrl] of assetUrls.entries()) {
+          await createFile({
+            fileName: `资产-${index + 1}`,
+            fileUrl: assetUrl,
+            source: 'local_asset_sheet',
+            remark: `来自本地兜底资产表第 ${index + 1} 行`,
+          });
+        }
+        for (const [index, imageUrl] of imageUrls.entries()) {
+          await createFile({
+            fileName: `图片-${index + 1}`,
+            fileUrl: imageUrl,
+            source: 'local_asset_sheet_image',
+            remark: `来自本地任务通知页图片区第 ${index + 1} 张`,
+          });
+        }
+        if (linkUrl) {
+          await createFile({
+            fileName: '交付链接',
+            fileUrl: linkUrl,
+            source: 'local_asset_sheet_link',
+            remark: '来自本地任务通知页单链接区',
+          });
+        }
+
+        const assetCount = this.billableAssetCount(created);
+        let savedTask = task;
+        if (
+          assetCount > 0 &&
+          task.status !== 'completed' &&
+          task.status !== 'pending_review'
+        ) {
+          task.status = 'pending_review';
+          task.progress_percent = Math.max(
+            Number(task.progress_percent ?? 0),
+            90,
+          );
+          savedTask = await taskRepository.save(task);
+        }
+        return { created, savedTask };
+      },
     );
 
     return {
       task: savedTask,
-      assetCount: created.length,
+      assetCount: this.billableAssetCount(created),
       syncedCount: created.length,
       created,
     };
+  }
+
+  async uploadLocalAssetImage(
+    id: string,
+    dto: UploadLocalAssetImageDto,
+    token?: string,
+  ) {
+    const task = await this.findOne(id);
+    this.assertAssetSheetAccess(task, token);
+    await this.assertUploadCapacity(task.id);
+    const match = /^data:image\/(png|jpe?g|webp|gif);base64,([a-z0-9+/=]+)$/i.exec(
+      dto.dataUrl ?? '',
+    );
+    if (!match) {
+      throw new BadRequestException('Only png, jpg, webp or gif images are supported');
+    }
+
+    const ext =
+      match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase();
+    const bytes = Buffer.from(match[2], 'base64');
+    if (bytes.length <= 0) {
+      throw new BadRequestException('Uploaded image is empty');
+    }
+    if (bytes.length > 8 * 1024 * 1024) {
+      throw new BadRequestException('Uploaded image must be smaller than 8MB');
+    }
+
+    const uploadDir = join(process.cwd(), 'public', 'uploads', 'task-assets', task.id);
+    await mkdir(uploadDir, { recursive: true });
+    const safeBaseName = this.safeFileBaseName(dto.fileName) || 'image';
+    const fileName = `${safeBaseName}-${randomUUID().slice(0, 8)}.${ext}`;
+    const filePath = join(uploadDir, fileName);
+    await writeFile(filePath, bytes);
+
+    return {
+      taskId: task.id,
+      imageUrl: `/uploads/task-assets/${task.id}/${fileName}`,
+      fileName,
+      size: bytes.length,
+    };
+  }
+
+  private uniqueTextValues(values: string[] | Set<string>) {
+    return Array.from(values)
+      .map((value) => String(value ?? '').trim())
+      .filter(Boolean)
+      .filter((value, index, array) => array.indexOf(value) === index);
+  }
+
+  private assertDeliveryUrls(
+    assetUrls: string[],
+    imageUrls: string[],
+    linkUrl: string,
+  ) {
+    if (assetUrls.length > this.maxLocalAssetCount) {
+      throw new BadRequestException(
+        `Asset URL count cannot exceed ${this.maxLocalAssetCount}`,
+      );
+    }
+    if (imageUrls.length > this.maxLocalImageCount) {
+      throw new BadRequestException(
+        `Image URL count cannot exceed ${this.maxLocalImageCount}`,
+      );
+    }
+    const allUrls = [...assetUrls, ...imageUrls, linkUrl].filter(Boolean);
+    for (const url of allUrls) {
+      if (url.length > 500) {
+        throw new BadRequestException('Delivery URL cannot exceed 500 characters');
+      }
+      if (!this.isAllowedDeliveryUrl(url)) {
+        throw new BadRequestException(
+          'Delivery URL must be http(s) or a local uploads path',
+        );
+      }
+    }
+  }
+
+  private isAllowedDeliveryUrl(url: string) {
+    return /^https?:\/\//i.test(url) || url.startsWith('/uploads/task-assets/');
+  }
+
+  private async assertUploadCapacity(taskId: string) {
+    const count = await this.taskResultFilesRepository.count({
+      where: {
+        task_id: taskId,
+        source: In(['local_asset_sheet_image', 'local_asset_sheet']),
+      },
+    });
+    if (count >= this.maxLocalImageCount) {
+      throw new BadRequestException(
+        `Image asset count cannot exceed ${this.maxLocalImageCount}`,
+      );
+    }
+  }
+
+  private billableAssetSources() {
+    return [
+      'local_asset_sheet',
+      'local_asset_sheet_image',
+      'feishu_asset_sheet',
+      'feishu_asset_sheet_image',
+      'manual',
+      'feishu',
+    ];
+  }
+
+  private billableAssetCount(files: TaskResultFileEntity[]) {
+    const sources = new Set(this.billableAssetSources());
+    return new Set(
+      files
+        .filter((file) => sources.has(file.source))
+        .map((file) => file.file_url)
+        .filter(Boolean),
+    ).size;
+  }
+
+  private assetSheetToken(task: TaskEntity) {
+    const secret =
+      process.env.TASK_ACCESS_TOKEN_SECRET ??
+      process.env.APP_SECRET ??
+      process.env.DB_PASSWORD ??
+      'xlyq-efficiency-engine-local-secret';
+    return createHmac('sha256', secret)
+      .update(`${task.id}:${task.task_no}`)
+      .digest('hex');
+  }
+
+  private assertAssetSheetAccess(task: TaskEntity, token?: string) {
+    const expected = this.assetSheetToken(task);
+    if (!token || token.length !== expected.length) {
+      throw new UnauthorizedException('Invalid task access token');
+    }
+    const ok = timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+    if (!ok) {
+      throw new UnauthorizedException('Invalid task access token');
+    }
+  }
+
+  private safeFileBaseName(value?: string) {
+    const raw = (value ?? '').trim();
+    const withoutExt = raw ? raw.slice(0, raw.length - extname(raw).length) : '';
+    return withoutExt
+      .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 48);
+  }
+
+  private async createTaskResultFile(
+    task: TaskEntity,
+    input: {
+      fileName: string;
+      fileUrl: string;
+      source: string;
+      remark: string;
+    },
+  ) {
+    const file = this.taskResultFilesRepository.create({
+      id: randomUUID(),
+      task_id: task.id,
+      project_id: task.project_id,
+      file_name: input.fileName,
+      file_url: input.fileUrl,
+      feishu_file_token: null,
+      uploaded_by_user_id: task.assignee_user_id,
+      source: input.source,
+      remark: input.remark,
+    });
+    return this.taskResultFilesRepository.save(file);
   }
 
   private async markTaskPendingReviewIfAssetsSubmitted(
@@ -618,14 +972,33 @@ export class TasksService {
     return this.tasksRepository.save(task);
   }
 
-  private uniqueAssets(assets: Array<{ sequence: number; assetUrl: string }>) {
+  private uniqueAssets(
+    assets: Array<{
+      sequence: number;
+      assetUrl: string;
+      imageUrls?: string[];
+      linkUrl?: string;
+    }>,
+  ) {
     const seen = new Set<string>();
     return assets.filter((asset) => {
-      if (seen.has(asset.assetUrl)) {
-        return false;
+      const urls = [
+        asset.assetUrl,
+        ...(asset.imageUrls ?? []),
+        asset.linkUrl,
+      ].filter((url): url is string => Boolean(url));
+      const uniqueUrls = urls.filter((url) => !seen.has(url));
+      uniqueUrls.forEach((url) => seen.add(url));
+      asset.imageUrls = (asset.imageUrls ?? []).filter((url) =>
+        uniqueUrls.includes(url),
+      );
+      if (asset.linkUrl && !uniqueUrls.includes(asset.linkUrl)) {
+        asset.linkUrl = '';
       }
-      seen.add(asset.assetUrl);
-      return true;
+      if (asset.assetUrl && !uniqueUrls.includes(asset.assetUrl)) {
+        asset.assetUrl = '';
+      }
+      return uniqueUrls.length > 0;
     });
   }
 

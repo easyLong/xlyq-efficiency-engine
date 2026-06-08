@@ -5,7 +5,13 @@
 ### 静态页面
 
 - `GET /`：MVP 登录、需求录入、任务指派、报价单、报价子项选择、结算单、统计分析页面。
-- `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>`：本地兜底资产登记表，员工填写资产地址 URL。
+- `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`：本地交付登记页，员工上传/粘贴图片资产并填写一个最终交付链接。
+
+### 认证
+
+- `GET /api/v1/auth/login-users`：登录页加载可登录用户的最小信息列表。
+- `POST /api/v1/auth/login`：MVP 用户选择登录，返回 `accessToken`。
+- 受保护接口需携带 `Authorization: Bearer <accessToken>`。
 
 ### 需求与任务
 
@@ -15,7 +21,9 @@
 - `PATCH /api/v1/requirements/{id}`：人工编辑历史需求任务，自动同步需求项和任务标题/描述/优先级。
 - `DELETE /api/v1/requirements/{id}/bundle`：软删除需求、需求项、任务、工作目录和资产记录，并清理关联报价映射。
 - `POST /api/v1/tasks/{id}/assign`：指派任务；`provisionWorkspace=true` 时创建资产入口并发送一条带按钮的飞书消息。
-- `POST /api/v1/tasks/{id}/asset-sheet/local-assets`：本地资产表保存资产 URL，系统去重统计，并将任务推进到待验收。
+- `GET /api/v1/tasks/{id}/asset-sheet/context?token=<token>`：员工交付登记页加载任务上下文。
+- `POST /api/v1/tasks/{id}/asset-sheet/upload-image?token=<token>`：上传本地图片，返回可保存的图片 URL。
+- `POST /api/v1/tasks/{id}/asset-sheet/local-assets?token=<token>`：保存图片资产 URL 和单个最终交付链接，图片资产去重统计，并将任务推进到待验收。
 - `POST /api/v1/tasks/{id}/asset-sheet/sync`：读取飞书在线表资产 URL 并同步统计。
 - `GET /api/v1/tasks/board?liveAssetCount=true&customerId=<customerId>`：任务看板，支持实时资产数和基金客户筛选。
 
@@ -55,7 +63,7 @@
 - 协议：HTTPS
 - 风格：RESTful + 少量动作型接口
 - Base Path：`/api/v1`
-- 鉴权：当前 MVP 暂未启用接口鉴权；正式上线前需要补齐登录、角色和接口权限
+- 鉴权：当前 MVP 已启用简化 Token 鉴权；正式上线前需要补齐账号密码/飞书登录、RBAC、项目可见范围和财务权限
 - 返回格式：JSON
 - 时间格式：ISO 8601
 - 主键类型：UUID 字符串
@@ -91,17 +99,17 @@
 ## 3.1 认证
 
 ### `POST /auth/login`
-- 说明：账号密码登录
+- 说明：MVP 用户选择登录；当前只校验用户是否存在且启用，不校验密码
 - 入参：`username`、`password`
-- 出参：`accessToken`、`refreshToken`、`user`
+- 出参：`accessToken`、`tokenType`、`user`
 
 ### `POST /auth/feishu/login`
-- 说明：飞书登录
+- 说明：正式飞书登录接口占位，当前 MVP 管理端暂未使用
 - 入参：`code`
 - 出参：`accessToken`、`refreshToken`、`user`
 
 ### `POST /auth/refresh`
-- 说明：刷新 Token
+- 说明：正式刷新 Token 接口占位，当前 MVP 暂未使用
 - 入参：`refreshToken`
 - 出参：`accessToken`
 
@@ -315,14 +323,25 @@
 - 入参：`assigneeUserId`、`feishuFolderToken`、`directoryUrl`
 
 ### `POST /tasks/{taskId}/asset-sheet/sync`
-- 说明：从飞书资产登记表读取“编号、资产地址”，并同步为任务资产记录
+- 说明：从飞书资产登记表读取图片资产地址，并同步为任务资产记录
 
 ### `GET /tasks/{taskId}/result-files`
 - 说明：获取任务资产记录列表，兼容旧版结果文件表
 
+### `GET /tasks/{taskId}/asset-sheet/context`
+- 说明：员工交付登记页加载任务上下文
+- 查询：`token`
+
+### `POST /tasks/{taskId}/asset-sheet/upload-image`
+- 说明：员工交付登记页上传图片，返回 `/uploads/task-assets/...` 图片 URL
+- 查询：`token`
+- 入参：`dataUrl`、`fileName`
+
 ### `POST /tasks/{taskId}/asset-sheet/local-assets`
-- 说明：本地兜底资产表保存时，把员工填写的资产地址同步到后台统计
-- 入参：`assets[]`，每项包含 `assetUrl`
+- 说明：本地交付登记页保存时，把员工填写的图片资产和最终交付链接同步到后台统计
+- 查询：`token`
+- 入参：`assets[]`、`imageUrls[]`、`linkUrl`
+- 约束：图片最多 80 张，资产 URL 最多 200 条，单个 URL 最长 500 字符；最终交付链接不计入结算资产个数
 
 ### `POST /tasks/{taskId}/result-files`
 - 说明：兼容旧版手动登记结果文件流程，当前 MVP 主链路不再使用
@@ -342,7 +361,7 @@
 ### `GET /tasks/board`
 - 说明：看板视图
 - 查询：`projectId`、`liveAssetCount`
-- 说明：`liveAssetCount=true` 时，会直接读取已开通飞书在线资产表中的非空资产地址 URL 个数，并同步为后台资产记录；读取失败时回退到后台缓存数量
+- 说明：`liveAssetCount=true` 时，会直接读取已开通飞书在线资产表中的图片资产 URL 个数，并同步为后台资产记录；读取失败时回退到后台缓存数量
 
 ### `GET /tasks/my`
 - 说明：我的任务

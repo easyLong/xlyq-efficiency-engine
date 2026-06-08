@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { randomUUID } from 'node:crypto';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
@@ -112,6 +112,7 @@ export class RequirementsService {
     private readonly mappingsRepository: Repository<RequirementQuotationMappingEntity>,
     @InjectRepository(QuotationItemEntity)
     private readonly quotationItemsRepository: Repository<QuotationItemEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findAll(projectId?: string) {
@@ -464,45 +465,65 @@ export class RequirementsService {
   }
 
   async removeBundle(id: string) {
-    await this.findOne(id);
-    const items = await this.requirementItemsRepository.find({
-      where: { requirement_id: id },
-    });
-    const itemIds = items.map((item) => item.id);
-    const tasks = itemIds.length
-      ? await this.tasksRepository.find({
-          where: { requirement_item_id: In(itemIds) },
-        })
-      : [];
-    const taskIds = tasks.map((task) => task.id);
-    const mappings = itemIds.length
-      ? await this.mappingsRepository.find({
-          where: { requirement_item_id: In(itemIds) },
-        })
-      : [];
-    const quotationItemIds = this.uniqueQuotationItemIds(mappings);
-
-    if (taskIds.length > 0) {
-      await this.taskResultFilesRepository.softDelete({ task_id: In(taskIds) });
-      await this.taskDirectoriesRepository.softDelete({ task_id: In(taskIds) });
-      await this.tasksRepository.softDelete({ id: In(taskIds) });
-    }
-    if (mappings.length > 0) {
-      await this.mappingsRepository.delete({
-        id: In(mappings.map((mapping) => mapping.id)),
+    const result = await this.dataSource.transaction(async (manager) => {
+      const requirement = await manager
+        .getRepository(RequirementEntity)
+        .findOne({ where: { id } });
+      if (!requirement) {
+        throw new NotFoundException('Requirement not found');
+      }
+      const items = await manager.getRepository(RequirementItemEntity).find({
+        where: { requirement_id: id },
       });
-    }
-    if (itemIds.length > 0) {
-      await this.requirementItemsRepository.softDelete({ id: In(itemIds) });
-    }
-    await this.requirementsRepository.softDelete({ id });
+      const itemIds = items.map((item) => item.id);
+      const tasks = itemIds.length
+        ? await manager.getRepository(TaskEntity).find({
+            where: { requirement_item_id: In(itemIds) },
+          })
+        : [];
+      const taskIds = tasks.map((task) => task.id);
+      const mappings = itemIds.length
+        ? await manager.getRepository(RequirementQuotationMappingEntity).find({
+            where: { requirement_item_id: In(itemIds) },
+          })
+        : [];
+      const quotationItemIds = this.uniqueQuotationItemIds(mappings);
+
+      if (taskIds.length > 0) {
+        await manager
+          .getRepository(TaskResultFileEntity)
+          .softDelete({ task_id: In(taskIds) });
+        await manager
+          .getRepository(TaskDirectoryEntity)
+          .softDelete({ task_id: In(taskIds) });
+        await manager.getRepository(TaskEntity).softDelete({ id: In(taskIds) });
+      }
+      if (mappings.length > 0) {
+        await manager.getRepository(RequirementQuotationMappingEntity).delete({
+          id: In(mappings.map((mapping) => mapping.id)),
+        });
+      }
+      if (itemIds.length > 0) {
+        await manager
+          .getRepository(RequirementItemEntity)
+          .softDelete({ id: In(itemIds) });
+      }
+      await manager.getRepository(RequirementEntity).softDelete({ id });
+      return {
+        quotationItemIds,
+        deletedItemCount: itemIds.length,
+        deletedTaskCount: taskIds.length,
+        deletedMappingCount: mappings.length,
+      };
+    });
+    const quotationItemIds = result.quotationItemIds;
     await this.syncQuotationItemMatchStatuses(quotationItemIds);
 
     return {
       requirementId: id,
-      deletedItemCount: itemIds.length,
-      deletedTaskCount: taskIds.length,
-      deletedMappingCount: mappings.length,
+      deletedItemCount: result.deletedItemCount,
+      deletedTaskCount: result.deletedTaskCount,
+      deletedMappingCount: result.deletedMappingCount,
     };
   }
 

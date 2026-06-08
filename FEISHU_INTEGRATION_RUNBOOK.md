@@ -3,9 +3,9 @@
 ## 当前联调结论
 
 - 飞书企业自建应用的个人消息投递已跑通，任务指派后可以向员工 `open_id` 发送卡片消息。
-- 指派并创建资产入口时，系统只发送一条飞书消息，消息内包含“填写资产地址”按钮。
-- 飞书在线表格创建需要应用权限：`drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create`。权限未开通时，飞书接口会返回 `Access denied`，系统会自动降级为本地资产表。
-- 本地资产表 URL 由 `APP_PUBLIC_BASE_URL` 生成。若配置为 `http://localhost:3000`，只有本机浏览器可访问，飞书移动端员工无法打开；生产或真实联调请配置公网 HTTPS 地址。
+- 指派并创建资产入口时，系统只发送一条飞书消息，消息内包含“填写图片和链接”按钮。
+- 飞书在线表格创建需要应用权限：`drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create`。权限未开通时，飞书接口会返回 `Access denied`，系统会自动降级为本地交付登记页。
+- 本地交付登记 URL 由 `APP_PUBLIC_BASE_URL` 生成，并附带任务访问 token。若配置为 `http://localhost:3000`，只有本机浏览器可访问，飞书移动端员工无法打开；生产或真实联调请配置公网 HTTPS 地址。
 
 ## 必配环境变量
 
@@ -14,6 +14,7 @@ FEISHU_APP_ID=
 FEISHU_APP_SECRET=
 FEISHU_DEFAULT_DEPARTMENT_ID=0
 APP_PUBLIC_BASE_URL=https://your-public-domain.example.com
+TASK_ACCESS_TOKEN_SECRET=replace-with-a-long-random-secret
 ```
 
 如需使用机器人群通知，再配置：
@@ -37,7 +38,7 @@ FEISHU_EVENT_VERIFICATION_TOKEN=
 
 开通权限后需要在飞书开放平台发布/启用应用权限变更，再重新测试资产表创建。
 
-本文档用于验证 MVP 的真实飞书消息闭环：同步员工、绑定接收人、指派任务、开通任务工作目录、员工在飞书中点击按钮进入目录。
+本文档用于验证 MVP 的真实飞书消息闭环：同步员工、绑定接收人、指派任务、发送交付登记入口、员工在飞书中点击按钮上传图片并填写链接。
 
 ## 当前能力
 
@@ -45,7 +46,7 @@ FEISHU_EVENT_VERIFICATION_TOKEN=
 - `POST /api/v1/integrations/feishu/contacts/sync-users` 可以同步飞书员工到本地 `users` 表。
 - 通知服务支持飞书应用个人消息。
 - 如果通知携带 `actionUrl`，飞书消息会以交互卡片发送，并展示按钮。
-- 任务工作目录开通通知会展示 `进入工作目录` 按钮。
+- 任务交付通知会展示 `填写图片和链接` 按钮，员工可上传多张图片并填写一个最终交付链接。
 
 ## 推荐飞书权限
 
@@ -80,7 +81,16 @@ Invoke-RestMethod `
 3. 查看本地用户，确认要测试的接收人：
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:3000/api/v1/users -Method Get
+$login = Invoke-RestMethod `
+  -Uri http://localhost:3000/api/v1/auth/login `
+  -Method Post `
+  -ContentType 'application/json' `
+  -Body '{"username":"admin"}'
+
+Invoke-RestMethod `
+  -Uri http://localhost:3000/api/v1/users `
+  -Headers @{ Authorization = "Bearer $($login.accessToken)" } `
+  -Method Get
 ```
 
 4. 如需手动绑定某个系统用户的飞书账号：
@@ -88,6 +98,7 @@ Invoke-RestMethod -Uri http://localhost:3000/api/v1/users -Method Get
 ```powershell
 Invoke-RestMethod `
   -Uri http://localhost:3000/api/v1/users/<userId> `
+  -Headers @{ Authorization = "Bearer $($login.accessToken)" } `
   -Method Patch `
   -ContentType 'application/json' `
   -Body '{"feishuOpenId":"ou_xxx"}'
@@ -109,6 +120,7 @@ $utf8Body = [System.Text.Encoding]::UTF8.GetBytes($body)
 
 Invoke-RestMethod `
   -Uri http://localhost:3000/api/v1/notifications/send `
+  -Headers @{ Authorization = "Bearer $($login.accessToken)" } `
   -Method Post `
   -ContentType 'application/json; charset=utf-8' `
   -Body $utf8Body
@@ -127,6 +139,7 @@ $utf8Body = [System.Text.Encoding]::UTF8.GetBytes($body)
 
 Invoke-RestMethod `
   -Uri http://localhost:3000/api/v1/tasks/<taskId>/assign `
+  -Headers @{ Authorization = "Bearer $($login.accessToken)" } `
   -Method Post `
   -ContentType 'application/json; charset=utf-8' `
   -Body $utf8Body
@@ -135,7 +148,7 @@ Invoke-RestMethod `
 员工会收到两类通知：
 
 - 新任务通知：提示被指派任务。
-- 工作目录通知：飞书卡片里包含 `进入工作目录` 按钮。
+- 交付登记通知：飞书卡片里包含 `填写图片和链接` 按钮。
 
 ## 当前环境验证记录
 
@@ -146,5 +159,5 @@ Invoke-RestMethod `
 ## 下一步
 
 - 选择一个明确的员工 `open_id` 作为测试接收人，避免随机打扰真实员工。
-- 用真实飞书云文档目录 URL 替换示例 `directoryUrl`。
-- 跑通一次 `任务指派 -> 目录授权 -> 飞书卡片 -> 点击进入目录` 的端到端测试。
+- 用公网 HTTPS `APP_PUBLIC_BASE_URL` 跑通移动端点击，确认 token 链接可打开。
+- 跑通一次 `任务指派 -> 飞书卡片 -> 上传图片/填写链接 -> 后台统计` 的端到端测试。

@@ -494,6 +494,134 @@
     .metric { min-height: 118px; display: flex; flex-direction: column; justify-content: space-between; }
     .metric span { color: #687366; font-size: 13px; }
     .metric strong { font-size: 32px; }
+    .dashboard-kpi-grid,
+    .dashboard-board-grid {
+      display: grid;
+      grid-template-columns: minmax(0, .86fr) minmax(420px, 1.14fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+    .dashboard-focus-card,
+    .dashboard-card { min-width: 0; }
+    .dashboard-focus-card { min-height: 150px; }
+    .dashboard-stat-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .dashboard-stat-card {
+      min-width: 0;
+      border: 1px solid #e2e7da;
+      border-radius: 14px;
+      background: #fffdf7;
+      padding: 12px;
+    }
+    .dashboard-stat-card span {
+      display: block;
+      color: #687366;
+      font-size: 12px;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dashboard-stat-card strong { font-size: 28px; line-height: 1; }
+    .dashboard-stat-card.warn strong { color: #e4554f; }
+    .dashboard-stat-card.ok strong { color: #2f9a4a; }
+    .dashboard-stat-card.neutral strong { color: #596657; }
+    .mini-bars { display: grid; gap: 11px; }
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(88px, 142px) minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+    }
+    .bar-label {
+      min-width: 0;
+      color: #263426;
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bar-value {
+      color: #687366;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .bar-track,
+    .stacked-track {
+      width: 100%;
+      min-width: 0;
+      height: 18px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #edf1e8;
+    }
+    .bar-fill,
+    .stack-segment {
+      height: 100%;
+      border-radius: 999px;
+      background: #b8d95d;
+    }
+    .bar-fill.warn,
+    .stack-segment.warn { background: #ff7d55; }
+    .bar-fill.ok,
+    .stack-segment.ok { background: #b8d95d; }
+    .bar-fill.mid,
+    .stack-segment.mid { background: #ffd84d; }
+    .bar-fill.neutral,
+    .stack-segment.neutral { background: #9fb0a4; }
+    .stacked-track { display: flex; }
+    .stack-segment { border-radius: 0; min-width: 0; }
+    .stack-segment:first-child { border-radius: 999px 0 0 999px; }
+    .stack-segment:last-child { border-radius: 0 999px 999px 0; }
+    .stack-segment:only-child { border-radius: 999px; }
+    .dashboard-legend { display: flex; gap: 10px; flex-wrap: wrap; margin: 2px 0 12px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 5px; color: #687366; font-size: 12px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 999px; background: #b8d95d; }
+    .legend-dot.warn { background: #ff7d55; }
+    .legend-dot.mid { background: #ffd84d; }
+    .legend-dot.neutral { background: #9fb0a4; }
+    .funnel { display: grid; gap: 10px; padding: 4px 0 2px; }
+    .funnel-step { display: grid; grid-template-columns: 72px minmax(0, 1fr) 64px; gap: 10px; align-items: center; }
+    .funnel-label { color: #263426; font-size: 13px; font-weight: 800; white-space: nowrap; }
+    .funnel-track { height: 34px; display: flex; align-items: center; justify-content: center; }
+    .funnel-fill {
+      height: 100%;
+      min-width: 42px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #16221b;
+      font-weight: 900;
+      background: #b8d95d;
+    }
+    .funnel-fill.warn { background: #ff7d55; color: #fff; }
+    .funnel-fill.mid { background: #ffd84d; }
+    .funnel-rate { color: #687366; font-size: 12px; text-align: right; white-space: nowrap; }
+    .priority-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 9px;
+    }
+    .priority-card {
+      border: 1px solid #e2e7da;
+      border-radius: 14px;
+      padding: 11px 12px;
+      background: #fff;
+      min-width: 0;
+    }
+    .priority-card span { color: #687366; font-size: 12px; }
+    .priority-card strong { display: block; margin-top: 5px; font-size: 24px; }
+    .key-task-table table { min-width: 1060px; }
+    .key-task-table th,
+    .key-task-table td { padding: 8px 9px; font-size: 12px; vertical-align: top; }
+    .key-task-title { max-width: 210px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 800; }
+    .key-task-dim { max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .timeline { display: grid; gap: 10px; }
     .step {
       border: 1px solid #d8dfcf;
@@ -543,7 +671,7 @@
     .toast.show { opacity: 1; transform: translateY(0); }
     .hidden { display: none !important; }
     @media (max-width: 980px) {
-      .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
+      .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-kpi-grid, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
       .edit-panel { grid-template-columns: 1fr; }
       .quotation-import-actions { flex-wrap: wrap; }
       .side { position: static; flex-wrap: wrap; }
@@ -884,6 +1012,64 @@
           <div id="analyticsDimensionFilters" class="form-grid"></div>
         </div>
         <div id="metrics" class="grid cols-4"></div>
+        <div class="dashboard-kpi-grid">
+          <div id="taskStatusOverview" class="panel dashboard-focus-card"></div>
+          <div id="taskPriorityOverview" class="panel dashboard-focus-card"></div>
+        </div>
+        <div class="dashboard-board-grid">
+          <div class="panel dashboard-card">
+            <div class="section-title">
+              <div>
+                <div class="kicker">Owner Board</div>
+                <h3>任务负责人看板</h3>
+              </div>
+              <span class="tag">正常 / 已延期</span>
+            </div>
+            <div id="assigneeLoadBoard"></div>
+          </div>
+          <div class="panel dashboard-card">
+            <div class="section-title">
+              <div>
+                <div class="kicker">Category Board</div>
+                <h3>业务分类任务数</h3>
+              </div>
+              <span class="tag">按二级 / 三级分类</span>
+            </div>
+            <div id="categoryTaskBoard"></div>
+          </div>
+        </div>
+        <div class="dashboard-board-grid">
+          <div class="panel dashboard-card">
+            <div class="section-title">
+              <div>
+                <div class="kicker">Urgency</div>
+                <h3>任务紧急程度分布</h3>
+              </div>
+              <span class="tag">结合优先级和逾期</span>
+            </div>
+            <div id="urgencyBoard"></div>
+          </div>
+          <div class="panel dashboard-card">
+            <div class="section-title">
+              <div>
+                <div class="kicker">Progress Funnel</div>
+                <h3>任务进展看板</h3>
+              </div>
+              <span class="tag">待开始 / 进行中 / 已完成</span>
+            </div>
+            <div id="taskFunnelBoard"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="section-title">
+            <div>
+              <div class="kicker">Key Tasks</div>
+              <h3>关键任务</h3>
+            </div>
+            <span class="tag">优先展示延期、高优先级和待报价任务</span>
+          </div>
+          <div id="keyTaskBoard" class="table-wrap"></div>
+        </div>
         <div class="grid cols-2">
           <div class="panel">
             <div class="section-title">
@@ -986,6 +1172,7 @@
     ];
     const state = {
       user: null,
+      accessToken: null,
       users: [],
       projects: [],
       customers: [],
@@ -1058,6 +1245,9 @@
     }
     async function request(path, options = {}) {
       const init = { ...options, headers: { ...(options.headers || {}) } };
+      if (state.accessToken && !init.headers.Authorization) {
+        init.headers.Authorization = `Bearer ${state.accessToken}`;
+      }
       if (init.body && typeof init.body !== "string") {
         init.headers["Content-Type"] = "application/json; charset=utf-8";
         init.body = JSON.stringify(init.body);
@@ -1074,8 +1264,17 @@
       return data;
     }
     async function loadBootstrap() {
-      const [users, projects, customers, contactContexts, requirements, requirementItems, tasks, quotations, quoteMappings, health] = await Promise.all([
-        request("/users"),
+      const [users, health] = await Promise.all([
+        request("/auth/login-users"),
+        request("/health"),
+      ]);
+      state.users = unwrap(users);
+      qs("healthPill").textContent = `后端 ${health.status} / 数据库 ${health.database}`;
+      renderLoginUsers();
+      qs("loginHint").textContent = "请选择用户登录。";
+    }
+    async function loadAppData() {
+      const [projects, customers, contactContexts, requirements, requirementItems, tasks, quotations, quoteMappings, health] = await Promise.all([
         request("/projects"),
         request("/customers"),
         request("/contact-contexts?status=active").catch(() => []),
@@ -1086,7 +1285,6 @@
         request("/quote-mappings").catch(() => []),
         request("/health"),
       ]);
-      state.users = unwrap(users);
       state.projects = unwrap(projects);
       state.customers = unwrap(customers);
       state.contactContexts = unwrap(contactContexts);
@@ -1097,7 +1295,6 @@
       state.quoteMappings = unwrap(quoteMappings);
       qs("healthPill").textContent = `后端 ${health.status} / 数据库 ${health.database}`;
       renderBootstrap();
-      qs("loginHint").textContent = "请选择用户登录。";
     }
     function unwrap(value) {
       if (Array.isArray(value)) return value;
@@ -1105,7 +1302,7 @@
       return value ? [value] : [];
     }
     function renderBootstrap() {
-      qs("loginUser").innerHTML = state.users.map(u => `<option value="${escapeAttr(u.username)}">${escapeHtml(u.display_name || u.username)} · ${escapeHtml(u.username)}</option>`).join("");
+      renderLoginUsers();
       const fundCustomers = state.customers.filter(c => c.industry === "公募基金");
       const customers = [...(fundCustomers.length ? fundCustomers : state.customers)].sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
       qs("customerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
@@ -1137,6 +1334,9 @@
       renderRequirementBoard();
       renderQuotationsBoard();
       renderQuotationMetrics([]);
+    }
+    function renderLoginUsers() {
+      qs("loginUser").innerHTML = state.users.map(u => `<option value="${escapeAttr(u.username)}">${escapeHtml(u.display_name || u.username)} · ${escapeHtml(u.username)}</option>`).join("");
     }
     function renderAnalyticsFilters(customers) {
       const select = qs("analyticsCustomerSelect");
@@ -1206,19 +1406,22 @@
         return;
       }
 
-      enterApp(result.user);
+      enterApp(result.user, result.accessToken);
       addLog("登录成功", result.user);
       await initializeAppAfterLogin();
     }
-    function enterApp(user) {
+    function enterApp(user, accessToken = null) {
       state.user = user;
-      localStorage.setItem("mvpUser", JSON.stringify(state.user));
+      state.accessToken = accessToken || `mvp-${user.id}`;
+      localStorage.setItem("mvpSession", JSON.stringify({ user: state.user, accessToken: state.accessToken }));
+      localStorage.removeItem("mvpUser");
       qs("loginView").classList.add("hidden");
       qs("appView").classList.remove("hidden");
       qs("currentUser").textContent = state.user.display_name || state.user.username;
       qs("currentUserMeta").textContent = `${state.user.username} · ${state.user.source}`;
     }
     async function initializeAppAfterLogin() {
+      await loadAppData();
       try {
         renderSteps();
       } catch (error) {
@@ -1233,6 +1436,7 @@
       }
     }
     function resetLocalSession() {
+      localStorage.removeItem("mvpSession");
       localStorage.removeItem("mvpUser");
       sessionStorage.clear();
       qs("loginUsername").value = "";
@@ -1240,6 +1444,7 @@
       toast("已清理本地登录状态");
     }
     function logout() {
+      localStorage.removeItem("mvpSession");
       localStorage.removeItem("mvpUser");
       location.reload();
     }
@@ -3449,6 +3654,20 @@
           ["报价已确认", quoteMatchedCount, `待确认 ${quotePendingCount} 项`],
           ["预计结算金额", formatMoney(settlementAmount), `覆盖 ${analyticsCustomers.length} 家基金客户`],
         ].map(([label, value, hint]) => `<div class="panel metric"><span>${label}</span><strong>${value}</strong><span>${hint}</span></div>`).join("");
+        const analyticsContext = {
+          quarter,
+          quarterTasks,
+          scopedRequirements,
+          scopedRequirementItems,
+          settlementRows,
+        };
+        renderTaskStatusOverview(analyticsContext);
+        renderTaskPriorityOverview(analyticsContext);
+        renderAssigneeLoadBoard(analyticsContext);
+        renderCategoryTaskBoard(analyticsContext);
+        renderUrgencyBoard(analyticsContext);
+        renderTaskFunnelBoard(analyticsContext);
+        renderKeyTaskBoard(analyticsContext);
         renderEmployeeTop(quarterTasks);
         renderFundTop(scopedRequirements, quarterTasks, settlementRows);
         renderSettlementTop(settlementRows);
@@ -3489,6 +3708,278 @@
           status: billable ? "可结算" : mappingStatusLabel(mappingRow?.mapping?.mapping_status) || quoteScopeStatusLabel(item.quote_scope_status),
         };
       });
+    }
+    function taskAssetCount(task) {
+      return Number(task?.asset_count ?? task?.assetCount ?? 0) || 0;
+    }
+    function taskRequirementItem(task) {
+      return state.requirementItems.find(item => item.id === task?.requirement_item_id) || null;
+    }
+    function taskDueDate(task) {
+      const raw = task?.planned_end_at || task?.plannedEndAt;
+      const date = raw ? new Date(raw) : null;
+      return date && !Number.isNaN(date.getTime()) ? date : null;
+    }
+    function shortDate(value) {
+      const date = value ? new Date(value) : null;
+      if (!date || Number.isNaN(date.getTime())) return "-";
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    }
+    function isTaskCompleted(task) {
+      return task?.status === "completed" || taskAssetCount(task) > 0;
+    }
+    function isTaskOverdue(task) {
+      const due = taskDueDate(task);
+      return !!due && due.getTime() < Date.now() && !isTaskCompleted(task) && task?.status !== "cancelled";
+    }
+    function isTaskDueSoon(task) {
+      const due = taskDueDate(task);
+      if (!due || isTaskCompleted(task)) return false;
+      const diff = due.getTime() - Date.now();
+      return diff >= 0 && diff <= 3 * 24 * 60 * 60 * 1000;
+    }
+    function taskProgressGroup(task) {
+      if (isTaskCompleted(task)) return "completed";
+      if (["in_progress", "blocked", "pending_review"].includes(task?.status)) return "inProgress";
+      if (["todo", "pending", "assigned"].includes(task?.status) && taskAssetCount(task) === 0) return "notStarted";
+      return "inProgress";
+    }
+    function priorityBucket(task) {
+      if (task?.priority === "high") return "high";
+      if (task?.priority === "medium") return "medium";
+      if (task?.priority === "low") return "low";
+      return "unset";
+    }
+    function urgencyBucket(task) {
+      const important = ["high", "medium"].includes(priorityBucket(task));
+      const urgent = isTaskOverdue(task) || isTaskDueSoon(task) || priorityBucket(task) === "high";
+      if (important && urgent) return "importantUrgent";
+      if (!important && urgent) return "urgent";
+      if (important && !urgent) return "important";
+      return "normal";
+    }
+    function percentage(value, total) {
+      if (!total) return 0;
+      return Math.round((value / total) * 100);
+    }
+    function renderTaskStatusOverview({ quarterTasks }) {
+      const box = qs("taskStatusOverview");
+      if (!box) return;
+      const total = quarterTasks.length;
+      const overdue = quarterTasks.filter(isTaskOverdue).length;
+      const completed = quarterTasks.filter(isTaskCompleted).length;
+      const notStarted = quarterTasks.filter(task => taskProgressGroup(task) === "notStarted").length;
+      box.innerHTML = `
+        <div class="section-title">
+          <div>
+            <div class="kicker">Task Status</div>
+            <h3>任务状态总览</h3>
+          </div>
+          <span class="tag">按当前筛选实时统计</span>
+        </div>
+        <div class="dashboard-stat-row">
+          <div class="dashboard-stat-card"><span>任务数</span><strong>${total}</strong></div>
+          <div class="dashboard-stat-card warn"><span>延期任务</span><strong>${overdue}</strong></div>
+          <div class="dashboard-stat-card ok"><span>已完成任务</span><strong>${completed}</strong></div>
+          <div class="dashboard-stat-card neutral"><span>未开始任务</span><strong>${notStarted}</strong></div>
+        </div>
+      `;
+    }
+    function renderTaskPriorityOverview({ quarterTasks }) {
+      const box = qs("taskPriorityOverview");
+      if (!box) return;
+      const counts = { high: 0, medium: 0, low: 0, unset: 0 };
+      quarterTasks.forEach(task => counts[priorityBucket(task)] += 1);
+      const cards = [
+        ["P0", "高优先级", counts.high, "warn"],
+        ["P1", "中优先级", counts.medium, "mid"],
+        ["P2", "低优先级", counts.low, "ok"],
+        ["P3", "未标记", counts.unset, "neutral"],
+      ];
+      box.innerHTML = `
+        <div class="section-title">
+          <div>
+            <div class="kicker">Priority</div>
+            <h3>任务优先级</h3>
+          </div>
+          <span class="tag">P0-P3</span>
+        </div>
+        <div class="priority-strip">
+          ${cards.map(([level, label, count, tone]) => `
+            <div class="priority-card">
+              <span>${level} · ${label}</span>
+              <strong>${count}</strong>
+              <div class="bar-track"><div class="bar-fill ${tone}" style="width:${count ? Math.max(6, percentage(count, quarterTasks.length)) : 0}%"></div></div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+    function renderAssigneeLoadBoard({ quarterTasks }) {
+      const box = qs("assigneeLoadBoard");
+      if (!box) return;
+      const groups = new Map();
+      quarterTasks.forEach(task => {
+        const id = task.assignee_user_id || "unassigned";
+        const current = groups.get(id) || { label: id === "unassigned" ? "未指派" : assigneeName(id), normal: 0, overdue: 0, total: 0 };
+        current.total += 1;
+        if (isTaskOverdue(task)) current.overdue += 1;
+        else current.normal += 1;
+        groups.set(id, current);
+      });
+      const rows = [...groups.values()].sort((a, b) => b.total - a.total || b.overdue - a.overdue).slice(0, 8);
+      renderStackedBarList(box, rows, "暂无负责人任务数据");
+    }
+    function renderCategoryTaskBoard({ quarterTasks }) {
+      const box = qs("categoryTaskBoard");
+      if (!box) return;
+      const groups = new Map();
+      quarterTasks.forEach(task => {
+        const dimensions = requirementDimensionSnapshot(requirementForTask(task), task);
+        const label = dimensions.tertiaryCategory || dimensions.secondaryCategory || projectTypeLabel(dimensions.businessCategory);
+        const key = label || "未分类";
+        groups.set(key, (groups.get(key) || 0) + 1);
+      });
+      const rows = [...groups.entries()].map(([label, total]) => ({ label, total })).sort((a, b) => b.total - a.total).slice(0, 8);
+      renderBarList(box, rows, "暂无分类任务数据");
+    }
+    function renderUrgencyBoard({ quarterTasks }) {
+      const box = qs("urgencyBoard");
+      if (!box) return;
+      const labels = {
+        importantUrgent: "重要且紧急",
+        urgent: "紧急不重要",
+        important: "重要不紧急",
+        normal: "不紧急不重要",
+      };
+      const groups = Object.fromEntries(Object.keys(labels).map(key => [key, { label: labels[key], normal: 0, overdue: 0, total: 0 }]));
+      quarterTasks.forEach(task => {
+        const current = groups[urgencyBucket(task)];
+        current.total += 1;
+        if (isTaskOverdue(task)) current.overdue += 1;
+        else current.normal += 1;
+      });
+      renderStackedBarList(box, Object.values(groups), "暂无紧急程度数据");
+    }
+    function renderTaskFunnelBoard({ quarterTasks }) {
+      const box = qs("taskFunnelBoard");
+      if (!box) return;
+      const counts = { notStarted: 0, inProgress: 0, completed: 0 };
+      quarterTasks.forEach(task => counts[taskProgressGroup(task)] += 1);
+      const total = quarterTasks.length;
+      const steps = [
+        ["待开始", counts.notStarted, "warn", total],
+        ["进行中", counts.inProgress, "ok", counts.notStarted || total],
+        ["已完成", counts.completed, "mid", counts.inProgress || total],
+      ];
+      box.innerHTML = total ? `
+        <div class="funnel">
+          ${steps.map(([label, count, tone, prev]) => {
+            const width = Math.max(14, percentage(count, total));
+            const rate = prev ? percentage(count, prev) : 0;
+            return `
+              <div class="funnel-step">
+                <div class="funnel-label">${label}</div>
+                <div class="funnel-track"><div class="funnel-fill ${tone}" style="width:${width}%">${count}</div></div>
+                <div class="funnel-rate">${rate}%</div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      ` : `<div class="empty-list">暂无任务进展数据</div>`;
+    }
+    function renderKeyTaskBoard({ quarterTasks }) {
+      const box = qs("keyTaskBoard");
+      if (!box) return;
+      box.classList.add("key-task-table");
+      const rows = [...quarterTasks]
+        .sort((a, b) => taskRiskScore(b) - taskRiskScore(a) || new Date(b.created_at || 0) - new Date(a.created_at || 0))
+        .slice(0, 12);
+      if (!rows.length) {
+        box.innerHTML = `<div class="empty-list">暂无关键任务数据</div>`;
+        return;
+      }
+      box.innerHTML = `
+        <table>
+          <thead><tr><th>编号</th><th>基金客户</th><th>业务维度</th><th>任务</th><th>负责人</th><th>状态</th><th>重要程度</th><th>报价</th><th>资产</th><th>截止时间</th></tr></thead>
+          <tbody>
+            ${rows.map(task => {
+              const requirement = requirementForTask(task);
+              const item = taskRequirementItem(task);
+              const dimensions = requirementDimensionSnapshot(requirement, task);
+              const dimText = [projectTypeLabel(dimensions.businessCategory), dimensions.secondaryCategory, dimensions.tertiaryCategory].filter(Boolean).join(" / ") || "-";
+              return `
+                <tr>
+                  <td>${safeText(task.task_no || "-")}</td>
+                  <td>${safeText(customerNameForTask(task))}</td>
+                  <td><div class="key-task-dim">${safeText(dimText)}</div></td>
+                  <td><div class="key-task-title">${safeText(task.task_name || item?.item_title || "-")}</div><span class="row-sub">${safeText(item?.item_description || requirement?.content || "")}</span></td>
+                  <td>${safeText(assigneeName(task.assignee_user_id))}</td>
+                  <td><span class="tag">${safeText(isTaskOverdue(task) ? "已延期" : taskStatusLabel(task.status))}</span></td>
+                  <td>${safeText(priorityLabel(task.priority))}</td>
+                  <td>${safeText(quoteScopeStatusLabel(item?.quote_scope_status))}</td>
+                  <td>${safeText(assetCountText(task))}</td>
+                  <td>${safeText(shortDate(taskDueDate(task)))}</td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+    function renderBarList(box, rows, emptyText) {
+      if (!rows.length) {
+        box.innerHTML = `<div class="empty-list">${emptyText}</div>`;
+        return;
+      }
+      const max = Math.max(...rows.map(row => row.total), 1);
+      box.innerHTML = `<div class="mini-bars">${rows.map((row, index) => `
+        <div class="bar-row">
+          <div class="bar-label" title="${escapeAttr(row.label)}">${escapeHtml(row.label)}</div>
+          <div class="bar-track"><div class="bar-fill ${index % 3 === 1 ? "mid" : index % 3 === 2 ? "warn" : "ok"}" style="width:${Math.max(5, percentage(row.total, max))}%"></div></div>
+          <div class="bar-value">${row.total}</div>
+        </div>
+      `).join("")}</div>`;
+    }
+    function renderStackedBarList(box, rows, emptyText) {
+      const visibleRows = rows.filter(row => row.total > 0);
+      if (!visibleRows.length) {
+        box.innerHTML = `<div class="empty-list">${emptyText}</div>`;
+        return;
+      }
+      const max = Math.max(...visibleRows.map(row => row.total), 1);
+      box.innerHTML = `
+        <div class="dashboard-legend">
+          <span class="legend-item"><i class="legend-dot"></i>正常</span>
+          <span class="legend-item"><i class="legend-dot warn"></i>已延期</span>
+        </div>
+        <div class="mini-bars">${visibleRows.map(row => {
+          const scaled = Math.max(5, percentage(row.total, max));
+          const normalWidth = row.total ? percentage(row.normal, row.total) : 0;
+          const overdueWidth = row.total ? 100 - normalWidth : 0;
+          return `
+            <div class="bar-row">
+              <div class="bar-label" title="${escapeAttr(row.label)}">${escapeHtml(row.label)}</div>
+              <div class="stacked-track" style="width:${scaled}%">
+                ${row.normal ? `<div class="stack-segment ok" style="width:${normalWidth}%"></div>` : ""}
+                ${row.overdue ? `<div class="stack-segment warn" style="width:${overdueWidth}%"></div>` : ""}
+              </div>
+              <div class="bar-value">${row.total}</div>
+            </div>
+          `;
+        }).join("")}</div>
+      `;
+    }
+    function taskRiskScore(task) {
+      const item = taskRequirementItem(task);
+      let score = 0;
+      if (isTaskOverdue(task)) score += 100;
+      if (priorityBucket(task) === "high") score += 45;
+      if (priorityBucket(task) === "medium") score += 20;
+      if (isPendingQuoteScopeStatus(item?.quote_scope_status)) score += 18;
+      if (taskProgressGroup(task) === "notStarted") score += 10;
+      if (isTaskDueSoon(task)) score += 8;
+      return score;
     }
     function renderEmployeeTop(tasks) {
       const groups = new Map();
@@ -3624,22 +4115,30 @@
     window.addEventListener("DOMContentLoaded", async () => {
       try {
         await loadBootstrap();
-        const saved = localStorage.getItem("mvpUser");
-        if (saved) {
-          let savedUser = null;
+        const savedSession = localStorage.getItem("mvpSession");
+        const legacyUser = localStorage.getItem("mvpUser");
+        if (savedSession || legacyUser) {
+          let session = null;
           try {
-            savedUser = JSON.parse(saved);
+            session = savedSession ? JSON.parse(savedSession) : { user: JSON.parse(legacyUser), accessToken: null };
           } catch {
+            localStorage.removeItem("mvpSession");
             localStorage.removeItem("mvpUser");
           }
-          if (savedUser?.username) {
-            enterApp(savedUser);
+          if (session?.user?.username) {
+            if (!session.accessToken) {
+              const result = await request("/auth/login", { method: "POST", body: { username: session.user.username } });
+              session = { user: result.user, accessToken: result.accessToken };
+            }
+            enterApp(session.user, session.accessToken);
             await initializeAppAfterLogin();
           } else {
+            localStorage.removeItem("mvpSession");
             localStorage.removeItem("mvpUser");
           }
         }
       } catch (error) {
+        localStorage.removeItem("mvpSession");
         localStorage.removeItem("mvpUser");
         qs("loginHint").textContent = error.message;
         toast(error.message);

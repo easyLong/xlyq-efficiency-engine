@@ -3,88 +3,205 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>任务资产登记表</title>
+  <title>任务交付登记</title>
   <style>
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      color: #18231d;
-      background: linear-gradient(135deg, #f7f4e9, #eef4e9);
+      color: #172033;
+      background: #f5f7fb;
       font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
     }
-    .page { width: min(1080px, calc(100% - 32px)); margin: 28px auto; display: grid; gap: 16px; }
+    .page {
+      width: min(1180px, calc(100% - 28px));
+      margin: 18px auto;
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
     .panel {
-      background: rgba(255,255,255,.88);
-      border: 1px solid #d8dfcf;
-      border-radius: 22px;
-      box-shadow: 0 18px 50px rgba(58, 77, 55, .12);
-      padding: 18px;
+      background: #fff;
+      border: 1px solid #e5e9f0;
+      border-radius: 10px;
+      box-shadow: 0 12px 34px rgba(15, 23, 42, .06);
+      padding: 16px;
     }
-    h1 { margin: 0 0 6px; font-size: 28px; }
-    p { margin: 0; color: #667163; }
-    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
-    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    button {
-      border: 1px solid #2f6b45;
-      background: #2f6b45;
-      color: #fff;
-      border-radius: 14px;
-      min-height: 40px;
-      padding: 9px 14px;
-      font-weight: 800;
-      cursor: pointer;
+    .task-panel { position: sticky; top: 16px; display: grid; gap: 14px; }
+    .workspace { display: grid; gap: 14px; }
+    .task-title { margin: 0; font-size: 24px; line-height: 1.28; color: #111827; }
+    .task-sub { color: #667085; font-size: 13px; line-height: 1.6; }
+    .tabs { display: flex; border-bottom: 1px solid #e5e9f0; }
+    .tab { padding: 0 0 10px; color: #2563eb; border-bottom: 3px solid #2563eb; font-weight: 900; }
+    .detail-list { display: grid; gap: 12px; }
+    .detail-row { display: grid; gap: 5px; }
+    .detail-label { color: #7b8494; font-size: 12px; font-weight: 900; }
+    .detail-value { color: #263244; font-size: 14px; font-weight: 800; line-height: 1.45; word-break: break-word; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      min-height: 23px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      background: #e8f0ff;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 900;
     }
-    button.secondary { background: #f7f4e9; color: #18231d; border-color: #cdd8c6; }
-    button.link { background: transparent; color: #9b3f2c; border-color: transparent; padding: 6px 8px; min-height: 32px; }
-    button:disabled { opacity: .55; cursor: not-allowed; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border-bottom: 1px solid #d8dfcf; padding: 10px 8px; text-align: left; }
-    th { color: #687366; background: #faf8ee; }
-    td:first-child { width: 90px; font-weight: 800; color: #2f6b45; }
-    td:last-child { width: 82px; text-align: right; }
-    input {
-      width: 100%;
-      border: 1px solid #d5ddcd;
+    .tag.warn { background: #fff3df; color: #9a4b13; }
+    .tag.ok { background: #e8f8ed; color: #166534; }
+    .summary-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .summary-box { border: 1px solid #e5e9f0; border-radius: 9px; padding: 10px; background: #fafbfd; }
+    .summary-box span { display: block; color: #667085; font-size: 12px; margin-bottom: 4px; }
+    .summary-box strong { font-size: 20px; }
+    h2 { margin: 0 0 10px; font-size: 18px; color: #111827; }
+    .section-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+    .section-head p { margin: 3px 0 0; color: #667085; font-size: 13px; line-height: 1.55; }
+    .upload-zone {
+      border: 1.5px dashed #aab8cf;
       border-radius: 12px;
-      background: #fffdf7;
-      color: #18231d;
-      padding: 10px 12px;
-      outline: none;
+      min-height: 148px;
+      background: #f8fbff;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 18px;
+      transition: border .15s ease, background .15s ease;
     }
-    input:focus { border-color: #356d45; box-shadow: 0 0 0 4px rgba(53,109,69,.12); }
-    .muted { color: #6a7567; font-size: 13px; }
-    .status { margin-top: 12px; font-weight: 800; }
-    .status.ok { color: #2f6b45; }
-    .status.error { color: #9b3f2c; }
+    .upload-zone.dragover { border-color: #2563eb; background: #eef5ff; }
+    .upload-zone strong { display: block; margin-bottom: 5px; font-size: 17px; }
+    .upload-zone p { margin: 0; color: #667085; font-size: 13px; line-height: 1.6; }
+    .upload-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+    input, textarea {
+      width: 100%;
+      border: 1px solid #d7dee8;
+      border-radius: 9px;
+      background: #fff;
+      color: #111827;
+      padding: 10px 11px;
+      outline: none;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    textarea { min-height: 92px; resize: vertical; line-height: 1.55; }
+    input:focus, textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+    .link-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+    .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(154px, 1fr)); gap: 10px; }
+    .asset-card { border: 1px solid #e5e9f0; border-radius: 10px; background: #fff; overflow: hidden; }
+    .asset-preview { aspect-ratio: 1.25; background: #f3f6fa; display: grid; place-items: center; color: #98a2b3; font-size: 12px; overflow: hidden; }
+    .asset-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .asset-meta { padding: 9px; display: grid; gap: 7px; }
+    .asset-url { color: #475467; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card-actions { display: flex; gap: 6px; }
+    button {
+      border: 1px solid #2563eb;
+      background: #2563eb;
+      color: #fff;
+      border-radius: 9px;
+      min-height: 38px;
+      padding: 8px 13px;
+      font-weight: 900;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button.secondary { background: #fff; color: #1f2937; border-color: #d7dee8; }
+    button.ghost { background: #f8fafc; color: #475467; border-color: #e5e9f0; min-height: 30px; padding: 5px 8px; font-size: 12px; }
+    button.danger { background: #fff7f5; color: #b42318; border-color: #ffd1c8; min-height: 30px; padding: 5px 8px; font-size: 12px; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .save-bar { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .status { color: #667085; font-size: 13px; font-weight: 800; line-height: 1.55; }
+    .status.ok { color: #166534; }
+    .status.error { color: #b42318; }
+    .empty { border: 1px dashed #d7dee8; border-radius: 10px; padding: 18px; color: #98a2b3; text-align: center; background: #fafbfd; }
+    .hidden { display: none !important; }
+    @media (max-width: 900px) {
+      .page { grid-template-columns: 1fr; }
+      .task-panel { position: static; }
+      .summary-row, .link-tools { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <main class="page">
-    <section class="panel toolbar">
+    <aside class="panel task-panel">
       <div>
-        <h1 id="title">任务资产登记表</h1>
-        <p>字段：编号、资产地址。编号会从 1 开始自动递增。</p>
+        <h1 id="taskTitle" class="task-title">任务详情</h1>
+        <p id="taskSub" class="task-sub">读取任务信息中...</p>
       </div>
-      <div class="actions">
-        <button onclick="addRow()">新增一行</button>
-        <button id="saveButton" class="secondary" onclick="saveRows()">保存并同步统计</button>
+      <div class="tabs"><div class="tab">详情</div></div>
+      <div class="summary-row">
+        <div class="summary-box"><span>图片</span><strong id="imageCount">0</strong></div>
+        <div class="summary-box"><span>链接</span><strong id="linkCount">0</strong></div>
+        <div class="summary-box"><span>状态</span><strong id="briefStatus">-</strong></div>
       </div>
-    </section>
+      <div id="taskDetails" class="detail-list"></div>
+    </aside>
 
-    <section class="panel">
-      <table>
-        <thead>
-          <tr>
-            <th>编号</th>
-            <th>资产地址</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
-      <p class="muted">本地兜底表会先保存在当前浏览器，并同步到效能引擎后台；飞书表格权限开通后，消息按钮会优先进入真实飞书在线表格。</p>
-      <p id="saveStatus" class="status muted">填写资产地址后点击“保存并同步统计”。</p>
+    <section class="workspace">
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <h2>图片资产</h2>
+            <p>支持点击上传、拖拽图片、粘贴截图，也可以批量粘贴图片链接。</p>
+          </div>
+          <button class="secondary" onclick="document.getElementById('fileInput').click()">选择图片</button>
+        </div>
+        <div id="uploadZone" class="upload-zone">
+          <div>
+            <strong>拖拽图片到这里，或直接 Ctrl+V 粘贴截图</strong>
+            <p>支持 PNG、JPG、WEBP、GIF，单张不超过 8MB；上传后会自动生成图片链接。</p>
+            <div class="upload-actions">
+              <button onclick="document.getElementById('fileInput').click()">上传图片</button>
+              <button class="secondary" onclick="focusLinkInput()">粘贴图片链接</button>
+            </div>
+          </div>
+        </div>
+        <input id="fileInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onchange="uploadSelectedFiles(this.files)" />
+      </div>
+
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <h2>图片链接补充</h2>
+            <p>如果图片已经在飞书、网盘或其他系统中，可以直接粘贴链接，一行一个或用空格分隔。</p>
+          </div>
+        </div>
+        <div class="link-tools">
+          <textarea id="imageUrlInput" placeholder="粘贴图片链接，例如：https://.../image.png"></textarea>
+          <button onclick="addImageUrlsFromText()">加入图片列表</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <h2>已添加图片</h2>
+            <p>保存后，这些图片会同步到后台统计口径。</p>
+          </div>
+          <button class="secondary" onclick="clearImages()">清空图片</button>
+        </div>
+        <div id="assetGrid" class="asset-grid"></div>
+      </div>
+
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <h2>最终交付链接</h2>
+            <p>只保留一个链接，适合填写最终飞书文档、文件夹、压缩包或交付页面。</p>
+          </div>
+        </div>
+        <input id="linkUrl" placeholder="粘贴最终交付链接" oninput="saveDraft()" />
+      </div>
+
+      <div class="panel save-bar">
+        <div id="saveStatus" class="status">添加图片或链接后点击保存。</div>
+        <div>
+          <button class="secondary" onclick="reloadContext()">刷新</button>
+          <button id="saveButton" onclick="saveDelivery()">保存并同步统计</button>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -92,122 +209,356 @@
     const params = new URLSearchParams(location.search);
     const taskId = params.get("taskId") || "default";
     const taskNo = params.get("taskNo") || "任务";
-    const storageKey = `asset-sheet:${taskId}`;
-    const rowsEl = document.getElementById("rows");
-    document.getElementById("title").textContent = `${taskNo} 资产登记表`;
+    const taskToken = params.get("token") || "";
+    const storageKey = `asset-delivery:${taskId}`;
+    const legacyStorageKey = `asset-sheet:${taskId}`;
+    const maxImageCount = 80;
+    const maxUrlLength = 500;
+    let context = null;
 
-    function loadRows() {
-      const rows = JSON.parse(localStorage.getItem(storageKey) || "[]");
-      return rows.length ? rows : [{ assetUrl: "" }];
+    function emptyDraft() {
+      return { imageUrls: [], linkUrl: "" };
     }
 
-    function renderRows() {
-      const rows = loadRows();
-      rowsEl.innerHTML = rows.map((row, index) => `
-        <tr>
-          <td>${index + 1}</td>
-          <td><input value="${escapeHtml(row.assetUrl || "")}" oninput="updateRow(${index}, this.value)" onpaste="handleAssetPaste(event, ${index})" placeholder="粘贴飞书文件、图片、压缩包或交付物地址；可一次粘贴多行" /></td>
-          <td><button class="link" onclick="removeRow(${index})">删除</button></td>
-        </tr>
+    function loadDraft() {
+      const current = localStorage.getItem(storageKey);
+      if (current) return normalizeDraft(JSON.parse(current));
+      const legacyRows = JSON.parse(localStorage.getItem(legacyStorageKey) || "[]");
+      if (legacyRows.length) {
+        return normalizeDraft({ imageUrls: legacyRows.map(row => row.assetUrl), linkUrl: "" });
+      }
+      return emptyDraft();
+    }
+
+    function normalizeDraft(value) {
+      const imageUrls = Array.isArray(value?.imageUrls) ? value.imageUrls : [];
+      return {
+        imageUrls: unique(imageUrls.map(item => String(item || "").trim()).filter(Boolean)),
+        linkUrl: String(value?.linkUrl || ""),
+      };
+    }
+
+    function saveDraft() {
+      const draft = loadDraft();
+      draft.linkUrl = document.getElementById("linkUrl").value.trim();
+      if (draft.linkUrl.length > maxUrlLength) {
+        setStatus("最终交付链接不能超过 500 个字符。", "error");
+        return;
+      }
+      localStorage.setItem(storageKey, JSON.stringify(draft));
+      renderAssets();
+    }
+
+    function persistDraft(draft) {
+      localStorage.setItem(storageKey, JSON.stringify(normalizeDraft(draft)));
+      renderAssets();
+    }
+
+    function renderAssets() {
+      const draft = loadDraft();
+      document.getElementById("linkUrl").value = draft.linkUrl;
+      document.getElementById("imageCount").textContent = draft.imageUrls.length;
+      document.getElementById("linkCount").textContent = draft.linkUrl ? "1" : "0";
+      const grid = document.getElementById("assetGrid");
+      if (!draft.imageUrls.length) {
+        grid.innerHTML = `<div class="empty">还没有图片资产。可以上传图片、拖拽图片、粘贴截图，或批量粘贴图片链接。</div>`;
+        return;
+      }
+      grid.innerHTML = draft.imageUrls.map((url, index) => `
+        <article class="asset-card">
+          <a class="asset-preview" href="${escapeAttr(url)}" target="_blank" rel="noreferrer">
+            <img src="${escapeAttr(url)}" alt="图片 ${index + 1}" onerror="this.remove(); this.parentElement.textContent='图片链接'" />
+          </a>
+          <div class="asset-meta">
+            <div class="asset-url" title="${escapeAttr(url)}">${escapeHtml(url)}</div>
+            <div class="card-actions">
+              <button class="ghost" onclick="copyText('${escapeAttr(url)}')">复制</button>
+              <button class="danger" onclick="removeImage(${index})">删除</button>
+            </div>
+          </div>
+        </article>
       `).join("");
     }
 
-    function updateRow(index, value) {
-      const rows = loadRows();
-      rows[index] = { assetUrl: value };
-      localStorage.setItem(storageKey, JSON.stringify(rows));
+    function focusLinkInput() {
+      document.getElementById("imageUrlInput").focus();
     }
 
-    function addRow() {
-      const rows = loadRows();
-      rows.push({ assetUrl: "" });
-      localStorage.setItem(storageKey, JSON.stringify(rows));
-      renderRows();
-    }
-
-    function removeRow(index) {
-      const rows = loadRows();
-      rows.splice(index, 1);
-      localStorage.setItem(storageKey, JSON.stringify(rows.length ? rows : [{ assetUrl: "" }]));
-      renderRows();
-    }
-
-    function handleAssetPaste(event, index) {
-      const text = event.clipboardData?.getData("text") || "";
-      const pastedAssets = text
-        .split(/\s+/)
-        .map(item => item.trim())
-        .filter(Boolean);
-      if (pastedAssets.length <= 1) return;
-      event.preventDefault();
-      const rows = loadRows();
-      rows.splice(index, 1, ...pastedAssets.map(assetUrl => ({ assetUrl })));
-      localStorage.setItem(storageKey, JSON.stringify(rows));
-      renderRows();
-      setStatus(`已自动填入 ${pastedAssets.length} 个资产地址，确认后点击保存同步统计。`, "ok");
-    }
-
-    async function loadServerRows() {
-      if (taskId === "default" || localStorage.getItem(storageKey)) return;
-      try {
-        const response = await fetch(`/api/v1/tasks/${taskId}/result-files`);
-        if (!response.ok) return;
-        const files = await response.json();
-        const rows = files
-          .filter(file => file.source === "local_asset_sheet")
-          .map(file => ({ assetUrl: file.file_url }))
-          .filter(row => row.assetUrl);
-        if (rows.length > 0) {
-          localStorage.setItem(storageKey, JSON.stringify(rows));
-          renderRows();
-        }
-      } catch (error) {
-        setStatus(`读取已保存资产失败：${error.message}`, "error");
+    function addImageUrls(urls) {
+      const draft = loadDraft();
+      const cleaned = urls.map(url => url.trim()).filter(Boolean);
+      if (cleaned.some(url => url.length > maxUrlLength)) {
+        setStatus("图片链接不能超过 500 个字符。", "error");
+        return;
+      }
+      draft.imageUrls = unique([...draft.imageUrls, ...cleaned]).slice(0, maxImageCount);
+      persistDraft(draft);
+      if (draft.imageUrls.length >= maxImageCount) {
+        setStatus(`最多支持 ${maxImageCount} 张图片。`, "error");
       }
     }
 
-    async function saveRows() {
-      const rows = loadRows();
-      localStorage.setItem(storageKey, JSON.stringify(rows));
-      const assets = rows
-        .map(row => ({ assetUrl: (row.assetUrl || "").trim() }))
-        .filter(row => row.assetUrl);
+    function addImageUrlsFromText() {
+      const input = document.getElementById("imageUrlInput");
+      const urls = splitUrls(input.value);
+      if (!urls.length) {
+        setStatus("请先粘贴图片链接。", "error");
+        return;
+      }
+      addImageUrls(urls);
+      input.value = "";
+      setStatus(`已加入 ${urls.length} 个图片链接。`, "ok");
+    }
 
+    function removeImage(index) {
+      const draft = loadDraft();
+      draft.imageUrls.splice(index, 1);
+      persistDraft(draft);
+    }
+
+    function clearImages() {
+      const draft = loadDraft();
+      draft.imageUrls = [];
+      persistDraft(draft);
+      setStatus("已清空图片列表，保存后后台会同步更新。", "ok");
+    }
+
+    async function uploadSelectedFiles(files) {
+      const imageFiles = [...(files || [])].filter(file => file.type.startsWith("image/"));
+      if (!imageFiles.length) return;
+      const uploadedUrls = [];
+      setStatus(`正在上传 ${imageFiles.length} 张图片...`, "");
+      for (const file of imageFiles) {
+        try {
+          if (file.size > 8 * 1024 * 1024) {
+            throw new Error(`${file.name} 超过 8MB`);
+          }
+          const dataUrl = await readFileAsDataUrl(file);
+          const url = await uploadImage(dataUrl, file.name);
+          uploadedUrls.push(url);
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      }
+      if (uploadedUrls.length) {
+        addImageUrls(uploadedUrls);
+        setStatus(`已上传 ${uploadedUrls.length} 张图片，记得点击保存同步统计。`, "ok");
+      }
+      document.getElementById("fileInput").value = "";
+    }
+
+    async function uploadImage(dataUrl, fileName) {
+      if (taskId === "default") {
+        return dataUrl;
+      }
+      const response = await fetch(taskAssetApi("upload-image"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify({ dataUrl, fileName }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "图片上传失败");
+      return result.imageUrl;
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error(`${file.name} 读取失败`));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function reloadContext() {
+      if (taskId === "default") {
+        renderFallback();
+        return;
+      }
+      try {
+        const response = await fetch(taskAssetApi("context"));
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "读取任务失败");
+        context = result;
+        renderTaskDetails();
+        if (!localStorage.getItem(storageKey)) {
+          localStorage.setItem(storageKey, JSON.stringify(normalizeDraft(result.delivery)));
+        }
+        renderAssets();
+      } catch (error) {
+        setStatus(`读取任务详情失败：${error.message}`, "error");
+        renderFallback();
+      }
+    }
+
+    function renderFallback() {
+      document.getElementById("taskTitle").textContent = `${taskNo} 任务详情`;
+      document.getElementById("taskSub").textContent = "本地登记模式";
+      document.getElementById("briefStatus").textContent = "未开始";
+      document.getElementById("taskDetails").innerHTML = detailRows([
+        ["任务", taskNo],
+        ["状态", `<span class="tag">未开始</span>`],
+      ]);
+    }
+
+    function renderTaskDetails() {
+      const task = context?.task || {};
+      const project = context?.project || {};
+      const item = context?.requirementItem || {};
+      const assignee = context?.assignee || {};
+      document.getElementById("taskTitle").textContent = task.task_name || `${taskNo} 任务详情`;
+      document.getElementById("taskSub").textContent = `${task.task_no || taskNo} · ${project.project_name || "未关联项目"}`;
+      document.getElementById("briefStatus").textContent = statusLabel(task.status);
+      document.getElementById("taskDetails").innerHTML = detailRows([
+        ["任务", escapeHtml(task.task_name || item.item_title || "-")],
+        ["所属项目", escapeHtml(project.project_name || "-")],
+        ["状态", `<span class="tag ${statusTone(task.status)}">${escapeHtml(statusLabel(task.status))}</span>`],
+        ["开始时间", escapeHtml(formatDate(task.created_at))],
+        ["截止时间", escapeHtml(formatDate(task.planned_end_at))],
+        ["优先级", `<span class="tag warn">${escapeHtml(priorityLabel(task.priority))}</span>`],
+        ["任务执行人", escapeHtml(assignee.display_name || assignee.username || "-")],
+        ["实际完成时间", escapeHtml(formatDate(task.actual_end_at))],
+        ["内容描述", escapeHtml(task.description || item.item_description || "-")],
+      ]);
+    }
+
+    function detailRows(rows) {
+      return rows.map(([label, value]) => `
+        <div class="detail-row">
+          <div class="detail-label">${escapeHtml(label)}</div>
+          <div class="detail-value">${value}</div>
+        </div>
+      `).join("");
+    }
+
+    async function saveDelivery() {
+      saveDraft();
+      const draft = loadDraft();
+      const imageUrls = unique(draft.imageUrls.map(url => url.trim()).filter(Boolean));
+      const linkUrl = draft.linkUrl.trim();
+      if (imageUrls.length > maxImageCount || imageUrls.some(url => url.length > maxUrlLength) || linkUrl.length > maxUrlLength) {
+        setStatus(`最多 ${maxImageCount} 张图片，且每个链接不能超过 ${maxUrlLength} 个字符。`, "error");
+        return;
+      }
       const button = document.getElementById("saveButton");
       button.disabled = true;
       setStatus("正在同步到统计分析...", "");
       try {
-        const response = await fetch(`/api/v1/tasks/${taskId}/asset-sheet/local-assets`, {
+        const response = await fetch(taskAssetApi("local-assets"), {
           method: "POST",
           headers: { "Content-Type": "application/json; charset=utf-8" },
-          body: JSON.stringify({ assets }),
+          body: JSON.stringify({ imageUrls, linkUrl }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || "同步失败");
-        setStatus(`已保存，统计分析将显示 ${result.assetCount || 0} 个资产。`, "ok");
+        localStorage.setItem(storageKey, JSON.stringify(normalizeDraft({ imageUrls, linkUrl })));
+        renderAssets();
+        setStatus(`已保存 ${imageUrls.length} 张图片${linkUrl ? "和 1 个链接" : ""}，统计分析将显示 ${result.assetCount || 0} 个资产。`, "ok");
       } catch (error) {
-        setStatus(`已保存到本地，但同步后台失败：${error.message}`, "error");
+        setStatus(`已保存在当前浏览器，但同步后台失败：${error.message}`, "error");
       } finally {
         button.disabled = false;
       }
     }
 
+    function setupUploadInteractions() {
+      const zone = document.getElementById("uploadZone");
+      zone.addEventListener("dragover", event => {
+        event.preventDefault();
+        zone.classList.add("dragover");
+      });
+      zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
+      zone.addEventListener("drop", event => {
+        event.preventDefault();
+        zone.classList.remove("dragover");
+        uploadSelectedFiles(event.dataTransfer.files);
+      });
+      document.addEventListener("paste", event => {
+        const target = event.target;
+        if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+        const files = [...(event.clipboardData?.files || [])].filter(file => file.type.startsWith("image/"));
+        if (files.length) {
+          event.preventDefault();
+          uploadSelectedFiles(files);
+        }
+      });
+    }
+
+    function splitUrls(text) {
+      return String(text || "")
+        .split(/\s+/)
+        .map(item => item.trim())
+        .filter(Boolean);
+    }
+
+    function taskAssetApi(action) {
+      return `/api/v1/tasks/${encodeURIComponent(taskId)}/asset-sheet/${action}?token=${encodeURIComponent(taskToken)}`;
+    }
+
     function setStatus(message, type) {
       const status = document.getElementById("saveStatus");
       status.textContent = message;
-      status.className = `status ${type || "muted"}`;
+      status.className = `status ${type || ""}`;
+    }
+
+    async function copyText(value) {
+      try {
+        await navigator.clipboard.writeText(value);
+        setStatus("图片链接已复制。", "ok");
+      } catch {
+        setStatus("复制失败，请手动复制链接。", "error");
+      }
+    }
+
+    function unique(values) {
+      return values.filter((value, index, array) => array.indexOf(value) === index);
+    }
+
+    function statusLabel(status) {
+      return {
+        todo: "未开始",
+        pending: "未开始",
+        assigned: "已指派",
+        in_progress: "进行中",
+        blocked: "受阻",
+        pending_review: "待验收",
+        completed: "已完成",
+        cancelled: "已取消",
+        returned: "已退回",
+      }[status] || status || "-";
+    }
+
+    function statusTone(status) {
+      if (status === "completed") return "ok";
+      if (status === "blocked" || status === "returned") return "warn";
+      return "";
+    }
+
+    function priorityLabel(priority) {
+      return { high: "P0", medium: "P1", low: "P2" }[priority] || "P3";
+    }
+
+    function formatDate(value) {
+      const date = value ? new Date(value) : null;
+      if (!date || Number.isNaN(date.getTime())) return "-";
+      return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
     }
 
     function escapeHtml(value) {
-      return String(value)
+      return String(value ?? "-")
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;");
     }
 
-    renderRows();
-    loadServerRows();
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll("'", "&#39;");
+    }
+
+    setupUploadInteractions();
+    renderAssets();
+    reloadContext();
   </script>
 </body>
 </html>

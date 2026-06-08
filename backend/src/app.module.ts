@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ContactContextsModule } from './contact-contexts/contact-contexts.module';
@@ -16,6 +17,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { UsersModule } from './users/users.module';
 import { WeeklyReportsModule } from './weekly-reports/weekly-reports.module';
 import { WorklogsModule } from './worklogs/worklogs.module';
+import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
 
 @Module({
   imports: [
@@ -51,6 +53,12 @@ import { WorklogsModule } from './worklogs/worklogs.module';
     QuotationsModule,
     QuoteMappingsModule,
     DashboardModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: MvpAuthGuard,
+    },
   ],
 })
 export class AppModule {}

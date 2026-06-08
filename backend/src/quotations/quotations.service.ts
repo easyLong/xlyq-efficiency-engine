@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
@@ -39,6 +39,7 @@ export class QuotationsService {
     private readonly mappingsRepository: Repository<RequirementQuotationMappingEntity>,
     @InjectRepository(RequirementItemEntity)
     private readonly requirementItemsRepository: Repository<RequirementItemEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findAll(projectId?: string, status?: string) {
@@ -236,24 +237,52 @@ export class QuotationsService {
   }
 
   async remove(id: string) {
-    await this.findOne(id);
-    const items = await this.quotationItemsRepository.find({
-      where: { quotation_id: id },
-    });
-    const itemIds = items.map((item) => item.id);
-    if (itemIds.length > 0) {
-      await this.dimensionRulesRepository.softDelete({
-        quotation_item_id: In(itemIds),
+    const result = await this.dataSource.transaction(async (manager) => {
+      const quotation = await manager
+        .getRepository(QuotationEntity)
+        .findOne({ where: { id } });
+      if (!quotation) {
+        throw new NotFoundException('Quotation not found');
+      }
+      const items = await manager.getRepository(QuotationItemEntity).find({
+        where: { quotation_id: id },
       });
-      await this.quotationItemsRepository.softDelete({ id: In(itemIds) });
-    }
-    const affectedRequirementItemIds =
-      await this.deleteMappingsForQuotation(id, itemIds);
-    await this.quotationsRepository.softDelete(id);
+      const itemIds = items.map((item) => item.id);
+      if (itemIds.length > 0) {
+        await manager
+          .getRepository(QuotationItemDimensionRuleEntity)
+          .softDelete({ quotation_item_id: In(itemIds) });
+        await manager
+          .getRepository(QuotationItemEntity)
+          .softDelete({ id: In(itemIds) });
+      }
+      const mappingQuery = manager
+        .getRepository(RequirementQuotationMappingEntity)
+        .createQueryBuilder('mapping')
+        .where('mapping.quotation_id = :quotationId', { quotationId: id });
+      if (itemIds.length > 0) {
+        mappingQuery.orWhere('mapping.quotation_item_id IN (:...itemIds)', {
+          itemIds,
+        });
+      }
+      const mappings = await mappingQuery.getMany();
+      const affectedRequirementItemIds = this.uniqueRequirementItemIds(mappings);
+      if (mappings.length > 0) {
+        await manager.getRepository(RequirementQuotationMappingEntity).delete({
+          id: In(mappings.map((mapping) => mapping.id)),
+        });
+      }
+      await manager.getRepository(QuotationEntity).softDelete(id);
+      return {
+        itemIds,
+        affectedRequirementItemIds,
+      };
+    });
+    const affectedRequirementItemIds = result.affectedRequirementItemIds;
     await this.syncRequirementQuoteScopeStatuses(affectedRequirementItemIds);
     return {
       quotationId: id,
-      deletedItemCount: itemIds.length,
+      deletedItemCount: result.itemIds.length,
       clearedMappingRequirementItemCount: affectedRequirementItemIds.length,
     };
   }

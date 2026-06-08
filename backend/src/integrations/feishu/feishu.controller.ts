@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Public } from '../../common/decorators/public.decorator';
 import { SendAppMessageDto } from './dto/send-app-message.dto';
 import { SendBotMessageDto } from './dto/send-bot-message.dto';
 import { SyncFeishuUsersDto } from './dto/sync-feishu-users.dto';
@@ -8,6 +9,7 @@ import { FeishuService } from './feishu.service';
 export class FeishuController {
   constructor(private readonly feishuService: FeishuService) {}
 
+  @Public()
   @Get('config')
   config() {
     return this.feishuService.getConfigStatus();
@@ -28,6 +30,7 @@ export class FeishuController {
     return this.feishuService.syncUsers(dto);
   }
 
+  @Public()
   @Post('webhook/events')
   webhook(@Body() body: Record<string, unknown>) {
     return this.feishuService.handleWebhookEvent(body);

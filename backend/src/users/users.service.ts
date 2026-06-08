@@ -25,10 +25,17 @@ export class UsersService {
     });
   }
 
-  async getMe() {
-    return this.usersRepository.findOne({
-      where: { username: 'bool' },
+  async findLoginUsers() {
+    const users = await this.usersRepository.find({
+      where: { status: 'active' },
+      order: { created_at: 'DESC' },
+      take: 50,
     });
+    return users.map((user) => ({
+      username: user.username,
+      display_name: user.display_name,
+      source: user.source,
+    }));
   }
 
   async login(dto: LoginDto) {

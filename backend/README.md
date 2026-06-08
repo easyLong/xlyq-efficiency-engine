@@ -1,13 +1,13 @@
 # 效能引擎后端
 
-更新时间：2026-06-04
+更新时间：2026-06-08
 
 这是效能引擎的 NestJS 后端服务，同时托管当前 MVP 静态页面。
 
 ## 运行入口
 
 - 管理端：`GET http://localhost:3000/`
-- 本地资产表：`GET http://localhost:3000/asset-sheet.html`
+- 本地交付登记页：`GET http://localhost:3000/asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`
 - API Base：`http://localhost:3000/api/v1`
 - 健康检查：`GET /api/v1/health`
 
@@ -42,7 +42,7 @@ src/
   worklogs/          工时
 public/
   index.html         MVP 管理端
-  asset-sheet.html   本地兜底资产表
+  asset-sheet.html   本地交付登记页
 scripts/
   migrate-project-tables.js
 ```
@@ -60,6 +60,7 @@ copy .env.example .env
 ```env
 PORT=3000
 APP_PUBLIC_BASE_URL=http://localhost:3000
+TASK_ACCESS_TOKEN_SECRET=replace-with-a-long-random-secret
 
 DB_HOST=127.0.0.1
 DB_PORT=3306
@@ -110,6 +111,8 @@ npm run migrate:project-tables -- --help
 ## 主要 API 模块
 
 - `GET /api/v1/health`
+- `GET /api/v1/auth/login-users`
+- `POST /api/v1/auth/login`
 - `/api/v1/users`
 - `/api/v1/customers`
 - `/api/v1/contact-contexts`
@@ -127,6 +130,8 @@ npm run migrate:project-tables -- --help
 
 完整接口清单见 [../API_SPEC.md](../API_SPEC.md)。
 
+管理端接口默认需要 `Authorization: Bearer <accessToken>`；`/api/v1/health`、`/api/v1/auth/login-users`、`/api/v1/auth/login`、飞书事件回调和带任务 token 的交付登记接口是公开入口。
+
 ## 数据链路说明
 
 关键链路见 [../DATA_FLOW.md](../DATA_FLOW.md)。
@@ -137,6 +142,8 @@ npm run migrate:project-tables -- --help
 - 删除需求会清理需求项、任务、资产记录和报价映射。
 - 报价映射创建/更新会校验需求客户、报价单客户和报价子项归属，避免跨基金挂错报价。
 - 报价子项状态只按有效映射回算，`rejected`、`obsolete` 不再占用报价子项。
+- 本地交付登记保存、需求删除、报价单删除使用事务，避免资产、任务、映射残留。
+- 资产个数只统计图片资产和人工登记资产；最终交付链接仅用于追踪，不参与结算数量。
 
 ## 数据库与迁移
 
@@ -155,5 +162,5 @@ npm run migrate:project-tables -- --execute
 
 - OpenAI 兼容模型用于需求文件拆分、客户/业务分类识别、报价单解析。
 - 飞书在线表格依赖 `drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create` 权限。
-- 权限不足时，任务指派会降级到本地资产表。
-- 移动端员工访问本地资产表时，`APP_PUBLIC_BASE_URL` 必须是公网可访问地址。
+- 权限不足时，任务指派会降级到本地交付登记页。
+- 移动端员工访问本地交付登记页时，`APP_PUBLIC_BASE_URL` 必须是公网可访问地址。

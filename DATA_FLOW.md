@@ -1,6 +1,6 @@
 # 数据链路说明
 
-更新时间：2026-06-04
+更新时间：2026-06-08
 
 本文档说明当前 MVP 中“需求、任务、资产、报价、结算”的真实数据链路和一致性规则。
 
@@ -79,17 +79,30 @@ contact_context_configs
 
 - `tasks.assignee_user_id` 记录负责人。
 - 系统尝试创建飞书在线资产表。
-- 飞书权限不足时降级到 `public/asset-sheet.html`。
-- 员工只填写资产 URL。
-- 后台写入 `task_result_files`。
+- 飞书权限不足或本地兜底时，生成 `public/asset-sheet.html` 入口。
+- 本地交付入口会携带任务访问 token：`asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`。
+- 员工可上传、拖拽、粘贴图片，也可粘贴图片 URL；同时支持填写一个最终交付链接。
+- 后台统一写入 `task_result_files`。
 
 资产统计口径：
 
 ```text
 COUNT(DISTINCT task_result_files.file_url)
+WHERE source IN (
+  'local_asset_sheet',
+  'local_asset_sheet_image',
+  'feishu_asset_sheet',
+  'feishu_asset_sheet_image',
+  'manual',
+  'feishu'
+)
 ```
 
-本地资产表保存后，任务会进入 `pending_review`。
+说明：
+
+- `local_asset_sheet_image` / `feishu_asset_sheet_image`：图片资产，计入结算资产个数。
+- `local_asset_sheet_link` / `feishu_asset_sheet_link`：最终交付链接，只用于交付追踪，不计入结算资产个数。
+- 本地交付登记保存使用事务，保存成功后任务进入 `pending_review`。
 
 ## 5. 报价单链路
 
@@ -185,6 +198,7 @@ COUNT(DISTINCT task_result_files.file_url)
 - 软删除任务工作目录和资产记录
 - 删除相关 `requirement_quotation_mappings`
 - 回算报价子项 `match_status`
+- 以上动作在事务中执行，避免只删一半导致数据链路断裂。
 
 删除报价子项：
 
@@ -201,6 +215,7 @@ COUNT(DISTINCT task_result_files.file_url)
 - 软删除报价子项
 - 软删除报价单
 - 回算需求项 `quote_scope_status`
+- 报价单删除在事务中执行。
 
 ## 10. 结算和统计
 

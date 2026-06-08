@@ -1,4 +1,7 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req } from '@nestjs/common';
+import { Request } from 'express';
+import { Public } from '../common/decorators/public.decorator';
+import { UserEntity } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -13,14 +16,21 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Public()
+  @Get('auth/login-users')
+  findLoginUsers() {
+    return this.usersService.findLoginUsers();
+  }
+
+  @Public()
   @Post('auth/login')
   login(@Body() dto: LoginDto) {
     return this.usersService.login(dto);
   }
 
   @Get('users/me')
-  getMe() {
-    return this.usersService.getMe();
+  getMe(@Req() request: Request & { user?: UserEntity }) {
+    return request.user;
   }
 
   @Get('roles')

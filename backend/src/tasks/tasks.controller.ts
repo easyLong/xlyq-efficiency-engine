@@ -7,12 +7,14 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Public } from '../common/decorators/public.decorator';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
 import { ReturnTaskRevisionDto } from './dto/return-task-revision.dto';
 import { SaveLocalAssetSheetDto } from './dto/save-local-asset-sheet.dto';
+import { UploadLocalAssetImageDto } from './dto/upload-local-asset-image.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TasksService } from './tasks.service';
@@ -72,6 +74,12 @@ export class TasksController {
     return this.tasksService.getWorkspace(id);
   }
 
+  @Public()
+  @Get(':id/asset-sheet/context')
+  getAssetSheetContext(@Param('id') id: string, @Query('token') token?: string) {
+    return this.tasksService.getAssetSheetContext(id, token);
+  }
+
   @Post(':id/workspace/provision')
   provisionWorkspace(
     @Param('id') id: string,
@@ -90,12 +98,24 @@ export class TasksController {
     return this.tasksService.syncAssetSheet(id);
   }
 
+  @Public()
   @Post(':id/asset-sheet/local-assets')
   saveLocalAssetSheet(
     @Param('id') id: string,
+    @Query('token') token: string | undefined,
     @Body() dto: SaveLocalAssetSheetDto,
   ) {
-    return this.tasksService.saveLocalAssetSheet(id, dto);
+    return this.tasksService.saveLocalAssetSheet(id, dto, token);
+  }
+
+  @Public()
+  @Post(':id/asset-sheet/upload-image')
+  uploadLocalAssetImage(
+    @Param('id') id: string,
+    @Query('token') token: string | undefined,
+    @Body() dto: UploadLocalAssetImageDto,
+  ) {
+    return this.tasksService.uploadLocalAssetImage(id, dto, token);
   }
 
   @Post(':id/result-files')

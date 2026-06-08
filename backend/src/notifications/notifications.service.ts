@@ -159,21 +159,34 @@ export class NotificationsService {
       (workspace.feishu_folder_token
         ? `https://www.feishu.cn/drive/folder/${workspace.feishu_folder_token}`
         : null);
+    const [project, assignee] = await Promise.all([
+      this.projectsRepository.findOne({ where: { id: task.project_id } }),
+      workspace.assignee_user_id
+        ? this.usersRepository.findOne({
+            where: { id: workspace.assignee_user_id },
+          })
+        : Promise.resolve(null),
+    ]);
 
     return this.sendToUsers([workspace.assignee_user_id], {
       title: `新任务已指派：${task.task_name}`,
       content: [
-        `你收到一个新任务 ${task.task_no}。`,
+        `**任务**：${task.task_name}`,
+        `**所属项目**：${project?.project_name ?? '-'}`,
+        `**状态**：${this.taskStatusLabel(task.status)}`,
+        `**截止时间**：${this.formatDate(task.planned_end_at)}`,
+        `**优先级**：${this.priorityLabel(task.priority)}`,
+        `**任务执行人**：${assignee?.display_name ?? '-'}`,
         directoryUrl
-          ? `点击填写资产地址：${directoryUrl}`
-          : '请在任务详情中查看资产登记表。',
-        '请只在表格的“资产地址”列粘贴交付物 URL，系统会自动读取并统计。',
+          ? `点击进入登记页：${directoryUrl}`
+          : '请在任务详情中查看登记页。',
+        '登记页支持保存多张图片和一个交付链接，系统会同步到统计分析。',
       ].join('\n'),
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
       actionUrl: directoryUrl ?? undefined,
-      actionText: '填写资产地址',
+      actionText: '填写图片和链接',
     });
   }
 
@@ -418,6 +431,35 @@ export class NotificationsService {
     message.status = message.status === 'sent' ? 'read' : message.status;
     message.read_at = new Date();
     return this.notificationsRepository.save(message);
+  }
+
+  private taskStatusLabel(status: string | null) {
+    return (
+      {
+        todo: '未开始',
+        pending: '未开始',
+        assigned: '已指派',
+        in_progress: '进行中',
+        blocked: '受阻',
+        pending_review: '待验收',
+        completed: '已完成',
+        cancelled: '已取消',
+        returned: '已退回',
+      }[status ?? ''] ??
+      status ??
+      '-'
+    );
+  }
+
+  private priorityLabel(priority: string | null) {
+    return { high: 'P0', medium: 'P1', low: 'P2' }[priority ?? ''] ?? 'P3';
+  }
+
+  private formatDate(value: Date | null) {
+    if (!value) {
+      return '-';
+    }
+    return `${value.getFullYear()}/${String(value.getMonth() + 1).padStart(2, '0')}/${String(value.getDate()).padStart(2, '0')}`;
   }
 
   private async sendFeishuAppMessage(
