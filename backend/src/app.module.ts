@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ContactContextsModule } from './contact-contexts/contact-contexts.module';
 import { CustomersModule } from './customers/customers.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthModule } from './health/health.module';
@@ -36,6 +37,7 @@ import { WorklogsModule } from './worklogs/worklogs.module';
       }),
     }),
     HealthModule,
+    ContactContextsModule,
     FeishuModule,
     NotificationsModule,
     CustomersModule,

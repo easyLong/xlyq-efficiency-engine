@@ -10,41 +10,55 @@
       margin: 0;
       min-height: 100vh;
       color: #18231d;
-      background:
-        radial-gradient(circle at 8% 8%, rgba(70, 122, 79, .20), transparent 28%),
-        radial-gradient(circle at 85% 18%, rgba(222, 151, 68, .20), transparent 26%),
-        linear-gradient(135deg, #f7f4e9 0%, #eef4e9 50%, #f8fbf4 100%);
+      background: linear-gradient(135deg, #f5f7f2 0%, #f8faf5 48%, #f3f6ef 100%);
       font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
     }
     button, input, textarea, select { font: inherit; }
     button { cursor: pointer; }
-    .shell { min-height: 100vh; display: grid; grid-template-columns: 280px 1fr; }
+    .shell { min-height: 100vh; display: grid; grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     .side {
       background: #16221b;
       color: #f8f5e8;
-      padding: 26px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      padding: 10px 18px;
       display: flex;
-      flex-direction: column;
-      gap: 20px;
-      box-shadow: 18px 0 48px rgba(20, 36, 28, .20);
+      flex-direction: row;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 10px 28px rgba(20, 36, 28, .16);
     }
-    .brand h1 { margin: 0; font-size: 25px; letter-spacing: .04em; }
-    .brand p { margin: 8px 0 0; color: rgba(248,245,232,.68); line-height: 1.7; font-size: 13px; }
-    .user-card { padding: 14px; border-radius: 18px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); }
-    .user-card strong { display: block; margin-bottom: 5px; }
-    .nav { display: grid; gap: 8px; }
+    .brand { min-width: 128px; }
+    .brand h1 { margin: 0; font-size: 20px; letter-spacing: .01em; white-space: nowrap; }
+    .brand p { display: none; }
+    .user-card {
+      width: 210px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .user-card strong { display: block; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-card .muted { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+    .nav { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; overflow-x: auto; }
     .nav button {
       border: 0;
-      border-radius: 14px;
-      padding: 12px 14px;
+      border-radius: 10px;
+      padding: 8px 12px;
       color: rgba(248,245,232,.74);
       background: transparent;
       text-align: left;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .nav button.active { color: #16221b; background: #f5d38d; font-weight: 800; }
-    .main { padding: 28px; min-width: 0; }
-    .top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 22px; }
-    .top h2 { margin: 0 0 7px; font-size: 30px; }
+    .side > .btn.warn { min-height: 34px; padding: 7px 14px; border-radius: 10px; white-space: nowrap; }
+    .main { padding: 16px 18px 18px; min-width: 0; }
+    .top { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; margin-bottom: 12px; }
+    .top h2 { margin: 0 0 4px; font-size: 25px; }
     .top p { margin: 0; color: #667163; }
     .pill { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #d8dfcf; background: rgba(255,255,255,.72); border-radius: 999px; padding: 9px 13px; color: #596657; font-size: 13px; }
     .grid { display: grid; gap: 16px; }
@@ -65,6 +79,113 @@
     .pool-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .pool-actions .btn { background: #f5d38d; border-color: #f5d38d; color: #16221b; }
     .board-panel { min-width: 0; }
+    .requirements-workspace {
+      display: grid;
+      grid-template-columns: minmax(300px, 330px) minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .requirements-history { display: grid; gap: 14px; min-width: 0; }
+    #view-requirements .panel {
+      border-radius: 16px;
+      border-color: #dde5d8;
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 10px 32px rgba(45, 63, 46, .09);
+    }
+    .requirements-compose {
+      position: sticky;
+      top: 16px;
+      padding: 16px;
+    }
+    .requirements-compose .section-title {
+      padding-bottom: 14px;
+      border-bottom: 1px solid #eef2ea;
+      margin-bottom: 12px;
+    }
+    .requirements-compose .section-title h3,
+    .history-panel .section-title h3 { font-size: 19px; }
+    .requirements-compose .tag { background: #edf5ee; color: #2f6b45; }
+    .requirements-compose .form-grid { grid-template-columns: 1fr; gap: 0; }
+    .requirements-compose label { margin-bottom: 10px; }
+    .requirements-compose textarea { min-height: 86px; }
+    .requirements-compose input,
+    .requirements-compose textarea,
+    .requirements-compose select {
+      border-radius: 10px;
+      background: #fbfcf8;
+      padding: 9px 10px;
+    }
+    .requirements-compose .preview-box {
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #f7faf4;
+    }
+    .requirements-compose .btns { margin-top: 2px; }
+    #view-requirements .intake-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      padding: 4px;
+      border-radius: 12px;
+      background: #eef3ea;
+    }
+    #view-requirements .intake-tabs button {
+      border-radius: 9px;
+      padding: 7px 10px;
+    }
+    #view-requirements .requirement-metrics {
+      grid-template-columns: repeat(5, minmax(84px, 1fr));
+      margin-bottom: 0;
+    }
+    #view-requirements .requirement-metrics .mini-metric {
+      border-radius: 14px;
+      background: #fff;
+      padding: 8px 10px;
+      box-shadow: 0 8px 24px rgba(45, 63, 46, .06);
+    }
+    #view-requirements .requirement-metrics .mini-metric span { margin-bottom: 2px; }
+    #view-requirements .requirement-metrics .mini-metric strong { font-size: 21px; }
+    .history-panel { padding: 0; overflow: hidden; }
+    .history-panel .section-title {
+      padding: 14px 16px 0;
+      margin-bottom: 10px;
+    }
+    .history-panel .status-filter {
+      padding: 0 16px 10px;
+      margin-bottom: 0;
+      border-bottom: 1px solid #edf1e8;
+    }
+    .history-panel #requirementsBoard { padding: 10px 16px 16px; }
+    #view-requirements .quick-filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    #view-requirements .advanced-filter { width: auto; margin-top: 0; position: relative; }
+    #view-requirements .advanced-filter summary {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 6px 10px;
+      border: 1px solid #d8dfcf;
+      border-radius: 10px;
+      background: #fff;
+      color: #50604e;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #view-requirements .advanced-filter[open] { width: 100%; }
+    #view-requirements .advanced-filter[open] summary { margin-bottom: 8px; }
+    #view-requirements .status-filter button {
+      border-radius: 10px;
+      padding: 7px 10px;
+    }
+    #view-requirements .status-filter .filter-select {
+      border-radius: 10px;
+      min-width: 136px;
+      background: #fff;
+      padding: 8px 10px;
+    }
+    #view-requirements .history-filter-grid {
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 8px;
+    }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .side-stack { display: grid; gap: 16px; position: sticky; top: 24px; }
     .panel {
@@ -106,6 +227,172 @@
     .requirement-row { cursor: pointer; transition: background .15s ease, transform .15s ease; }
     .requirement-row:hover { background: #fff9e8; }
     .requirement-row.active { background: #eef6eb; box-shadow: inset 4px 0 0 #2f6b45; }
+    .requirement-list { display: grid; gap: 12px; }
+    .requirement-card {
+      border: 1px solid #d8dfcf;
+      background: #fff;
+      border-radius: 12px;
+      padding: 9px 11px;
+      display: grid;
+      gap: 5px;
+      position: relative;
+    }
+    .requirement-card:hover { border-color: #bfd0b8; box-shadow: 0 8px 22px rgba(58,77,55,.07); }
+    .requirement-card-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(56px, auto);
+      gap: 10px;
+      align-items: center;
+    }
+    .requirement-card-footer {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+    .requirement-title-block { display: grid; gap: 6px; }
+    .requirement-title-line { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; }
+    .requirement-title-line .tag {
+      max-width: 118px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .requirement-title-line .row-title {
+      font-size: 15px;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .requirement-title-block .row-sub {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 0;
+    }
+    .requirement-meta-line {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #6a7567;
+      font-size: 12px;
+    }
+    .dimension-pill-grid { display: flex; gap: 6px; flex-wrap: wrap; }
+    .dimension-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      border: 1px solid #d8dfcf;
+      border-radius: 999px;
+      padding: 1px 6px;
+      background: #f6f8f3;
+      color: #50604e;
+      font-size: 11px;
+      line-height: 1.25;
+    }
+    .card-field { display: grid; gap: 5px; min-width: 0; }
+    .card-field-label { color: #687366; font-size: 12px; font-weight: 800; }
+    .compact-status {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .compact-status .row-sub { margin-top: 0; white-space: nowrap; }
+    .quote-action { display: grid; grid-template-columns: auto auto; gap: 6px; align-items: center; min-width: 0; justify-content: start; }
+    .quote-action.with-select { grid-template-columns: minmax(170px, 250px) auto; }
+    .requirement-card-footer .quote-action { grid-column: auto; }
+    .requirement-card-footer .quote-action-compact {
+      grid-column: auto;
+      grid-template-columns: auto auto;
+      justify-content: start;
+    }
+    .quote-action select {
+      min-width: 0;
+      max-width: 100%;
+      min-height: 26px;
+      padding: 3px 7px;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 12px;
+      line-height: 1.25;
+    }
+    .quote-action .btn { min-width: 76px; white-space: nowrap; }
+    .quote-action-compact .btn { min-width: 72px; }
+    .quote-selected { min-width: 0; }
+    .quote-selected .row-sub { word-break: break-word; }
+    .assign-action { display: grid; grid-template-columns: minmax(112px, 148px) auto; gap: 5px; align-items: center; justify-content: start; min-width: 0; }
+    .assign-action select {
+      width: 148px;
+      max-width: 148px;
+      min-height: 26px;
+      padding: 3px 7px;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 12px;
+      line-height: 1.25;
+    }
+    .assign-action .btn { min-width: 58px; white-space: nowrap; }
+    .card-edit-actions { display: flex; gap: 2px; justify-content: flex-end; flex-wrap: nowrap; }
+    .requirement-card-main .card-edit-actions { grid-column: auto; }
+    .card-edit-actions .btn { min-width: auto; }
+    #view-requirements .requirement-card-footer .btn {
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 800;
+      box-shadow: none;
+    }
+    #view-requirements .requirement-card-footer .btn.primary {
+      background: #eef7ef;
+      border-color: #c9dec9;
+      color: #245f3b;
+    }
+    #view-requirements .requirement-card-footer .btn.primary:hover {
+      background: #dceee0;
+      border-color: #a9caaa;
+    }
+    #view-requirements .requirement-card-footer .btn:not(.primary):not(.danger) {
+      background: transparent;
+      border-color: transparent;
+      color: #2f6b45;
+    }
+    #view-requirements .requirement-card-footer .btn:not(.primary):not(.danger):hover {
+      background: #edf5ee;
+      border-color: #d7e5d5;
+    }
+    #view-requirements .requirement-card-footer .btn.danger {
+      background: transparent;
+      border-color: transparent;
+      color: #b04a32;
+    }
+    #view-requirements .requirement-card-footer .btn.danger:hover {
+      background: #fff0eb;
+      border-color: #efc4b7;
+    }
+    #view-requirements .card-edit-actions .btn {
+      min-height: 22px;
+      padding: 1px 5px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .quote-status-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #edf5ee;
+      color: #2f6b45;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .history-filter-grid { width: 100%; margin-top: 10px; }
     .row-title { font-weight: 800; color: #18231d; }
     .row-sub { color: #6a7567; font-size: 12px; margin-top: 4px; line-height: 1.55; }
     .inline-assign { display: grid; grid-template-columns: 88px minmax(150px, 1fr); gap: 8px; align-items: center; min-width: 260px; }
@@ -132,6 +419,41 @@
     .hint-card .mini-metric { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); }
     .hint-card .mini-metric span { color: rgba(248,245,232,.70); }
     .hint-card .mini-metric strong { color: #f5d38d; }
+    .quotation-import-panel { padding: 16px; }
+    .quotation-import-panel .section-title { margin-bottom: 10px; }
+    .quotation-import-grid {
+      display: grid;
+      grid-template-columns: minmax(220px, .8fr) minmax(260px, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .quotation-import-grid .wide { grid-column: 1 / -1; }
+    .quotation-import-grid label { margin-bottom: 0; }
+    .quotation-import-grid textarea { min-height: 92px; }
+    .quotation-import-actions { display: flex; gap: 8px; align-items: end; flex-wrap: nowrap; }
+    .quotation-import-actions .btn { white-space: nowrap; }
+    .quotation-metrics { margin: 8px 0 0; grid-template-columns: repeat(4, minmax(100px, 1fr)); }
+    .quotation-metrics .mini-metric { padding: 8px 10px; border-radius: 12px; }
+    .quotation-item-actions { display: flex; gap: 4px; flex-wrap: nowrap; }
+    .quotation-item-actions .btn {
+      min-height: 26px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+    .quote-item-edit-grid {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) 80px 110px 120px 1.2fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+    .quote-item-edit-grid input,
+    .quote-item-edit-grid select {
+      min-height: 32px;
+      padding: 7px 9px;
+      border-radius: 10px;
+    }
+    .quote-item-edit-grid label { margin-bottom: 0; }
     .login {
       min-height: 100vh;
       display: grid;
@@ -194,6 +516,13 @@
     th, td { border-bottom: 1px solid #d8dfcf; padding: 11px 8px; text-align: left; vertical-align: top; }
     th { color: #687366; background: #faf8ee; }
     .tag { display: inline-flex; border-radius: 999px; padding: 3px 8px; background: #e9efe5; color: #356d45; font-size: 12px; }
+    #view-requirements .requirement-card .tag {
+      min-height: 20px;
+      padding: 1px 6px;
+      font-size: 11px;
+      line-height: 1.25;
+      align-items: center;
+    }
     .preview-box { border: 1px dashed #bfd0b8; background: #fbf8ed; border-radius: 16px; padding: 12px; }
     .preview-box strong { display: block; color: #263426; margin-bottom: 4px; }
     .file-tools { display: grid; gap: 10px; border: 1px solid #d8dfcf; background: #fffdf7; border-radius: 18px; padding: 13px; }
@@ -214,9 +543,11 @@
     .toast.show { opacity: 1; transform: translateY(0); }
     .hidden { display: none !important; }
     @media (max-width: 980px) {
-      .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip { grid-template-columns: 1fr; }
+      .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
       .edit-panel { grid-template-columns: 1fr; }
-      .side, .side-stack { position: static; }
+      .quotation-import-actions { flex-wrap: wrap; }
+      .side { position: static; flex-wrap: wrap; }
+      .side-stack, .requirements-compose { position: static; }
       .top { flex-direction: column; }
     }
   </style>
@@ -240,6 +571,7 @@
         <div class="btns">
           <button class="btn primary" onclick="login()">进入系统</button>
           <button class="btn" onclick="loadBootstrap()">刷新用户</button>
+          <button class="btn danger" onclick="resetLocalSession()">清理登录态</button>
         </div>
         <p class="muted" id="loginHint">正在加载用户...</p>
       </div>
@@ -259,7 +591,6 @@
       <nav class="nav">
         <button class="active" data-view="requirements" onclick="switchView('requirements')">需求与指派</button>
         <button data-view="quotations" onclick="switchView('quotations')">报价单</button>
-        <button data-view="mappings" onclick="switchView('mappings')">报价适配</button>
         <button data-view="settlement" onclick="switchView('settlement')">结算单</button>
         <button data-view="dashboard" onclick="switchView('dashboard')">统计分析</button>
         <button data-view="messages" onclick="switchView('messages')">消息记录</button>
@@ -276,8 +607,8 @@
         <div class="pill" id="healthPill">后端连接中...</div>
       </div>
 
-      <section id="view-requirements" class="grid">
-        <div class="panel">
+      <section id="view-requirements" class="requirements-workspace">
+        <div class="panel requirements-compose">
           <div class="section-title">
             <div>
               <div class="kicker">New Requirement</div>
@@ -294,14 +625,29 @@
 
             <div id="manualIntakePanel" class="tab-panel">
               <div class="form-grid">
+                <label>对接人
+                  <select id="contactContextSelect" onchange="applyContactContextSelection()"></select>
+                </label>
                 <label>客户
                   <select id="customerSelect" onchange="syncProjectSelection(false)"></select>
                 </label>
-                <label>项目大类
+                <label>业务大类
                   <select id="projectTypeSelect" onchange="syncProjectSelection(false)"></select>
                 </label>
+                <label>业务平台
+                  <select id="businessPlatformInput"></select>
+                </label>
+                <label>二级分类
+                  <input id="secondaryCategoryInput" readonly />
+                </label>
+                <label>三级分类
+                  <input id="tertiaryCategoryInput" placeholder="可由对接人带出，也可人工修改" />
+                </label>
               </div>
-              <div id="projectPreview" class="preview-box muted">请选择客户和项目大类。</div>
+              <div id="projectPreview" class="preview-box muted">请选择客户和业务大类。</div>
+              <label>业务命名
+                <input id="businessNameInput" placeholder="人工填写，例如：2026Q2国联安季报制作" />
+              </label>
               <label>需求标题
                 <input id="requirementTitle" />
               </label>
@@ -328,7 +674,7 @@
                   </label>
                   <button id="aiMatchButton" class="btn" onclick="aiMatchRequirementContext()">AI匹配客户和大类</button>
                 </div>
-                <div id="aiMatchBox" class="match-box muted">AI 会先分析文件内容，自动匹配客户和项目大类。</div>
+                <div id="aiMatchBox" class="match-box muted">AI 会先分析文件内容，自动匹配客户和业务大类。</div>
                 <div id="aiSplitPreview" class="muted">支持 txt、md、csv、json 等文本文件；加载后会进入 AI 拆分，不影响手动录入。</div>
               </div>
               <div class="btns">
@@ -339,64 +685,51 @@
           </div>
         </div>
 
-        <div id="requirementMetrics" class="summary-strip"></div>
+        <div class="requirements-history">
+          <div id="requirementMetrics" class="summary-strip requirement-metrics"></div>
 
-        <div class="panel board-panel">
-          <div class="section-title">
-            <div>
-              <div class="kicker">History</div>
-              <h3>历史需求任务状态</h3>
+          <div class="panel board-panel history-panel">
+            <div class="section-title">
+              <div>
+                <div class="kicker">History</div>
+                <h3>历史需求任务状态</h3>
+              </div>
+              <span class="tag">在卡片内完成报价和指派</span>
             </div>
-            <span class="tag">待指派任务可在操作列处理</span>
+            <div id="requirementFilters" class="status-filter"></div>
+            <div id="requirementsBoard" class="table-wrap"></div>
           </div>
-          <div id="requirementFilters" class="status-filter"></div>
-          <div id="requirementsBoard" class="table-wrap"></div>
         </div>
       </section>
 
       <section id="view-quotations" class="grid hidden">
-        <div class="panel">
+        <div class="panel quotation-import-panel">
           <div class="section-title">
             <div>
               <div class="kicker">Quotation</div>
               <h3>上传报价单生成子项</h3>
-              <p>先支持文本类报价单文件或粘贴内容，系统会拆成最细粒度报价子项，后续用于和需求任务挂靠。</p>
             </div>
-            <span class="tag">最细粒度子项</span>
           </div>
-          <div class="grid workbench-grid">
-            <div class="grid">
-              <div class="form-grid">
-                <label>基金客户
-                  <select id="quoteCustomerSelect" onchange="syncQuoteProjectSelection(false)"></select>
-                </label>
-                <label>项目大类
-                  <select id="quoteProjectTypeSelect" onchange="syncQuoteProjectSelection(false)"></select>
-                </label>
-              </div>
-              <div id="quoteProjectPreview" class="preview-box muted">请选择基金客户和项目大类。</div>
-              <div class="file-tools">
-                <div class="file-tools-row">
-                  <label>上传报价单文件
-                    <input id="quotationFile" type="file" accept=".txt,.md,.csv,.json" onchange="loadQuotationFile()" />
-                  </label>
-                  <button class="btn" onclick="previewQuotationItems()">预览拆分</button>
-                </div>
-                <label>报价单内容
-                  <textarea id="quotationContent" placeholder="支持粘贴报价单明细，例如：&#10;设计服务：&#10;1. 月报设计 2 期 3000 6000&#10;2. 产品长图设计、Banner设计 2 项 4000 8000"></textarea>
-                </label>
-                <div id="quotationPreview" class="split-preview muted">上传或粘贴报价单后，可先预览将生成的细粒度子项。</div>
-              </div>
-              <div class="btns">
-                <button id="importQuotationButton" class="btn primary" onclick="importQuotation()">生成报价单和子项</button>
-                <button class="btn" onclick="clearQuotationForm()">清空</button>
-              </div>
+          <div class="quotation-import-grid">
+            <label>基金客户
+              <select id="quoteCustomerSelect" onchange="syncQuoteProjectSelection(false)"></select>
+            </label>
+            <label>报价单文件
+              <input id="quotationFile" type="file" accept=".txt,.md,.csv,.json" onchange="loadQuotationFile()" />
+            </label>
+            <div class="quotation-import-actions">
+              <button class="btn" onclick="previewQuotationItems()">预览</button>
+              <button id="importQuotationButton" class="btn primary" onclick="importQuotation()">生成报价单和子项</button>
+              <button class="btn" onclick="clearQuotationForm()">清空</button>
             </div>
-            <div class="panel hint-card">
-              <h3>解析规则</h3>
-              <p class="muted">预览和导入使用同一套后端解析规则。优先识别表格、CSV、制表符和多空格分隔的行；会跳过合计/说明行，并把“长图、Banner”等合并服务拆成更细子项。</p>
-              <div id="quotationMetrics" class="summary-strip"></div>
+            <label class="wide">报价单内容
+              <textarea id="quotationContent" placeholder="可上传文件，也可以直接粘贴报价单内容"></textarea>
+            </label>
+            <div class="wide">
+              <div id="quotationPreview" class="split-preview muted">上传或粘贴报价单后，可先预览将生成的细粒度子项。</div>
+              <div id="quotationMetrics" class="summary-strip quotation-metrics"></div>
             </div>
+            <div id="quoteProjectPreview" class="preview-box muted hidden">请选择基金客户。</div>
           </div>
         </div>
 
@@ -417,7 +750,10 @@
               <div class="kicker">Items</div>
               <h3>报价子项明细</h3>
             </div>
-            <span id="selectedQuotationHint" class="tag">请选择报价单</span>
+            <div class="btns">
+              <span id="selectedQuotationHint" class="tag">请选择报价单</span>
+              <button class="btn primary" onclick="startAddQuotationItem()">新增子项</button>
+            </div>
           </div>
           <div id="quotationItemsBoard" class="table-wrap"></div>
         </div>
@@ -462,6 +798,17 @@
           </div>
           <div id="mappingWorkbench" class="table-wrap"></div>
         </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <div>
+              <div class="kicker">Dimension Rules</div>
+              <h3>报价子项维度规则</h3>
+            </div>
+            <button class="btn" onclick="renderQuotationDimensionRules()">刷新规则</button>
+          </div>
+          <div id="quotationDimensionRules" class="table-wrap"></div>
+        </div>
       </section>
 
       <section id="view-settlement" class="grid hidden">
@@ -470,21 +817,22 @@
             <div>
               <div class="kicker">Settlement</div>
               <h3>结算单预览</h3>
-              <p>基于“需求报价已确认 + 任务资产个数”实时生成结算明细，可按基金维度和季度维度统计。</p>
+              <p>基于“需求报价已确认 + 任务资产个数”实时生成结算明细，可按基金、业务和员工维度统计。</p>
             </div>
             <span class="tag">资产个数 × 报价单价</span>
           </div>
           <div class="form-grid">
             <label>基金维度
-              <select id="settlementCustomerSelect" onchange="loadSettlementStatement()"></select>
+              <select id="settlementCustomerSelect" onchange="setSettlementPrimaryCustomer(this.value)"></select>
             </label>
             <label>季度维度
               <select id="settlementQuarterSelect" onchange="loadSettlementStatement()"></select>
             </label>
           </div>
+          <div id="settlementDimensionFilters" class="form-grid"></div>
           <div class="btns">
             <button class="btn primary" onclick="loadSettlementStatement()">生成结算单预览</button>
-            <button class="btn" onclick="switchView('mappings')">回到报价适配</button>
+            <button class="btn" onclick="switchView('requirements')">回到需求与指派</button>
           </div>
         </div>
 
@@ -518,12 +866,12 @@
           <div class="section-title">
             <div>
               <h3>管理驾驶舱</h3>
-              <p>汇总需求、任务、报价、结算和员工完成情况，支持按基金客户和季度筛选。</p>
+              <p>汇总需求、任务、报价、结算和员工完成情况，支持按基金、业务和员工维度筛选。</p>
             </div>
             <div class="inline-assign">
               <label>
                 基金筛选
-                <select id="analyticsCustomerSelect" onchange="refreshAnalytics()"></select>
+                <select id="analyticsCustomerSelect" onchange="setDashboardPrimaryCustomer(this.value)"></select>
               </label>
               <label>
                 季度筛选
@@ -531,6 +879,9 @@
               </label>
             </div>
           </div>
+        </div>
+        <div class="panel">
+          <div id="analyticsDimensionFilters" class="form-grid"></div>
         </div>
         <div id="metrics" class="grid cols-4"></div>
         <div class="grid cols-2">
@@ -584,36 +935,53 @@
 
   <script>
     const apiBase = "/api/v1";
+    const businessPlatforms = ["招行", "工行", "交行", "理财通", "蚂蚁", "天天基金"];
+    const businessCategoryDefs = [
+      {
+        value: "design",
+        label: "设计",
+        secondaries: ["配图拓展", "banner新设计", "巨幅新设计", "长图新设计", "长图拓展", "长图套模板", "（其他）"],
+      },
+      {
+        value: "copywriting",
+        label: "文案",
+        secondaries: ["数据更新", "已有素材新编辑", "原创文案", "共建文案", "（其他）"],
+      },
+      {
+        value: "operation",
+        label: "运营",
+        secondaries: ["发布陪伴", "活动配置", "魔秀搭建", "页面推厂", "直播配置", "（其他）"],
+      },
+      {
+        value: "community",
+        label: "社区",
+        secondaries: ["粉丝投放", "精华贴", "氛围贴", "（其他）"],
+      },
+    ];
     const projectTypes = [
       {
-        value: "periodic_report",
-        label: "定期报告制作",
+        value: "design",
+        label: "设计",
         budgetAmount: "300000",
-        description: "基金月报、季报、年报、临时报告制作与交付。",
+        description: "配图、banner、巨幅、长图与模板类设计服务。",
       },
       {
-        value: "marketing_material",
-        label: "营销材料设计",
+        value: "copywriting",
+        label: "文案",
         budgetAmount: "180000",
-        description: "基金路演材料、海报、长图、产品手册等营销物料。",
+        description: "数据更新、已有素材编辑、原创与共建文案。",
       },
       {
-        value: "data_disclosure",
-        label: "数据披露与核对",
+        value: "operation",
+        label: "运营",
         budgetAmount: "220000",
-        description: "净值、持仓、业绩、风险指标等披露数据整理与复核。",
+        description: "发布陪伴、活动配置、魔秀搭建、页面推厂和直播配置。",
       },
       {
-        value: "compliance_content",
-        label: "合规内容支持",
+        value: "community",
+        label: "社区",
         budgetAmount: "160000",
-        description: "合规文案、免责声明、材料合规调整与留痕。",
-      },
-      {
-        value: "web_investor_education",
-        label: "官网与投教运营",
-        budgetAmount: "260000",
-        description: "官网内容维护、投教专题、活动页和运营内容更新。",
+        description: "粉丝投放、精华贴、氛围贴等社区服务。",
       },
     ];
     const state = {
@@ -621,10 +989,12 @@
       users: [],
       projects: [],
       customers: [],
+      contactContexts: [],
       requirements: [],
       requirementItems: [],
       tasks: [],
       quotations: [],
+      quoteMappings: [],
       quotationItemsById: {},
       selectedQuotationId: null,
       loadedQuotationFileName: null,
@@ -637,7 +1007,15 @@
       settlementStatement: null,
       settlementRequestSeq: 0,
       requirementFilter: "all",
-      requirementCustomerFilterId: "all",
+      dimensionFilters: {
+        customerId: "all",
+        contactContextId: "all",
+        businessPlatform: "all",
+        businessCategory: "all",
+        secondaryCategory: "all",
+        tertiaryCategory: "all",
+        assigneeUserId: "all",
+      },
       currentProject: null,
       requirement: null,
       item: null,
@@ -653,6 +1031,8 @@
       analyticsQuarter: null,
       analyticsRequestSeq: 0,
       editingRequirementId: null,
+      editingQuotationItemId: null,
+      addingQuotationItem: false,
       busyActionId: null,
     };
     const stepDefs = [
@@ -694,23 +1074,27 @@
       return data;
     }
     async function loadBootstrap() {
-      const [users, projects, customers, requirements, requirementItems, tasks, quotations, health] = await Promise.all([
+      const [users, projects, customers, contactContexts, requirements, requirementItems, tasks, quotations, quoteMappings, health] = await Promise.all([
         request("/users"),
         request("/projects"),
         request("/customers"),
+        request("/contact-contexts?status=active").catch(() => []),
         request("/requirements"),
         request("/requirement-items"),
         request("/tasks"),
         request("/quotations"),
+        request("/quote-mappings").catch(() => []),
         request("/health"),
       ]);
       state.users = unwrap(users);
       state.projects = unwrap(projects);
       state.customers = unwrap(customers);
+      state.contactContexts = unwrap(contactContexts);
       state.requirements = unwrap(requirements);
       state.requirementItems = unwrap(requirementItems);
       state.tasks = unwrap(tasks);
       state.quotations = unwrap(quotations);
+      state.quoteMappings = unwrap(quoteMappings);
       qs("healthPill").textContent = `后端 ${health.status} / 数据库 ${health.database}`;
       renderBootstrap();
       qs("loginHint").textContent = "请选择用户登录。";
@@ -721,14 +1105,14 @@
       return value ? [value] : [];
     }
     function renderBootstrap() {
-      qs("loginUser").innerHTML = state.users.map(u => `<option value="${u.username}">${u.display_name || u.username} · ${u.username}</option>`).join("");
+      qs("loginUser").innerHTML = state.users.map(u => `<option value="${escapeAttr(u.username)}">${escapeHtml(u.display_name || u.username)} · ${escapeHtml(u.username)}</option>`).join("");
       const fundCustomers = state.customers.filter(c => c.industry === "公募基金");
       const customers = [...(fundCustomers.length ? fundCustomers : state.customers)].sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
-      qs("customerSelect").innerHTML = customers.map(c => `<option value="${c.id}">${c.customer_code || "客户"} · ${c.customer_name}</option>`).join("");
-      qs("quoteCustomerSelect").innerHTML = customers.map(c => `<option value="${c.id}">${c.customer_code || "客户"} · ${c.customer_name}</option>`).join("");
-      qs("mappingCustomerSelect").innerHTML = customers.map(c => `<option value="${c.id}">${c.customer_code || "客户"} · ${c.customer_name}</option>`).join("");
+      qs("customerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
+      qs("quoteCustomerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
+      qs("mappingCustomerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
       qs("mappingQuarterSelect").innerHTML = quarterOptions().map(item => `<option value="${item.value}">${item.label}</option>`).join("");
-      qs("settlementCustomerSelect").innerHTML = [`<option value="all">全部基金客户</option>`, ...customers.map(c => `<option value="${c.id}">${c.customer_code || "客户"} · ${c.customer_name}</option>`)].join("");
+      qs("settlementCustomerSelect").innerHTML = [`<option value="all">全部基金客户</option>`, ...customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`)].join("");
       qs("settlementQuarterSelect").innerHTML = quarterOptions().map(item => `<option value="${item.value}">${item.label}</option>`).join("");
       state.mappingCustomerId ||= customers[0]?.id || null;
       state.mappingQuarter ||= currentQuarter();
@@ -739,8 +1123,11 @@
       qs("settlementCustomerSelect").value = state.settlementCustomerId;
       qs("settlementQuarterSelect").value = state.settlementQuarter;
       renderAnalyticsFilters(customers);
+      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", false);
+      renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
+      renderContactContextOptions();
       qs("projectTypeSelect").innerHTML = projectTypes.map(t => `<option value="${t.value}">${t.label}</option>`).join("");
-      qs("quoteProjectTypeSelect").innerHTML = projectTypes.map(t => `<option value="${t.value}">${t.label}</option>`).join("");
+      qs("businessPlatformInput").innerHTML = businessPlatformOptions("");
       syncProjectSelection(false);
       syncQuoteProjectSelection(false);
       const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
@@ -750,14 +1137,13 @@
       renderRequirementBoard();
       renderQuotationsBoard();
       renderQuotationMetrics([]);
-      loadQuarterMappingWorkbench(false);
     }
     function renderAnalyticsFilters(customers) {
       const select = qs("analyticsCustomerSelect");
       if (!select) return;
       select.innerHTML = [
         `<option value="all">全部基金客户</option>`,
-        ...customers.map(c => `<option value="${c.id}">${c.customer_code || "基金"} · ${c.customer_name}</option>`),
+        ...customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "基金")} · ${escapeHtml(c.customer_name)}</option>`),
       ].join("");
       select.value = state.analyticsCustomerId;
       const quarterSelect = qs("analyticsQuarterSelect");
@@ -766,19 +1152,92 @@
         quarterSelect.value = state.analyticsQuarter || currentQuarter();
       }
     }
+    function renderContactContextOptions() {
+      const select = qs("contactContextSelect");
+      if (!select) return;
+      const activeContexts = state.contactContexts.filter(item => item.status !== "inactive");
+      select.innerHTML = [
+        `<option value="">手动选择客户和分类</option>`,
+        ...activeContexts.map(item => `<option value="${item.id}">${escapeHtml(contactContextLabel(item))}</option>`),
+      ].join("");
+      syncContactContextPreview(null);
+    }
+    function contactContextLabel(context) {
+      const customer = state.customers.find(item => item.id === context.customer_id);
+      const typeLabel = projectTypeLabel(context.business_category);
+      return [
+        context.contact_name,
+        customer?.customer_name,
+        context.business_platform,
+        typeLabel,
+        context.secondary_category,
+        context.tertiary_category,
+      ].filter(Boolean).join(" · ");
+    }
+    function selectedContactContext() {
+      const contextId = qs("contactContextSelect")?.value;
+      return state.contactContexts.find(item => item.id === contextId) || null;
+    }
+    async function applyContactContextSelection() {
+      const context = selectedContactContext();
+      if (!context) {
+        syncContactContextPreview(null);
+        await syncProjectSelection(false);
+        return;
+      }
+      if (context.customer_id && qs("customerSelect")) qs("customerSelect").value = context.customer_id;
+      if (context.business_category && qs("projectTypeSelect")) qs("projectTypeSelect").value = context.business_category;
+      syncContactContextPreview(context);
+      await syncProjectSelection(false);
+    }
+    function syncContactContextPreview(context) {
+      if (qs("businessPlatformInput")) qs("businessPlatformInput").value = context?.business_platform || "";
+      if (qs("secondaryCategoryInput")) qs("secondaryCategoryInput").value = context?.secondary_category || "";
+      if (qs("tertiaryCategoryInput")) qs("tertiaryCategoryInput").value = context?.tertiary_category || "";
+    }
     async function login() {
       const username = qs("loginUsername").value.trim() || qs("loginUser").value;
-      const result = await request("/auth/login", { method: "POST", body: { username } });
-      state.user = result.user;
+      let result = null;
+      try {
+        result = await request("/auth/login", { method: "POST", body: { username } });
+      } catch (error) {
+        qs("loginHint").textContent = error.message;
+        toast(error.message);
+        return;
+      }
+
+      enterApp(result.user);
+      addLog("登录成功", result.user);
+      await initializeAppAfterLogin();
+    }
+    function enterApp(user) {
+      state.user = user;
       localStorage.setItem("mvpUser", JSON.stringify(state.user));
       qs("loginView").classList.add("hidden");
       qs("appView").classList.remove("hidden");
       qs("currentUser").textContent = state.user.display_name || state.user.username;
       qs("currentUserMeta").textContent = `${state.user.username} · ${state.user.source}`;
-      addLog("登录成功", result.user);
-      await refreshAnalytics();
-      renderSteps();
-      startAutoRefresh();
+    }
+    async function initializeAppAfterLogin() {
+      try {
+        renderSteps();
+      } catch (error) {
+        console.error(error);
+        toast(`历史任务渲染失败：${error.message}`);
+      }
+      await refreshAnalytics().catch(error => toast(`统计刷新失败：${error.message}`));
+      try {
+        startAutoRefresh();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    function resetLocalSession() {
+      localStorage.removeItem("mvpUser");
+      sessionStorage.clear();
+      qs("loginUsername").value = "";
+      qs("loginHint").textContent = "已清理本地登录状态，请重新选择用户进入。";
+      toast("已清理本地登录状态");
     }
     function logout() {
       localStorage.removeItem("mvpUser");
@@ -800,9 +1259,9 @@
       const titles = {
         requirements: ["需求与指派", "录入客户需求后自动生成任务，并在同一页完成员工指派。"],
         quotations: ["报价单", "上传报价单并拆成最细粒度子项，为后续需求任务挂靠做准备。"],
-        mappings: ["报价适配", "按基金和季度，把需求项自动适配到报价单最细子项。"],
+        mappings: ["报价子项选择", "在历史需求任务中为需求选择对应基金的报价子项。"],
         settlement: ["结算单", "按基金和季度汇总已确认报价需求，根据任务资产个数生成结算预览。"],
-        dashboard: ["统计分析", "查看任务看板、完成情况和项目统计。"],
+        dashboard: ["统计分析", "查看任务看板、完成情况和业务统计。"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
       };
       qs("pageTitle").textContent = titles[view][0];
@@ -866,8 +1325,16 @@
     function customerName(id) {
       return state.customers.find(c => c.id === id)?.customer_name || "-";
     }
+    function contactContextName(id) {
+      const context = state.contactContexts.find(item => item.id === id);
+      return context ? contactContextLabel(context) : "";
+    }
     function projectName(id) {
       return state.projects.find(p => p.id === id)?.project_name || "-";
+    }
+    function businessCategoryNameForProject(id) {
+      const project = state.projects.find(p => p.id === id);
+      return projectTypeLabel(project?.project_type) || "-";
     }
     function projectForTask(task) {
       return state.projects.find(p => p.id === task?.project_id) || null;
@@ -879,6 +1346,150 @@
     function assigneeName(id) {
       const user = state.users.find(u => u.id === id);
       return user ? userDisplayName(user) : "-";
+    }
+    function resetDimensionFilters() {
+      state.dimensionFilters = {
+        customerId: "all",
+        contactContextId: "all",
+        businessPlatform: "all",
+        businessCategory: "all",
+        secondaryCategory: "all",
+        tertiaryCategory: "all",
+        assigneeUserId: "all",
+      };
+      state.analyticsCustomerId = "all";
+      state.settlementCustomerId = "all";
+      if (qs("analyticsCustomerSelect")) qs("analyticsCustomerSelect").value = "all";
+      if (qs("settlementCustomerSelect")) qs("settlementCustomerSelect").value = "all";
+    }
+    function contactContextForRequirement(requirement) {
+      return state.contactContexts.find(item => item.id === requirement?.source_ref_id) || null;
+    }
+    function projectForRequirement(requirement) {
+      return state.projects.find(project => project.id === requirement?.project_id) || null;
+    }
+    function requirementForTask(task) {
+      const item = state.requirementItems.find(entry => entry.id === task?.requirement_item_id);
+      return requirementForItem(item);
+    }
+    function requirementDimensionSnapshot(requirement, task = null) {
+      const context = contactContextForRequirement(requirement);
+      const project = projectForRequirement(requirement);
+      return {
+        customerId: requirement?.customer_id || project?.customer_id || "",
+        contactContextId: requirement?.source_ref_id || "",
+        businessPlatform: requirement?.business_platform || context?.business_platform || "",
+        businessCategory: requirement?.business_category || context?.business_category || project?.project_type || "",
+        secondaryCategory: requirement?.secondary_category || context?.secondary_category || "",
+        tertiaryCategory: requirement?.tertiary_category || context?.tertiary_category || "",
+        assigneeUserId: task?.assignee_user_id || "",
+      };
+    }
+    function dimensionMatchesRequirement(requirement, task = null) {
+      const snapshot = requirementDimensionSnapshot(requirement, task);
+      return Object.entries(state.dimensionFilters).every(([key, selected]) => {
+        return !selected || selected === "all" || snapshot[key] === selected;
+      });
+    }
+    function activeDimensionRows() {
+      return requirementRows().filter(row => dimensionMatchesRequirement(row.requirement, row.task));
+    }
+    function uniqueDimensionValues(key) {
+      const values = new Map();
+      const add = (value, label = value) => {
+        if (!value) return;
+        values.set(value, label || value);
+      };
+      for (const context of state.contactContexts) {
+        if (key === "contactContextId") add(context.id, contactContextLabel(context));
+        if (key === "businessPlatform") add(context.business_platform);
+        if (key === "businessCategory") add(context.business_category, projectTypeLabel(context.business_category));
+        if (key === "secondaryCategory") add(context.secondary_category);
+        if (key === "tertiaryCategory") add(context.tertiary_category);
+      }
+      for (const requirement of state.requirements) {
+        const snapshot = requirementDimensionSnapshot(requirement, taskForRequirement(requirement.id));
+        if (key === "businessCategory") add(snapshot[key], projectTypeLabel(snapshot[key]));
+        else add(snapshot[key]);
+      }
+      return [...values.entries()]
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1]), "zh-Hans-CN"))
+        .map(([value, label]) => ({ value, label }));
+    }
+    function dimensionCustomerOptions() {
+      const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
+      return [...(fundCustomers.length ? fundCustomers : state.customers)]
+        .sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""))
+        .map(customer => ({ value: customer.id, label: `${customer.customer_code || "基金"} · ${customer.customer_name}` }));
+    }
+    function dimensionEmployeeOptions() {
+      return state.users
+        .map(user => ({ value: user.id, label: userDisplayName(user) }))
+        .sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN"));
+    }
+    function dimensionOptions(key) {
+      if (key === "customerId") return dimensionCustomerOptions();
+      if (key === "assigneeUserId") return dimensionEmployeeOptions();
+      if (key === "businessPlatform") return businessPlatforms.map(value => ({ value, label: value }));
+      return uniqueDimensionValues(key);
+    }
+    function dimensionSelect(label, key, allLabel, onChangeHandler) {
+      const selected = state.dimensionFilters[key] || "all";
+      const options = dimensionOptions(key);
+      return `
+        <label>${label}
+          <select class="filter-select" onchange="${onChangeHandler}('${key}', this.value)">
+            <option value="all" ${selected === "all" ? "selected" : ""}>${allLabel}</option>
+            ${options.map(option => `<option value="${escapeAttr(option.value)}" ${selected === option.value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
+          </select>
+        </label>
+      `;
+    }
+    function renderDimensionFilters(containerId, onChangeHandler, includeCustomer = true) {
+      const box = qs(containerId);
+      if (!box) return;
+      const specs = [
+        ...(includeCustomer ? [["基金", "customerId", "全部基金"]] : []),
+        ["对接人", "contactContextId", "全部对接人"],
+        ["业务平台", "businessPlatform", "全部平台"],
+        ["业务大类", "businessCategory", "全部业务大类"],
+        ["二级分类", "secondaryCategory", "全部二级分类"],
+        ["三级分类", "tertiaryCategory", "全部三级分类"],
+        ["员工", "assigneeUserId", "全部员工"],
+      ];
+      box.innerHTML = specs.map(([label, key, allLabel]) => dimensionSelect(label, key, allLabel, onChangeHandler)).join("");
+    }
+    function syncPrimaryCustomerSelects(customerId) {
+      state.dimensionFilters.customerId = customerId || "all";
+      state.analyticsCustomerId = state.dimensionFilters.customerId;
+      state.settlementCustomerId = state.dimensionFilters.customerId;
+      if (qs("analyticsCustomerSelect")) qs("analyticsCustomerSelect").value = state.dimensionFilters.customerId;
+      if (qs("settlementCustomerSelect")) qs("settlementCustomerSelect").value = state.dimensionFilters.customerId;
+    }
+    function setRequirementDimensionFilter(key, value) {
+      state.dimensionFilters[key] = value || "all";
+      if (key === "customerId") syncPrimaryCustomerSelects(value || "all");
+      renderRequirementBoard();
+      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", false);
+      renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
+    }
+    function setDashboardDimensionFilter(key, value) {
+      state.dimensionFilters[key] = value || "all";
+      refreshAnalytics();
+    }
+    function setSettlementDimensionFilter(key, value) {
+      state.dimensionFilters[key] = value || "all";
+      loadSettlementStatement(false);
+    }
+    function setDashboardPrimaryCustomer(customerId) {
+      syncPrimaryCustomerSelects(customerId || "all");
+      renderRequirementBoard();
+      refreshAnalytics();
+    }
+    function setSettlementPrimaryCustomer(customerId) {
+      syncPrimaryCustomerSelects(customerId || "all");
+      renderRequirementBoard();
+      loadSettlementStatement();
     }
     function safeText(value) {
       return escapeHtml(value ?? "-");
@@ -941,6 +1552,9 @@
       } else {
         qs("requirementTitle").value = "";
         qs("requirementContent").value = "";
+        if (qs("businessNameInput")) qs("businessNameInput").value = "";
+        if (qs("contactContextSelect")) qs("contactContextSelect").value = "";
+        syncContactContextPreview(null);
       }
       syncProjectSelection(false);
       toast("表单已清空");
@@ -1012,7 +1626,7 @@
       const box = qs("aiMatchBox");
       if (!match) {
         box.className = "match-box muted";
-        box.innerHTML = "AI 会先分析文件内容，自动匹配客户和项目大类。";
+        box.innerHTML = "AI 会先分析文件内容，自动匹配客户和业务大类。";
         return;
       }
       box.className = "match-box";
@@ -1046,7 +1660,7 @@
         if (match.projectType) qs("projectTypeSelect").value = match.projectType;
         await syncProjectSelection(false);
         renderAiMatchBox(match);
-        if (showToast) toast("已匹配客户和项目大类");
+        if (showToast) toast("已匹配客户和业务大类");
         return match;
       } catch (error) {
         if (showToast) toast(error.message);
@@ -1077,6 +1691,21 @@
     function requirementForItem(requirementItem) {
       return state.requirements.find(requirement => requirement.id === requirementItem?.requirement_id) || null;
     }
+    function mappingForRequirementItem(requirementItemId) {
+      return state.quoteMappings
+        .filter(mapping => mapping.requirement_item_id === requirementItemId)
+        .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))[0] || null;
+    }
+    function quotationItemById(quotationItemId) {
+      for (const items of Object.values(state.quotationItemsById)) {
+        const found = (items || []).find(item => item.id === quotationItemId);
+        if (found) return found;
+      }
+      return null;
+    }
+    function quotationById(quotationId) {
+      return state.quotations.find(item => item.id === quotationId) || null;
+    }
     function taskForRequirement(requirementId) {
       const item = itemForRequirement(requirementId);
       return item ? state.tasks.find(task => task.requirement_item_id === item.id) : null;
@@ -1090,14 +1719,24 @@
       return state.requirements.map(requirement => {
         const item = itemForRequirement(requirement.id);
         const task = taskForRequirement(requirement.id);
+        const mapping = mappingForRequirementItem(item?.id);
+        const quotationItem = quotationItemById(mapping?.quotation_item_id);
+        const context = contactContextForRequirement(requirement);
+        const dimensions = requirementDimensionSnapshot(requirement, task);
         return {
           requirement,
           item,
           task,
           customer: customerName(requirement.customer_id),
-          project: projectName(requirement.project_id),
+          contactContext: context?.contact_name || "",
+          businessPlatform: dimensions.businessPlatform,
+          businessCategory: projectTypeLabel(dimensions.businessCategory),
+          secondaryCategory: dimensions.secondaryCategory,
+          tertiaryCategory: dimensions.tertiaryCategory,
           taskStatus: displayTaskStatus(task),
           quoteStatus: quoteScopeStatusLabel(item?.quote_scope_status),
+          mapping,
+          quotationItem,
         };
       });
     }
@@ -1110,34 +1749,44 @@
         changed: "报价有变更",
       }[status] || status || "未适配";
     }
+    function isPendingQuoteScopeStatus(status) {
+      return ["not_started", "pending_confirm", "partial", "changed"].includes(status || "not_started");
+    }
+    function isPendingQuoteRow(row) {
+      return isPendingQuoteScopeStatus(row.item?.quote_scope_status);
+    }
     function setRequirementFilter(filter) {
       state.requirementFilter = filter;
       renderRequirementBoard();
     }
     async function refreshRequirementBoard() {
       if (state.editingRequirementId || state.busyActionId) return;
-      const [requirements, requirementItems, tasks, projects, users] = await Promise.all([
+      const [requirements, requirementItems, tasks, projects, users, contactContexts, quoteMappings] = await Promise.all([
         request("/requirements"),
         request("/requirement-items"),
         request("/tasks"),
         request("/projects"),
         request("/users"),
+        request("/contact-contexts?status=active").catch(() => []),
+        request("/quote-mappings").catch(() => []),
       ]);
       state.requirements = unwrap(requirements);
       state.requirementItems = unwrap(requirementItems);
       state.tasks = unwrap(tasks);
       state.projects = unwrap(projects);
       state.users = unwrap(users);
+      state.contactContexts = unwrap(contactContexts);
+      state.quoteMappings = unwrap(quoteMappings);
       renderRequirementBoard();
     }
     function renderRequirementBoard() {
-      const rows = requirementRows();
+      const rows = activeDimensionRows();
       const metrics = {
         total: rows.length,
         pending: rows.filter(row => !row.task || row.taskStatus === "待指派").length,
         assigned: rows.filter(row => row.taskStatus === "已指派" || row.taskStatus === "进行中").length,
         quoteReady: rows.filter(row => row.item?.quote_scope_status === "matched").length,
-        quotePending: rows.filter(row => ["pending_confirm", "partial", "changed"].includes(row.item?.quote_scope_status)).length,
+        quotePending: rows.filter(isPendingQuoteRow).length,
       };
       const metricsEl = qs("requirementMetrics");
       if (metricsEl) {
@@ -1153,22 +1802,37 @@
       const filters = [
         ["all", "全部"],
         ["pending", "待指派"],
+        ["quote_pending", "待报价"],
         ["assigned", "处理中"],
         ["completed", "已完成"],
       ];
       const filtersEl = qs("requirementFilters");
       if (filtersEl) {
         filtersEl.innerHTML = `
-          ${filters.map(([key, label]) => `<button class="${state.requirementFilter === key ? "active" : ""}" onclick="setRequirementFilter('${key}')">${label}</button>`).join("")}
-          <select class="filter-select" onchange="setRequirementCustomerFilter(this.value)">
-            ${requirementCustomerFilterOptions()}
-          </select>
+          <div class="quick-filter-row">
+            ${filters.map(([key, label]) => `<button class="${state.requirementFilter === key ? "active" : ""}" onclick="setRequirementFilter('${key}')">${label}</button>`).join("")}
+            <button onclick="clearRequirementFilters()">清空筛选</button>
+            <details class="advanced-filter">
+              <summary>高级筛选</summary>
+              <div class="form-grid history-filter-grid">
+                ${[
+                  ["基金", "customerId", "全部基金"],
+                  ["对接人", "contactContextId", "全部对接人"],
+                  ["业务平台", "businessPlatform", "全部平台"],
+                  ["业务大类", "businessCategory", "全部业务大类"],
+                  ["二级分类", "secondaryCategory", "全部二级分类"],
+                  ["三级分类", "tertiaryCategory", "全部三级分类"],
+                  ["员工", "assigneeUserId", "全部员工"],
+                ].map(([label, key, allLabel]) => dimensionSelect(label, key, allLabel, "setRequirementDimensionFilter")).join("")}
+              </div>
+            </details>
+          </div>
         `;
       }
 
       const filteredRows = rows.filter(row => {
-        if (state.requirementCustomerFilterId !== "all" && row.requirement.customer_id !== state.requirementCustomerFilterId) return false;
         if (state.requirementFilter === "pending") return !row.task || row.taskStatus === "待指派";
+        if (state.requirementFilter === "quote_pending") return isPendingQuoteRow(row);
         if (state.requirementFilter === "assigned") return row.taskStatus === "已指派" || row.taskStatus === "进行中";
         if (state.requirementFilter === "completed") return row.taskStatus === "已完成";
         return true;
@@ -1185,81 +1849,161 @@
         return;
       }
       boardEl.innerHTML = `
-        <table>
-          <thead>
-            <tr>
-              <th>需求</th>
-              <th>客户 / 项目</th>
-              <th>状态</th>
-              <th>负责人</th>
-              <th>创建时间</th>
-              <th>指派操作</th>
-              <th>编辑</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${filteredRows.map(row => `
-              <tr class="requirement-row">
-                <td>
-                  <div class="row-title">${safeText(row.requirement.title)}</div>
-                  <div class="row-sub">${safeText(row.requirement.requirement_code || row.requirement.id)}</div>
-                </td>
-                <td>
-                  ${safeText(row.customer)}<br>
-                  <span class="row-sub">${safeText(row.project)}</span>
-                </td>
-                <td>
+        <div class="requirement-list">
+          ${filteredRows.map(row => `
+            <article class="requirement-card">
+              <div class="requirement-card-main">
+                <div class="requirement-title-block">
+                  <div class="requirement-title-line">
+                    <span class="tag">${safeText(row.requirement.requirement_code || "需求")}</span>
+                    <div class="row-title">${safeText(row.requirement.title)}</div>
+                  </div>
+                </div>
+                <div class="card-field compact-status">
+                  <span class="dimension-pill">${safeText(row.customer)}</span>
+                  <span class="dimension-pill">${safeText(row.businessPlatform || "-")}</span>
+                  <span class="dimension-pill">${safeText(row.businessCategory || "-")}</span>
                   <div class="status-stack">
                     <span class="tag">需求：${safeText(row.requirement.status)}</span>
                     <span class="tag">任务：${safeText(row.taskStatus)}</span>
                     <span class="tag">报价：${safeText(row.quoteStatus)}</span>
                   </div>
-                </td>
-                <td>${safeText(assigneeName(row.task?.assignee_user_id))}</td>
-                <td>${new Date(row.requirement.created_at).toLocaleString()}</td>
-                <td>${renderAssignAction(row)}</td>
-                <td>${renderRequirementEditAction(row)}</td>
-              </tr>
+                  <div class="row-sub">负责人：${safeText(assigneeName(row.task?.assignee_user_id))}</div>
+                </div>
+                ${renderRequirementEditAction(row)}
+              </div>
+              <div class="requirement-card-footer">
+                <div class="requirement-meta-line">${[
+                  row.requirement.business_name ? `业务命名：${safeText(row.requirement.business_name)}` : "",
+                  row.contactContext ? `对接人：${safeText(row.contactContext)}` : "",
+                  `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
+                  `负责人：${safeText(assigneeName(row.task?.assignee_user_id))}`,
+                ].filter(Boolean).join(" · ")}</div>
+                ${renderRequirementQuoteAction(row)}
+                ${renderAssignAction(row)}
+              </div>
               ${state.editingRequirementId === row.requirement.id ? renderRequirementEditRow(row) : ""}
-            `).join("")}
-          </tbody>
-        </table>
+            </article>
+          `).join("")}
+        </div>
       `;
-    }
-    function requirementCustomerFilterOptions() {
-      const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
-      const customers = [...(fundCustomers.length ? fundCustomers : state.customers)]
-        .sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
-      return [
-        `<option value="all" ${state.requirementCustomerFilterId === "all" ? "selected" : ""}>全部基金客户</option>`,
-        ...customers.map(customer => `<option value="${customer.id}" ${state.requirementCustomerFilterId === customer.id ? "selected" : ""}>${customer.customer_code || "客户"} · ${customer.customer_name}</option>`),
-      ].join("");
-    }
-    function setRequirementCustomerFilter(customerId) {
-      state.requirementCustomerFilterId = customerId || "all";
-      renderRequirementBoard();
     }
     function clearRequirementFilters() {
       state.requirementFilter = "all";
-      state.requirementCustomerFilterId = "all";
+      resetDimensionFilters();
       renderRequirementBoard();
+      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", false);
+      renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
     }
     function renderRequirementEditAction(row) {
       const isBusy = state.busyActionId === row.requirement.id;
       return `
-        <div class="inline-assign edit-actions" onclick="event.stopPropagation()">
+        <div class="card-edit-actions" onclick="event.stopPropagation()">
           <button class="btn" ${isBusy ? "disabled" : ""} onclick="startEditRequirement('${row.requirement.id}')">编辑</button>
           <button class="btn danger" ${isBusy ? "disabled" : ""} onclick="deleteRequirementBundle('${row.requirement.id}')">${isBusy ? "处理中..." : "删除"}</button>
         </div>
       `;
     }
+    function renderRequirementQuoteAction(row) {
+      if (!row.item) return `<span class="muted">需求项生成中</span>`;
+      const selectedItem = row.quotationItem || quotationItemById(row.mapping?.quotation_item_id);
+      const isBusy = state.busyActionId === `quote-${row.item.id}`;
+      const hasLoadedItems = quotationsForCustomer(row.requirement.customer_id).some(quotation => (state.quotationItemsById[quotation.id] || []).length);
+      return `
+        <div class="quote-action ${hasLoadedItems || selectedItem ? "with-select" : "quote-action-compact"}" onclick="event.stopPropagation()">
+          ${hasLoadedItems || selectedItem
+            ? `<select id="requirement-quote-item-${row.item.id}" ${isBusy ? "disabled" : ""}>
+                ${requirementQuoteItemOptions(row)}
+              </select>
+              <button class="btn ${selectedItem ? "" : "primary"}" ${isBusy ? "disabled" : ""} onclick="saveRequirementQuoteMapping('${row.requirement.id}')">${isBusy ? "保存中..." : "确认"}</button>`
+            : `<span class="quote-status-pill">报价：${safeText(row.quoteStatus)}</span>
+              <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="loadRequirementQuoteOptions('${row.requirement.id}')">选择</button>`}
+        </div>
+      `;
+    }
+    function requirementQuoteItemOptions(row) {
+      const quotations = quotationsForCustomer(row.requirement.customer_id);
+      const selectedId = row.mapping?.quotation_item_id || "";
+      const options = [`<option value="">选择报价子项</option>`];
+      for (const quotation of quotations) {
+        const items = state.quotationItemsById[quotation.id] || [];
+        if (!items.length) continue;
+        options.push(`<optgroup label="${escapeAttr(quotation.quotation_no)} · ${escapeAttr(new Date(quotation.created_at).toLocaleDateString())}">`);
+        for (const item of items) {
+          options.push(`<option value="${item.id}" ${item.id === selectedId ? "selected" : ""}>${escapeHtml(item.item_code)} · ${escapeHtml(item.item_name)} · ${formatMoney(item.unit_price)} / ${escapeHtml(item.unit || "项")}</option>`);
+        }
+        options.push(`</optgroup>`);
+      }
+      if (options.length === 1) {
+        options.push(`<option value="" disabled>该基金暂无可选报价子项，请先上传报价单</option>`);
+      }
+      return options.join("");
+    }
+    function quotationsForCustomer(customerId) {
+      return state.quotations
+        .filter(item => item.customer_id === customerId)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+    async function loadRequirementQuoteOptions(requirementId) {
+      const row = requirementRows().find(item => item.requirement.id === requirementId);
+      if (!row?.item) return toast("需求项还未生成，暂不能适配报价");
+      try {
+        const quotations = quotationsForCustomer(row.requirement.customer_id);
+        if (!quotations.length) {
+          toast("该基金暂无报价单，请先上传报价单");
+          return;
+        }
+        await Promise.all(quotations.map(async quotation => {
+          if (!state.quotationItemsById[quotation.id]) {
+            state.quotationItemsById[quotation.id] = await request(`/quotations/${quotation.id}/items`);
+          }
+        }));
+        renderRequirementBoard();
+      } catch (error) {
+        toast(error.message);
+      }
+    }
+    async function saveRequirementQuoteMapping(requirementId) {
+      const row = requirementRows().find(item => item.requirement.id === requirementId);
+      if (!row?.item) return toast("需求项还未生成，暂不能适配报价");
+      const quotationItemId = qs(`requirement-quote-item-${row.item.id}`)?.value;
+      if (!quotationItemId) return toast("请选择报价子项");
+      const quotationItem = quotationItemById(quotationItemId);
+      if (!quotationItem) return toast("报价子项未加载，请重新打开选择");
+      const body = {
+        projectId: row.requirement.project_id,
+        requirementItemId: row.item.id,
+        quotationId: quotationItem.quotation_id,
+        quotationItemId,
+        mappingStatus: "matched",
+        mappingType: "manual",
+        matchedRatio: "100.00",
+        remark: "历史需求任务中人工选择报价子项",
+      };
+      state.busyActionId = `quote-${row.item.id}`;
+      renderRequirementBoard();
+      try {
+        const saved = row.mapping?.id
+          ? await request(`/quote-mappings/${row.mapping.id}`, { method: "PATCH", body })
+          : await request("/quote-mappings", { method: "POST", body });
+        state.quoteMappings = [saved, ...state.quoteMappings.filter(item => item.id !== saved.id)];
+        await refreshRequirementBoard();
+        if (isViewActive("settlement")) await loadSettlementStatement(false);
+        refreshAnalytics();
+        toast("已适配报价子项");
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        state.busyActionId = null;
+        renderRequirementBoard();
+      }
+    }
     function renderRequirementEditRow(row) {
       const requirement = row.requirement;
       const project = projectForRequirement(requirement);
       return `
-        <tr class="edit-row">
-          <td colspan="7">
-            <div class="edit-panel">
+        <div class="edit-row">
+          <div class="edit-panel">
               <label>
                 基金客户
                 <select id="edit-customer-${requirement.id}" onchange="renderEditProjectHint('${requirement.id}')">
@@ -1267,7 +2011,7 @@
                 </select>
               </label>
               <label>
-                项目大类
+                业务大类
                 <select id="edit-project-type-${requirement.id}" onchange="renderEditProjectHint('${requirement.id}')">
                   ${editProjectTypeOptions(project?.project_type)}
                 </select>
@@ -1275,6 +2019,20 @@
               <div class="edit-project-hint muted" id="edit-project-hint-${requirement.id}">
                 ${editProjectHint(requirement.customer_id, project?.project_type)}
               </div>
+              <label>
+                业务命名
+                <input id="edit-business-name-${requirement.id}" value="${escapeAttr(requirement.business_name || "")}" />
+              </label>
+              <label>
+                业务平台
+                <select id="edit-business-platform-${requirement.id}">
+                  ${businessPlatformOptions(requirement.business_platform || "")}
+                </select>
+              </label>
+              <label>
+                三级分类
+                <input id="edit-tertiary-category-${requirement.id}" value="${escapeAttr(requirement.tertiary_category || "")}" />
+              </label>
               <label>
                 需求标题
                 <input id="edit-title-${requirement.id}" value="${escapeAttr(requirement.title || "")}" />
@@ -1293,9 +2051,8 @@
                 <button class="btn primary" ${state.busyActionId === requirement.id ? "disabled" : ""} onclick="saveRequirementEdit('${requirement.id}')">${state.busyActionId === requirement.id ? "保存中..." : "保存修改"}</button>
                 <button class="btn" ${state.busyActionId === requirement.id ? "disabled" : ""} onclick="cancelRequirementEdit()">取消</button>
               </div>
-            </div>
-          </td>
-        </tr>
+          </div>
+        </div>
       `;
     }
     function editCustomerOptions(selectedCustomerId) {
@@ -1307,15 +2064,12 @@
     function editProjectTypeOptions(selectedProjectType) {
       return projectTypes.map(type => `<option value="${type.value}" ${type.value === selectedProjectType ? "selected" : ""}>${type.label}</option>`).join("");
     }
-    function projectForRequirement(requirement) {
-      return state.projects.find(project => project.id === requirement?.project_id) || null;
-    }
     function editProjectHint(customerId, projectType) {
       const customer = state.customers.find(item => item.id === customerId);
       const type = projectTypes.find(item => item.value === projectType) || projectTypes[0];
       const project = state.projects.find(item => item.customer_id === customerId && item.project_type === type?.value);
-      if (project) return `将挂靠到：${project.project_name}`;
-      return `保存时会自动创建：${customer?.customer_name || ""}${type?.label || ""}项目`;
+      if (project) return `后台挂靠：${project.project_name}`;
+      return `保存时会自动创建后台挂靠：${customer?.customer_name || ""}${type?.label || ""}`;
     }
     function renderEditProjectHint(requirementId) {
       const customerId = qs(`edit-customer-${requirementId}`)?.value;
@@ -1328,9 +2082,9 @@
       if (row.taskStatus === "已完成") return `<span class="done-text">已完成</span>`;
       const isBusy = state.busyActionId === row.task.id;
       return `
-        <div class="inline-assign" onclick="event.stopPropagation()">
-          <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="assignTaskFromBoard('${row.requirement.id}', '${row.task.id}')">${isBusy ? "指派中..." : (row.task.assignee_user_id ? "重新指派" : "指派")}</button>
+        <div class="assign-action" onclick="event.stopPropagation()">
           <select id="assignee-${row.task.id}" ${isBusy ? "disabled" : ""}>${feishuUserOptions(row.task.assignee_user_id)}</select>
+          <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="assignTaskFromBoard('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : (row.task.assignee_user_id ? "改派" : "指派")}</button>
         </div>
       `;
     }
@@ -1348,21 +2102,24 @@
       const title = qs(`edit-title-${requirementId}`)?.value.trim();
       const rawContent = qs(`edit-content-${requirementId}`)?.value.trim();
       const priority = qs(`edit-priority-${requirementId}`)?.value;
+      const businessName = qs(`edit-business-name-${requirementId}`)?.value.trim();
+      const businessPlatform = qs(`edit-business-platform-${requirementId}`)?.value;
+      const tertiaryCategory = qs(`edit-tertiary-category-${requirementId}`)?.value.trim();
       const customerId = qs(`edit-customer-${requirementId}`)?.value;
       const projectType = qs(`edit-project-type-${requirementId}`)?.value;
       if (!title) return toast("需求标题不能为空");
       if (!rawContent) return toast("需求内容不能为空");
-      if (!customerId || !projectType) return toast("请选择基金客户和项目大类");
+      if (!customerId || !projectType) return toast("请选择基金客户和业务大类");
 
       state.busyActionId = requirementId;
       renderRequirementBoard();
       try {
         const project = await ensureProjectForContext(customerId, projectType);
-        if (!project) return toast("无法创建或匹配项目");
+        if (!project) return toast("无法创建或匹配后台挂靠");
 
         const result = await request(`/requirements/${requirementId}`, {
           method: "PATCH",
-          body: { title, rawContent, priority, customerId, projectId: project.id },
+          body: { title, rawContent, priority, customerId, projectId: project.id, businessName, businessPlatform: businessPlatform || undefined, tertiaryCategory },
         });
         if (result.requirement) {
           state.requirements = state.requirements.map(item => item.id === requirementId ? result.requirement : item);
@@ -1373,8 +2130,8 @@
         if (result.task) {
           state.tasks = state.tasks.map(item => item.id === result.task.id ? result.task : item);
         }
-        if (state.requirementCustomerFilterId !== "all" && state.requirementCustomerFilterId !== customerId) {
-          state.requirementCustomerFilterId = customerId;
+        if (state.dimensionFilters.customerId !== "all" && state.dimensionFilters.customerId !== customerId) {
+          syncPrimaryCustomerSelects(customerId);
         }
         linkMappingContext(customerId, quarterForDate(result.requirement?.created_at));
         loadQuarterMappingWorkbench(false);
@@ -1391,7 +2148,10 @@
     }
     async function ensureProjectForContext(customerId, projectType) {
       const customer = state.customers.find(item => item.id === customerId);
-      const type = projectTypes.find(item => item.value === projectType);
+      const type = projectTypes.find(item => item.value === projectType)
+        || (projectType === "quotation_contract"
+          ? { value: "quotation_contract", label: "合同报价", budgetAmount: "0", description: "报价单合同后台挂靠，不作为业务筛选维度。" }
+          : null);
       if (!customer || !type) return null;
       let project = state.projects.find(item => item.customer_id === customerId && item.project_type === projectType);
       if (project) return project;
@@ -1411,7 +2171,7 @@
         },
       });
       state.projects.unshift(project);
-      addLog("编辑历史需求时自动创建项目", project);
+      addLog("编辑历史需求时自动创建后台挂靠", project);
       return project;
     }
     async function deleteRequirementBundle(requirementId) {
@@ -1464,7 +2224,7 @@
           },
         });
         state.projects.unshift(project);
-        addLog("已自动创建客户项目", project);
+        addLog("已自动创建客户后台挂靠", project);
       }
 
       state.currentProject = project || null;
@@ -1474,19 +2234,19 @@
     }
     function renderProjectPreview(customer = selectedCustomer(), type = selectedProjectType(), project = state.currentProject) {
       const projectText = project
-        ? `已匹配项目：${project.project_name}（${project.project_code}）`
-        : `保存需求时会自动创建：${customer?.customer_name || ""}${type?.label || ""}项目`;
+        ? `后台挂靠已匹配：${project.project_name}（${project.project_code}）`
+        : `保存需求时会自动创建后台挂靠：${customer?.customer_name || ""}${type?.label || ""}`;
       qs("projectPreview").innerHTML = `
         <strong>${customer?.customer_name || "未选择客户"} / ${type?.label || "未选择大类"}</strong>
         <span>${projectText}</span><br>
-        <span>客户池：${state.customers.filter(c => c.industry === "公募基金").length} 家基金客户；项目大类：${projectTypes.length} 类。</span>
+        <span>基金池：${state.customers.filter(c => c.industry === "公募基金").length} 家基金客户；业务大类：${projectTypes.length} 类。</span>
       `;
     }
     function selectedQuoteCustomer() {
       return state.customers.find(c => c.id === qs("quoteCustomerSelect")?.value);
     }
     function selectedQuoteProjectType() {
-      return projectTypes.find(t => t.value === qs("quoteProjectTypeSelect")?.value) || projectTypes[0];
+      return { value: "quotation_contract", label: "合同报价", budgetAmount: "0", description: "报价单合同后台挂靠，不作为业务筛选维度。" };
     }
     async function syncQuoteProjectSelection(createIfMissing) {
       const customer = selectedQuoteCustomer();
@@ -1499,13 +2259,9 @@
       return project || null;
     }
     function renderQuoteProjectPreview(customer = selectedQuoteCustomer(), type = selectedQuoteProjectType(), project = null) {
-      const projectText = project
-        ? `已匹配项目：${project.project_name}（${project.project_code}）`
-        : `生成报价单时会自动创建：${customer?.customer_name || ""}${type?.label || ""}项目`;
       qs("quoteProjectPreview").innerHTML = `
-        <strong>${escapeHtml(customer?.customer_name || "未选择客户")} / ${escapeHtml(type?.label || "未选择大类")}</strong>
-        <span>${escapeHtml(projectText)}</span><br>
-        <span>报价单会先进入草稿状态，子项默认未挂靠需求任务。</span>
+        <strong>${escapeHtml(customer?.customer_name || "未选择客户")}</strong>
+        <span>报价单合同可覆盖多个业务大类；生成后请在“报价子项维度规则”里为各子项配置适用维度。</span>
       `;
     }
     async function loadQuotationFile() {
@@ -1533,7 +2289,7 @@
           },
         });
         const items = result.items || [];
-        renderQuotationPreview(items, result.ignoredLines || []);
+        renderQuotationPreview(items, result.ignoredLines || [], result);
         renderQuotationMetrics(items, result.summary);
         if (items.length === 0) toast("暂未识别到报价子项，可检查是否包含服务项和金额");
         return result;
@@ -1614,7 +2370,7 @@
     function compactQuoteItemName(value) {
       return String(value || "").trim().replace(/\s+/g, " ").replace(/^[：:，,;；-]+|[：:，,;；-]+$/g, "").slice(0, 128);
     }
-    function renderQuotationPreview(items, ignoredLines = []) {
+    function renderQuotationPreview(items, ignoredLines = [], meta = null) {
       const box = qs("quotationPreview");
       if (!items.length) {
         box.className = "split-preview muted";
@@ -1622,8 +2378,14 @@
         return;
       }
       box.className = "split-preview";
+      const modeLabel = meta?.mode === "openai_compatible"
+        ? "模型识别"
+        : meta?.mode === "openai_failed_rule_fallback"
+          ? "模型失败，已用规则兜底"
+          : "规则识别";
+      const modelDetail = meta?.modelName ? ` · ${escapeHtml(meta.modelName)}` : "";
       box.innerHTML = [
-        `<div class="muted">预计生成 ${items.length} 个报价子项${ignoredLines.length ? `，已忽略 ${ignoredLines.length} 行标题/合计/说明` : ""}。保存后可在下方明细查看。</div>`,
+        `<div class="muted">预计生成 ${items.length} 个报价子项 · ${modeLabel}${modelDetail}${ignoredLines.length ? `，已忽略 ${ignoredLines.length} 行标题/合计/说明` : ""}。保存后可在下方明细查看。</div>`,
         ...items.slice(0, 8).map(item => `<div class="split-preview-item"><strong>${escapeHtml(item.itemName)}</strong><span class="muted">${formatMoney(item.lineAmount)} · ${escapeHtml(item.quantity)} ${escapeHtml(item.unit)} × ${formatMoney(item.unitPrice)}${item.category ? ` · ${escapeHtml(item.category)}` : ""}</span></div>`),
       ].join("");
     }
@@ -1644,7 +2406,7 @@
       const rawContent = qs("quotationContent").value.trim();
       if (!rawContent) return toast("请先上传或粘贴报价单内容");
       const project = await syncQuoteProjectSelection(true);
-      if (!project) return toast("请先选择基金客户和项目大类");
+      if (!project) return toast("请先选择基金客户");
       const button = qs("importQuotationButton");
       state.busyActionId = "quotation-import";
       if (button) {
@@ -1665,7 +2427,8 @@
         state.quotationItemsById[result.quotation.id] = result.items || [];
         state.selectedQuotationId = result.quotation.id;
         addLog("报价单已解析生成", result);
-        toast(`已生成报价单，子项 ${result.parsedCount || result.items?.length || 0} 条`);
+        const modeText = result.mode === "openai_compatible" ? "模型识别" : result.mode === "openai_failed_rule_fallback" ? "规则兜底" : "规则识别";
+        toast(`已生成报价单，${modeText}子项 ${result.parsedCount || result.items?.length || 0} 条`);
         renderQuotationMetrics(result.items || [], result.summary);
         renderQuotationPreview((result.items || []).map(item => ({
           itemName: item.item_name,
@@ -1674,7 +2437,7 @@
           unitPrice: item.unit_price,
           lineAmount: item.line_amount,
           category: null,
-        })), result.ignoredLines || []);
+        })), result.ignoredLines || [], result);
         renderQuotationsBoard();
         renderQuotationItems(result.quotation.id);
         linkMappingContext(result.quotation.customer_id, quarterForDate(result.quotation.created_at), result.quotation.id);
@@ -1703,6 +2466,23 @@
       state.quotations = unwrap(quotations);
       renderQuotationsBoard();
     }
+    async function reloadQuotationItems(quotationId) {
+      if (!quotationId) return;
+      const [quotations, items] = await Promise.all([
+        request("/quotations"),
+        request(`/quotations/${quotationId}/items`),
+      ]);
+      state.quotations = unwrap(quotations);
+      state.quotationItemsById[quotationId] = unwrap(items);
+      state.selectedQuotationId = quotationId;
+      renderQuotationsBoard();
+      const quotation = state.quotations.find(item => item.id === quotationId);
+      if (quotation) {
+        linkMappingContext(quotation.customer_id, quarterForDate(quotation.created_at), quotationId);
+        loadQuarterMappingWorkbench(false);
+      }
+      if (isViewActive("settlement")) loadSettlementStatement(false);
+    }
     function renderQuotationsBoard() {
       const box = qs("quotationsBoard");
       if (!box) return;
@@ -1713,12 +2493,12 @@
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>报价单</th><th>基金客户 / 项目</th><th>状态</th><th>金额</th><th>创建时间</th><th>操作</th></tr></thead>
+          <thead><tr><th>报价单</th><th>基金客户</th><th>状态</th><th>金额</th><th>创建时间</th><th>操作</th></tr></thead>
           <tbody>
             ${state.quotations.map(item => `
               <tr class="${state.selectedQuotationId === item.id ? "requirement-row active" : "requirement-row"}">
                 <td><div class="row-title">${safeText(item.quotation_no)}</div><div class="row-sub">${safeText(item.remark || item.pricing_basis)}</div></td>
-                <td>${safeText(customerName(item.customer_id))}<br><span class="row-sub">${safeText(projectName(item.project_id))}</span></td>
+                <td>${safeText(customerName(item.customer_id))}</td>
                 <td><span class="tag">${quotationStatusLabel(item.status)}</span></td>
                 <td>${formatMoney(item.total_amount)}</td>
                 <td>${new Date(item.created_at).toLocaleString()}</td>
@@ -1777,31 +2557,185 @@
       const quotation = state.quotations.find(item => item.id === quotationId);
       qs("selectedQuotationHint").textContent = quotation ? quotation.quotation_no : "请选择报价单";
       if (!quotationId || !quotation) {
+        state.addingQuotationItem = false;
+        state.editingQuotationItemId = null;
         box.innerHTML = `<div class="empty-list">请选择一张报价单查看子项。</div>`;
         return;
       }
       const items = state.quotationItemsById[quotationId] || [];
-      if (!items.length) {
-        box.innerHTML = `<div class="empty-list">暂无子项，点击“查看明细”加载或重新生成报价单。</div>`;
+      if (!items.length && !state.addingQuotationItem) {
+        box.innerHTML = `<div class="empty-list">暂无子项，可以点击右上角“新增子项”手动补充。</div>`;
         return;
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>编码</th><th>细粒度报价子项</th><th>数量</th><th>单价</th><th>金额</th><th>挂靠状态</th></tr></thead>
+          <thead><tr><th>编码</th><th>细粒度报价子项</th><th>单位</th><th>单价</th><th>挂靠状态</th><th>操作</th></tr></thead>
           <tbody>
+            ${state.addingQuotationItem ? renderQuotationItemEditRow("add", null) : ""}
             ${items.map(item => `
               <tr>
                 <td>${safeText(item.item_code)}</td>
                 <td><div class="row-title">${safeText(item.item_name)}</div><div class="row-sub">${safeText(item.remark || "")}</div></td>
-                <td>${safeText(item.quantity)} ${safeText(item.unit || "项")}</td>
+                <td>${safeText(item.unit || "项")}</td>
                 <td>${formatMoney(item.unit_price)}</td>
-                <td>${formatMoney(item.line_amount)}</td>
                 <td><span class="tag">${quotationMatchStatusLabel(item.match_status)}</span></td>
+                <td>
+                  <div class="quotation-item-actions" onclick="event.stopPropagation()">
+                    <button class="btn" onclick="startEditQuotationItem('${item.id}')">编辑</button>
+                    <button class="btn danger" onclick="deleteQuotationItem('${item.id}')">删除</button>
+                  </div>
+                </td>
               </tr>
+              ${state.editingQuotationItemId === item.id ? renderQuotationItemEditRow("edit", item) : ""}
             `).join("")}
           </tbody>
         </table>
       `;
+    }
+    function renderQuotationItemEditRow(mode, item = null) {
+      const isAdd = mode === "add";
+      const prefix = isAdd ? "quote-item-add" : `quote-item-edit-${item.id}`;
+      return `
+        <tr class="edit-row">
+          <td colspan="6">
+            <div class="quote-item-edit-grid" onclick="event.stopPropagation()">
+              <label>子项名称
+                <input id="${prefix}-name" value="${escapeAttr(item?.item_name || "")}" placeholder="例如：长图新设计-主视觉" />
+              </label>
+              <label>单位
+                <input id="${prefix}-unit" value="${escapeAttr(item?.unit || "项")}" placeholder="项" />
+              </label>
+              <label>单价
+                <input id="${prefix}-unit-price" type="number" min="0" step="0.01" value="${escapeAttr(item?.unit_price || "")}" placeholder="0.00" />
+              </label>
+              <label>挂靠状态
+                <select id="${prefix}-match-status">${quotationItemStatusOptions(item?.match_status || (isAdd ? "manual_added" : "unmatched"))}</select>
+              </label>
+              <label>内容描述
+                <input id="${prefix}-remark" value="${escapeAttr(item?.remark || "")}" placeholder="可填写子项描述" />
+              </label>
+              <div class="btns">
+                <button class="btn primary" onclick="${isAdd ? "saveNewQuotationItem()" : `saveQuotationItemEdit('${item.id}')`}">保存</button>
+                <button class="btn" onclick="cancelQuotationItemEdit()">取消</button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+    function quotationItemStatusOptions(selectedValue) {
+      return [
+        ["manual_added", "人工新增"],
+        ["unmatched", "待挂靠"],
+        ["price_missing", "待补价"],
+        ["matched", "已挂靠"],
+        ["confirmed", "已确认"],
+      ].map(([value, label]) => `<option value="${value}" ${value === selectedValue ? "selected" : ""}>${label}</option>`).join("");
+    }
+    function startAddQuotationItem() {
+      if (!state.selectedQuotationId || !state.quotations.some(item => item.id === state.selectedQuotationId)) {
+        return toast("请先选择报价单");
+      }
+      state.addingQuotationItem = true;
+      state.editingQuotationItemId = null;
+      renderQuotationItems(state.selectedQuotationId);
+      setTimeout(() => qs("quote-item-add-name")?.focus(), 0);
+    }
+    function startEditQuotationItem(itemId) {
+      state.addingQuotationItem = false;
+      state.editingQuotationItemId = itemId;
+      renderQuotationItems(state.selectedQuotationId);
+      setTimeout(() => qs(`quote-item-edit-${itemId}-name`)?.focus(), 0);
+    }
+    function cancelQuotationItemEdit() {
+      state.addingQuotationItem = false;
+      state.editingQuotationItemId = null;
+      renderQuotationItems(state.selectedQuotationId);
+    }
+    function readQuotationItemForm(prefix) {
+      const itemName = qs(`${prefix}-name`)?.value.trim();
+      const unit = qs(`${prefix}-unit`)?.value.trim() || "项";
+      const unitPrice = qs(`${prefix}-unit-price`)?.value.trim() || "0";
+      const matchStatus = qs(`${prefix}-match-status`)?.value || "manual_added";
+      const remark = qs(`${prefix}-remark`)?.value.trim() || "";
+      const priceNumber = Number(unitPrice);
+      if (!itemName) {
+        toast("请填写子项名称");
+        return null;
+      }
+      if (!Number.isFinite(priceNumber) || priceNumber < 0) {
+        toast("请填写有效的单价");
+        return null;
+      }
+      return {
+        itemName,
+        unit,
+        unitPrice: priceNumber.toFixed(2),
+        quantity: "1",
+        matchStatus,
+        remark,
+      };
+    }
+    async function saveNewQuotationItem() {
+      const quotationId = state.selectedQuotationId;
+      if (!quotationId || state.busyActionId) return;
+      const body = readQuotationItemForm("quote-item-add");
+      if (!body) return;
+      state.busyActionId = "quotation-item-add";
+      try {
+        const result = await request(`/quotations/${quotationId}/items`, {
+          method: "POST",
+          body: { ...body, source: "manual" },
+        });
+        state.addingQuotationItem = false;
+        addLog("报价子项已新增", result);
+        toast("已新增报价子项");
+        await reloadQuotationItems(quotationId);
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        state.busyActionId = null;
+      }
+    }
+    async function saveQuotationItemEdit(itemId) {
+      const quotationId = state.selectedQuotationId;
+      if (!quotationId || state.busyActionId) return;
+      const body = readQuotationItemForm(`quote-item-edit-${itemId}`);
+      if (!body) return;
+      state.busyActionId = `quotation-item-edit-${itemId}`;
+      try {
+        const result = await request(`/quotations/items/${itemId}`, {
+          method: "PATCH",
+          body,
+        });
+        state.editingQuotationItemId = null;
+        addLog("报价子项已更新", result);
+        toast("已更新报价子项");
+        await reloadQuotationItems(quotationId);
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        state.busyActionId = null;
+      }
+    }
+    async function deleteQuotationItem(itemId) {
+      const quotationId = state.selectedQuotationId;
+      if (!quotationId || state.busyActionId) return;
+      const item = (state.quotationItemsById[quotationId] || []).find(row => row.id === itemId);
+      if (!window.confirm(`确认删除报价子项「${item?.item_name || "这个子项"}」吗？`)) return;
+      state.busyActionId = `quotation-item-delete-${itemId}`;
+      try {
+        const result = await request(`/quotations/items/${itemId}`, { method: "DELETE" });
+        state.editingQuotationItemId = null;
+        state.addingQuotationItem = false;
+        addLog("报价子项已删除", result);
+        toast("已删除报价子项");
+        await reloadQuotationItems(quotationId);
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        state.busyActionId = null;
+      }
     }
     function quotationStatusLabel(status) {
       return { draft: "草稿", pending_review: "待审核", pending_customer_confirm: "待客户确认", confirmed: "已确认", rejected: "已驳回" }[status] || status || "-";
@@ -1827,13 +2761,13 @@
         renderMappingQuotationOptions(workbench);
         renderMappingMetrics(workbench);
         renderMappingWorkbench(workbench);
+        renderQuotationDimensionRules(workbench);
         renderRequirementBoard();
         if (workbench.selectedQuotation?.id === state.selectedQuotationId) {
           renderQuotationItems(state.selectedQuotationId);
         }
         if (showToast) toast("已刷新季度报价适配");
       } catch (error) {
-        if (requestSeq !== state.analyticsRequestSeq) return;
         toast(error.message);
       }
     }
@@ -1922,6 +2856,145 @@
         ...items.map(item => `<option value="${item.id}" ${item.id === selectedId ? "selected" : ""}>${item.item_code} · ${item.item_name} · ${formatMoney(item.line_amount)}</option>`),
       ].join("");
     }
+    function businessCategoryOptions(selectedValue = "") {
+      return [
+        `<option value="">全部业务大类</option>`,
+        ...businessCategoryDefs.map(item => `<option value="${item.value}" ${item.value === selectedValue ? "selected" : ""}>${item.label}</option>`),
+      ].join("");
+    }
+    function businessPlatformOptions(selectedValue = "") {
+      const values = [...businessPlatforms];
+      if (selectedValue && !values.includes(selectedValue)) values.unshift(selectedValue);
+      return [
+        `<option value="">全部平台</option>`,
+        ...values.map(value => `<option value="${escapeAttr(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHtml(value)}</option>`),
+      ].join("");
+    }
+    function secondaryCategoryOptions(categoryValue = "", selectedValue = "") {
+      const def = businessCategoryDefs.find(item => item.value === categoryValue);
+      const values = [...(def?.secondaries || [])];
+      if (selectedValue && !values.includes(selectedValue)) values.unshift(selectedValue);
+      return [
+        `<option value="">全部二级分类</option>`,
+        ...values.map(value => `<option value="${escapeAttr(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHtml(value)}</option>`),
+      ].join("");
+    }
+    function rulesForQuotationItem(quotationItemId) {
+      return (state.mappingWorkbench?.dimensionRules || []).filter(rule => rule.quotation_item_id === quotationItemId && rule.status !== "inactive");
+    }
+    function firstRuleForQuotationItem(quotationItemId) {
+      return rulesForQuotationItem(quotationItemId).sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0))[0] || null;
+    }
+    function renderQuotationDimensionRules(workbench = state.mappingWorkbench) {
+      const box = qs("quotationDimensionRules");
+      if (!box) return;
+      const items = workbench?.quotationItems || [];
+      if (!workbench?.selectedQuotation) {
+        box.innerHTML = `<div class="empty-list">请选择季度报价单后维护报价子项维度规则。</div>`;
+        return;
+      }
+      if (!items.length) {
+        box.innerHTML = `<div class="empty-list">当前报价单暂无报价子项。</div>`;
+        return;
+      }
+      box.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>报价子项</th>
+              <th>适用维度</th>
+              <th>优先级</th>
+              <th>备注</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map(item => {
+              const rule = firstRuleForQuotationItem(item.id);
+              const ruleCount = rulesForQuotationItem(item.id).length;
+              const category = rule?.business_category || "";
+              return `
+                <tr>
+                  <td>
+                    <div class="row-title">${safeText(item.item_name)}</div>
+                    <div class="row-sub">${safeText(item.item_code)} · ${formatMoney(item.line_amount)}${ruleCount > 1 ? ` · 已配置 ${ruleCount} 条规则` : ""}</div>
+                  </td>
+                  <td>
+                    <div class="form-grid">
+                      <label>业务平台
+                        <select id="rule-platform-${item.id}">
+                          ${businessPlatformOptions(rule?.business_platform || "")}
+                        </select>
+                      </label>
+                      <label>业务大类
+                        <select id="rule-category-${item.id}" onchange="syncRuleSecondaryOptions('${item.id}')">
+                          ${businessCategoryOptions(category)}
+                        </select>
+                      </label>
+                      <label>二级分类
+                        <select id="rule-secondary-${item.id}">
+                          ${secondaryCategoryOptions(category, rule?.secondary_category || "")}
+                        </select>
+                      </label>
+                      <label>三级分类
+                        <input id="rule-tertiary-${item.id}" value="${escapeAttr(rule?.tertiary_category || "")}" placeholder="全部三级分类" />
+                      </label>
+                    </div>
+                  </td>
+                  <td><input id="rule-priority-${item.id}" type="number" value="${escapeAttr(rule?.priority ?? 100)}" min="0" max="999" /></td>
+                  <td><input id="rule-remark-${item.id}" value="${escapeAttr(rule?.remark || "")}" placeholder="可选" /></td>
+                  <td>
+                    <div class="inline-assign edit-actions" onclick="event.stopPropagation()">
+                      <button class="btn primary" onclick="saveQuotationDimensionRule('${item.id}', '${rule?.id || ""}')">保存规则</button>
+                      ${rule ? `<button class="btn danger" onclick="deleteQuotationDimensionRule('${rule.id}')">删除</button>` : ""}
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+    function syncRuleSecondaryOptions(quotationItemId) {
+      const category = qs(`rule-category-${quotationItemId}`)?.value || "";
+      const secondary = qs(`rule-secondary-${quotationItemId}`);
+      if (secondary) secondary.innerHTML = secondaryCategoryOptions(category, secondary.value || "");
+    }
+    async function saveQuotationDimensionRule(quotationItemId, ruleId = "") {
+      const body = {
+        quotationItemId,
+        customerId: state.mappingWorkbench?.customerId || undefined,
+        businessPlatform: qs(`rule-platform-${quotationItemId}`)?.value || undefined,
+        businessCategory: qs(`rule-category-${quotationItemId}`)?.value || undefined,
+        secondaryCategory: qs(`rule-secondary-${quotationItemId}`)?.value || undefined,
+        tertiaryCategory: qs(`rule-tertiary-${quotationItemId}`)?.value.trim() || undefined,
+        priority: Number(qs(`rule-priority-${quotationItemId}`)?.value || 100),
+        status: "active",
+        remark: qs(`rule-remark-${quotationItemId}`)?.value.trim() || undefined,
+      };
+      try {
+        if (ruleId) {
+          await request(`/quote-mappings/dimension-rules/${ruleId}`, { method: "PATCH", body });
+        } else {
+          await request("/quote-mappings/dimension-rules", { method: "POST", body });
+        }
+        await loadQuarterMappingWorkbench(false);
+        toast("报价子项维度规则已保存");
+      } catch (error) {
+        toast(error.message);
+      }
+    }
+    async function deleteQuotationDimensionRule(ruleId) {
+      if (!ruleId) return;
+      try {
+        await request(`/quote-mappings/dimension-rules/${ruleId}`, { method: "DELETE" });
+        await loadQuarterMappingWorkbench(false);
+        toast("报价子项维度规则已删除");
+      } catch (error) {
+        toast(error.message);
+      }
+    }
     function mappingStatusLabel(status) {
       return { pending_confirm: "待确认", matched: "已确认", partial: "待人工选择", rejected: "已驳回", obsolete: "已作废" }[status] || status || "未适配";
     }
@@ -1947,6 +3020,7 @@
         renderMappingQuotationOptions(result.workbench);
         renderMappingMetrics(result.workbench);
         renderMappingWorkbench(result.workbench);
+        renderQuotationDimensionRules(result.workbench);
         renderRequirementBoard();
         if (isViewActive("settlement")) await loadSettlementStatement(false);
         addLog("季度需求报价子项已自动适配", result);
@@ -2000,6 +3074,8 @@
       const quarter = qs("settlementQuarterSelect")?.value || state.settlementQuarter || currentQuarter();
       state.settlementCustomerId = customerId;
       state.settlementQuarter = quarter;
+      syncPrimaryCustomerSelects(customerId);
+      renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
       const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
       const customers = customerId === "all"
         ? (fundCustomers.length ? fundCustomers : state.customers)
@@ -2016,7 +3092,9 @@
         const workbenches = workbenchBundle.workbenches || [];
         const taskRows = Object.entries(board).flatMap(([status, tasks]) => (tasks || []).map(task => ({ status, ...task })));
         const taskByRequirementItemId = new Map(taskRows.filter(task => task.requirement_item_id).map(task => [task.requirement_item_id, task]));
-        const rows = workbenches.flatMap(workbench => buildSettlementRows(workbench, taskByRequirementItemId));
+        const rows = workbenches
+          .flatMap(workbench => buildSettlementRows(workbench, taskByRequirementItemId))
+          .filter(row => dimensionMatchesRequirement(row.requirement || { customer_id: row.customerId }, row.task));
         state.settlementStatement = {
           customerId,
           quarter,
@@ -2060,6 +3138,8 @@
           unitPrice,
           amount,
           status: settlementRowStatus(row, assetCount),
+          requirement: row.requirement,
+          task,
         };
       });
     }
@@ -2142,7 +3222,7 @@
     function renderSettlementDetails(rows) {
       const box = qs("settlementDetails");
       if (!rows.length) {
-        box.innerHTML = `<div class="empty-list">暂无结算明细。请先完成需求、报价单和报价适配。</div>`;
+        box.innerHTML = `<div class="empty-list">暂无结算明细。请先完成需求、报价单和报价子项选择。</div>`;
         return;
       }
       box.innerHTML = `
@@ -2166,9 +3246,13 @@
     }
     async function createRequirement() {
       const project = await syncProjectSelection(true);
-      if (!project) return toast("请先选择客户和项目大类");
+      if (!project) return toast("请先选择客户和业务大类");
+      const businessName = qs("businessNameInput").value.trim();
+      const businessPlatform = qs("businessPlatformInput").value;
+      const tertiaryCategory = qs("tertiaryCategoryInput").value.trim();
       const title = qs("requirementTitle").value.trim();
       const content = qs("requirementContent").value.trim();
+      if (!businessName) return toast("请填写业务命名");
       if (!title) return toast("请填写需求标题");
       if (!content) return toast("请填写需求内容");
       const button = qs("createRequirementButton");
@@ -2181,6 +3265,7 @@
       state.task = null;
       state.workspace = null;
       try {
+        const contactContext = selectedContactContext();
         const result = await request("/requirements/with-task", {
           method: "POST",
           body: {
@@ -2190,6 +3275,10 @@
             rawContent: content,
             priority: "high",
             estimatedHours: "6",
+            contactContextId: contactContext?.id || undefined,
+            businessName,
+            businessPlatform: businessPlatform || undefined,
+            tertiaryCategory,
           },
         });
         state.requirement = result.requirement;
@@ -2202,6 +3291,7 @@
         linkMappingContext(state.requirement.customer_id, quarterForDate(state.requirement.created_at));
         loadQuarterMappingWorkbench(false);
         if (isViewActive("settlement")) loadSettlementStatement(false);
+        qs("businessNameInput").value = "";
         qs("requirementTitle").value = "";
         qs("requirementContent").value = "";
         toast("需求已进入历史需求任务列表，状态为待指派");
@@ -2224,12 +3314,12 @@
         : await aiMatchRequirementContext(false);
       if (!match?.customerId || !match?.projectType) {
         renderAiMatchBox(match);
-        return toast("AI未能匹配客户和项目大类，请补充文件中的客户和需求信息后重试");
+        return toast("AI未能匹配客户和业务大类，请补充文件中的客户和需求信息后重试");
       }
       qs("customerSelect").value = match.customerId;
       qs("projectTypeSelect").value = match.projectType;
       const project = await syncProjectSelection(true);
-      if (!project) return toast("AI匹配结果无法创建项目，请重试");
+      if (!project) return toast("AI匹配结果无法创建后台挂靠，请重试");
       const button = qs("aiSplitButton");
       if (button) {
         button.disabled = true;
@@ -2316,9 +3406,11 @@
       const quarter = qs("analyticsQuarterSelect")?.value || state.analyticsQuarter || currentQuarter();
       state.analyticsCustomerId = customerId;
       state.analyticsQuarter = quarter;
+      syncPrimaryCustomerSelects(customerId);
+      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", false);
       const query = new URLSearchParams({ liveAssetCount: "true" });
       if (customerId !== "all") query.set("customerId", customerId);
-      qs("metrics").innerHTML = `<div class="panel metric"><span>正在刷新</span><strong>...</strong><span>同步资产表和季度报价适配</span></div>`;
+      qs("metrics").innerHTML = `<div class="panel metric"><span>正在刷新</span><strong>...</strong><span>同步资产表和报价子项选择</span></div>`;
       try {
         const analyticsCustomers = selectedAnalyticsCustomers(customerId);
         const [board, workbenchBundle] = await Promise.all([
@@ -2332,19 +3424,21 @@
           .flatMap(([status, tasks]) => (tasks || []).map(t => ({ status, ...t })))
           .filter(task => {
             const taskCustomerId = projectForTask(task)?.customer_id;
-            return !taskCustomerId || customerIds.has(taskCustomerId);
+            const requirement = requirementForTask(task);
+            return (!taskCustomerId || customerIds.has(taskCustomerId)) && dimensionMatchesRequirement(requirement, task);
           });
         const quarterTasks = rows.filter(task => quarterForDate(task.created_at) === quarter);
         const totalAssets = quarterTasks.reduce((sum, task) => sum + Number(task.asset_count || task.assetCount || 0), 0);
         const completedTasks = quarterTasks.filter(task => task.status === "completed" || Number(task.asset_count || task.assetCount || 0) > 0).length;
         const scopedRequirements = state.requirements.filter(requirement => {
           if (!customerIds.has(requirement.customer_id)) return false;
+          if (!dimensionMatchesRequirement(requirement, taskForRequirement(requirement.id))) return false;
           return quarterForDate(requirement.created_at) === quarter;
         });
         const scopedRequirementIds = new Set(scopedRequirements.map(requirement => requirement.id));
         const scopedRequirementItems = state.requirementItems.filter(item => scopedRequirementIds.has(item.requirement_id));
-        const quoteMatchedCount = workbenches.reduce((sum, workbench) => sum + (workbench.summary?.confirmedCount || 0), 0);
-        const quotePendingCount = workbenches.reduce((sum, workbench) => sum + (workbench.summary?.pendingCount || 0), 0);
+        const quoteMatchedCount = scopedRequirementItems.filter(item => item.quote_scope_status === "matched").length;
+        const quotePendingCount = scopedRequirementItems.filter(item => isPendingQuoteScopeStatus(item.quote_scope_status)).length;
         const scopeText = `${customerId === "all" ? "全部基金" : customerName(customerId)} · ${quarter}`;
         const settlementRows = buildDashboardSettlementRows(scopedRequirementItems, rows, workbenches);
         const settlementAmount = settlementRows.reduce((sum, row) => sum + row.amount, 0);
@@ -2358,7 +3452,11 @@
         renderEmployeeTop(quarterTasks);
         renderFundTop(scopedRequirements, quarterTasks, settlementRows);
         renderSettlementTop(settlementRows);
-        qs("boardBox").innerHTML = `<table><thead><tr><th>基金客户</th><th>项目</th><th>任务</th><th>负责人</th><th>状态</th><th>资产个数</th></tr></thead><tbody>${quarterTasks.map(t => `<tr><td>${customerNameForTask(t)}</td><td>${projectName(t.project_id)}</td><td>${t.task_no}<br>${t.task_name}</td><td>${assigneeName(t.assignee_user_id)}</td><td><span class="tag">${taskStatusLabel(t.status)}</span></td><td>${assetCountText(t)}</td></tr>`).join("") || `<tr><td colspan="6" class="muted">暂无任务数据</td></tr>`}</tbody></table>`;
+        qs("boardBox").innerHTML = `<table><thead><tr><th>基金客户</th><th>业务维度</th><th>任务</th><th>负责人</th><th>状态</th><th>资产个数</th></tr></thead><tbody>${quarterTasks.map(t => {
+          const requirement = requirementForTask(t);
+          const dimensions = requirementDimensionSnapshot(requirement, t);
+          return `<tr><td>${safeText(customerNameForTask(t))}</td><td>${safeText(projectTypeLabel(dimensions.businessCategory))}<br><span class="row-sub">${safeText(dimensions.secondaryCategory || "-")} · ${safeText(dimensions.tertiaryCategory || "-")}</span></td><td>${safeText(t.task_no)}<br>${safeText(t.task_name)}</td><td>${safeText(assigneeName(t.assignee_user_id))}</td><td><span class="tag">${safeText(taskStatusLabel(t.status))}</span></td><td>${safeText(assetCountText(t))}</td></tr>`;
+        }).join("") || `<tr><td colspan="6" class="muted">暂无任务数据</td></tr>`}</tbody></table>`;
       } catch (error) {
         toast(error.message);
       }
@@ -2460,7 +3558,7 @@
         safeText(row.employeeName),
         `${row.assetCount} × ${formatMoney(row.unitPrice)}`,
         formatMoney(row.amount),
-      ], "暂无可结算数据，请先完成报价适配并产生资产。");
+      ], "暂无可结算数据，请先在历史需求任务中选择报价子项并产生资产。");
     }
     function renderSimpleTable(elementId, rows, headers, toCells, emptyText) {
       const box = qs(elementId);
@@ -2481,7 +3579,7 @@
     async function refreshMessages() {
       const assigneeId = state.task?.assignee_user_id || "";
       const messages = unwrap(await request(`/notifications?recipientUserId=${assigneeId}`));
-      qs("messagesBox").innerHTML = `<table><thead><tr><th>时间</th><th>标题</th><th>状态</th><th>飞书结果</th></tr></thead><tbody>${messages.map(m => `<tr><td>${m.sent_at || m.created_at}</td><td>${m.title}<br><span class="muted">${m.content || ""}</span></td><td>${m.status}</td><td>${m.delivery_result_json?.feishu_app?.status || "-"}</td></tr>`).join("")}</tbody></table>`;
+      qs("messagesBox").innerHTML = `<table><thead><tr><th>时间</th><th>标题</th><th>状态</th><th>飞书结果</th></tr></thead><tbody>${messages.map(m => `<tr><td>${safeText(m.sent_at || m.created_at)}</td><td>${safeText(m.title)}<br><span class="muted">${safeText(m.content || "")}</span></td><td>${safeText(m.status)}</td><td>${safeText(m.delivery_result_json?.feishu_app?.status || "-")}</td></tr>`).join("")}</tbody></table>`;
     }
     function renderSteps() {
       const done = {
@@ -2528,16 +3626,21 @@
         await loadBootstrap();
         const saved = localStorage.getItem("mvpUser");
         if (saved) {
-          state.user = JSON.parse(saved);
-          qs("loginView").classList.add("hidden");
-          qs("appView").classList.remove("hidden");
-          qs("currentUser").textContent = state.user.display_name || state.user.username;
-          qs("currentUserMeta").textContent = `${state.user.username} · ${state.user.source}`;
-          renderSteps();
-          await refreshAnalytics();
-          startAutoRefresh();
+          let savedUser = null;
+          try {
+            savedUser = JSON.parse(saved);
+          } catch {
+            localStorage.removeItem("mvpUser");
+          }
+          if (savedUser?.username) {
+            enterApp(savedUser);
+            await initializeAppAfterLogin();
+          } else {
+            localStorage.removeItem("mvpUser");
+          }
         }
       } catch (error) {
+        localStorage.removeItem("mvpUser");
         qs("loginHint").textContent = error.message;
         toast(error.message);
       }

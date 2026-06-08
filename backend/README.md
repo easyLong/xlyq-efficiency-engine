@@ -1,14 +1,15 @@
 # 效能引擎后端
 
-## 当前运行能力
+更新时间：2026-06-04
 
-- NestJS 后端同时提供 REST API 和 `public/` 静态 MVP 页面。
-- `GET /` 进入管理端 MVP 页面，包含登录、需求录入、AI 文件录入、历史需求任务编辑/删除、任务指派、统计分析和消息记录。
-- `GET /asset-sheet.html` 是员工填写资产 URL 的本地兜底资产表。
-- OpenAI 兼容模型通过 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL` 接入，用于 AI 文件拆分和客户/项目大类匹配。
-- 飞书在线资产表依赖 `drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create` 权限；权限不足时自动降级为本地资产表。
+这是效能引擎的 NestJS 后端服务，同时托管当前 MVP 静态页面。
 
-这是效能引擎项目的后端 MVP，基于 NestJS、TypeORM 和 MySQL 实现，负责承接项目管理、需求管理、任务管理、飞书集成、消息通知、报价适配和基础统计。
+## 运行入口
+
+- 管理端：`GET http://localhost:3000/`
+- 本地资产表：`GET http://localhost:3000/asset-sheet.html`
+- API Base：`http://localhost:3000/api/v1`
+- 健康检查：`GET /api/v1/health`
 
 ## 技术栈
 
@@ -24,20 +25,26 @@
 ```text
 src/
   common/            通用实体
+  contact-contexts/  对接人维度配置
   customers/         客户管理
   dashboard/         工作台统计
   health/            健康检查
   integrations/      飞书等外部集成
   notifications/     站内消息和飞书通知编排
   projects/          项目管理
-  quote-mappings/    需求报价适配
-  quotations/        报价单管理
+  quote-mappings/    需求任务与报价子项映射
+  quotations/        报价单和报价子项
   requirements/      需求管理
   risk-alerts/       风险预警
-  tasks/             任务管理、成果目录、结果文件
+  tasks/             任务、工作入口、资产记录
   users/             用户与角色
   weekly-reports/    周报
   worklogs/          工时
+public/
+  index.html         MVP 管理端
+  asset-sheet.html   本地兜底资产表
+scripts/
+  migrate-project-tables.js
 ```
 
 ## 环境配置
@@ -52,79 +59,101 @@ copy .env.example .env
 
 ```env
 PORT=3000
+APP_PUBLIC_BASE_URL=http://localhost:3000
+
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=your-password
-DB_NAME=efficiency_engine
+DB_NAME=ops_platform
 
 FEISHU_APP_ID=
 FEISHU_APP_SECRET=
 FEISHU_BOT_WEBHOOK_URL=
 FEISHU_EVENT_VERIFICATION_TOKEN=
 FEISHU_DEFAULT_DEPARTMENT_ID=0
+
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4.1-mini
 ```
 
-根目录 `scripts/` 下的数据库初始化脚本复用同一组 `DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME` 环境变量，不再硬编码数据库账号密码。
-
 ## 启动
+
+开发模式：
 
 ```bash
 npm install
 npm run start:dev
 ```
 
-健康检查：
+生产模式：
 
-```text
-GET http://localhost:3000/api/v1/health
+```bash
+npm run build
+npm run start:prod
 ```
 
 ## 常用脚本
 
 ```bash
 npm run build
-npm run start
+npm test -- --runInBand
+npm run test:e2e -- --runInBand
 npm run start:dev
-npm run lint
-npm run test
-npm run test:e2e
+npm run start:prod
+npm run migrate:project-tables -- --help
 ```
 
-## 主要接口模块
+注意：`npm run lint` 当前带 `--fix`，会自动改动文件；做纯检查时需谨慎使用。
+
+## 主要 API 模块
 
 - `GET /api/v1/health`
+- `/api/v1/users`
 - `/api/v1/customers`
+- `/api/v1/contact-contexts`
 - `/api/v1/projects`
 - `/api/v1/requirements`
 - `/api/v1/requirement-items`
 - `/api/v1/tasks`
-- `/api/v1/tasks/{id}/workspace`
-- `/api/v1/tasks/{id}/result-files`
-- `/api/v1/worklogs`
 - `/api/v1/notifications`
 - `/api/v1/integrations/feishu`
 - `/api/v1/quotations`
 - `/api/v1/quote-mappings`
 - `/api/v1/risk-alerts`
 - `/api/v1/weekly-reports`
-- `/api/v1/users`
+- `/api/v1/worklogs`
 
-完整接口清单见根目录 [../API_SPEC.md](../API_SPEC.md)。
+完整接口清单见 [../API_SPEC.md](../API_SPEC.md)。
 
-## 消息机制
+## 数据链路说明
 
-消息机制由 `notifications` 模块统一编排：
+关键链路见 [../DATA_FLOW.md](../DATA_FLOW.md)。
 
-- 站内消息落库：`notification_messages`
-- 飞书个人消息：企业自建应用 IM 消息
-- 飞书群消息：机器人 Webhook
-- 投递结果记录：`delivery_result_json`、`status`、`error_message`
+后端已经对以下链路做一致性保护：
 
-通知规则见根目录 [../NOTIFICATION_RULES.md](../NOTIFICATION_RULES.md)。
+- 删除报价单/报价子项会清理相关报价映射和报价子项维度规则。
+- 删除需求会清理需求项、任务、资产记录和报价映射。
+- 报价映射创建/更新会校验需求客户、报价单客户和报价子项归属，避免跨基金挂错报价。
+- 报价子项状态只按有效映射回算，`rejected`、`obsolete` 不再占用报价子项。
 
-## 数据库
+## 数据库与迁移
 
-建表 SQL 见根目录 [../mysql_schema.sql](../mysql_schema.sql)。
+建表 SQL 见 [../mysql_schema.sql](../mysql_schema.sql)。
 
-数据模型设计说明见根目录 [../DB_SCHEMA.md](../DB_SCHEMA.md)。
+跨库迁移脚本：
+
+```bash
+npm run migrate:project-tables -- --help
+npm run migrate:project-tables -- --execute
+```
+
+源库默认读取 `backend/.env` 的 `DB_*`，目标库通过 `TARGET_DB_NAME` 指定。
+
+## 飞书与模型
+
+- OpenAI 兼容模型用于需求文件拆分、客户/业务分类识别、报价单解析。
+- 飞书在线表格依赖 `drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create` 权限。
+- 权限不足时，任务指派会降级到本地资产表。
+- 移动端员工访问本地资产表时，`APP_PUBLIC_BASE_URL` 必须是公网可访问地址。

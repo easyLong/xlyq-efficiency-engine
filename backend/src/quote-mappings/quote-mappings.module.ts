@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { WorklogEntity } from '../common/entities/worklog.entity';
 import { QuotationEntity } from '../quotations/entities/quotation.entity';
+import { QuotationItemDimensionRuleEntity } from '../quotations/entities/quotation-item-dimension-rule.entity';
 import { QuotationItemEntity } from '../quotations/entities/quotation-item.entity';
 import { RequirementQuotationMappingEntity } from '../quotations/entities/requirement-quotation-mapping.entity';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
@@ -18,6 +19,7 @@ import { QuoteMappingsService } from './quote-mappings.service';
       RequirementEntity,
       QuotationEntity,
       QuotationItemEntity,
+      QuotationItemDimensionRuleEntity,
       WorklogEntity,
       AiExecutionLogEntity,
     ]),

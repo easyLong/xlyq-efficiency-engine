@@ -7,8 +7,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { randomUUID } from 'node:crypto';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
+import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
 import { CustomerEntity } from '../customers/entities/customer.entity';
 import { ProjectEntity } from '../projects/entities/project.entity';
+import { QuotationItemEntity } from '../quotations/entities/quotation-item.entity';
+import { RequirementQuotationMappingEntity } from '../quotations/entities/requirement-quotation-mapping.entity';
 import { TaskDirectoryEntity } from '../tasks/entities/task-directory.entity';
 import { TaskResultFileEntity } from '../tasks/entities/task-result-file.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
@@ -29,47 +32,58 @@ export class RequirementsService {
 
   private readonly projectTypes = [
     {
-      value: 'periodic_report',
-      label: '定期报告制作',
-      keywords: ['月报', '季报', '年报', '定期报告', '报告制作', '临时报告'],
+      value: 'design',
+      label: '设计',
+      keywords: [
+        '配图',
+        'banner',
+        '巨幅',
+        '长图',
+        '海报',
+        '设计',
+        '套模板',
+        '视觉',
+        '物料',
+      ],
     },
     {
-      value: 'marketing_material',
-      label: '营销材料设计',
+      value: 'copywriting',
+      label: '文案',
       keywords: [
-        '营销',
-        '路演',
-        '海报',
-        '长图',
-        '产品手册',
-        '材料设计',
         '文案',
+        '原创',
+        '共建',
+        '数据更新',
+        '素材编辑',
+        '编辑',
         'word',
         'Word',
         'WORD',
         'word版本',
-        '物料',
         '推文',
         '策划',
         '方案',
-        '配置圈',
-        '用户陪伴',
       ],
     },
     {
-      value: 'data_disclosure',
-      label: '数据披露与核对',
-      keywords: ['数据', '披露', '净值', '持仓', '业绩', '风险指标', '核对'],
+      value: 'operation',
+      label: '运营',
+      keywords: [
+        '发布',
+        '陪伴',
+        '活动配置',
+        '魔秀',
+        '页面',
+        '推厂',
+        '直播',
+        '配置',
+        '运营',
+      ],
     },
     {
-      value: 'compliance_content',
-      label: '合规内容支持',
-      keywords: ['合规', '免责声明', '文案审核', '留痕', '监管'],
-    },
-    {
-      value: 'web_investor_education',
-      label: '官网与投教运营',
-      keywords: ['官网', '投教', '运营', '专题', '活动页', '内容维护'],
+      value: 'community',
+      label: '社区',
+      keywords: ['社区', '粉丝投放', '精华贴', '氛围贴', '讨论区', '配置圈'],
     },
   ];
 
@@ -92,6 +106,12 @@ export class RequirementsService {
     private readonly projectsRepository: Repository<ProjectEntity>,
     @InjectRepository(UserEntity)
     private readonly usersRepository: Repository<UserEntity>,
+    @InjectRepository(ContactContextConfigEntity)
+    private readonly contactContextsRepository: Repository<ContactContextConfigEntity>,
+    @InjectRepository(RequirementQuotationMappingEntity)
+    private readonly mappingsRepository: Repository<RequirementQuotationMappingEntity>,
+    @InjectRepository(QuotationItemEntity)
+    private readonly quotationItemsRepository: Repository<QuotationItemEntity>,
   ) {}
 
   async findAll(projectId?: string) {
@@ -127,6 +147,12 @@ export class RequirementsService {
       customer_id: dto.customerId,
       title: dto.title,
       source_type: 'manual',
+      source_ref_id: null,
+      business_name: null,
+      business_platform: null,
+      business_category: null,
+      secondary_category: null,
+      tertiary_category: null,
       status: 'draft',
       priority: 'medium',
       raw_content: dto.rawContent ?? null,
@@ -137,8 +163,24 @@ export class RequirementsService {
   }
 
   async createWithTask(dto: CreateRequirementWithTaskDto) {
+    const contactContext = dto.contactContextId
+      ? await this.resolveContactContext(dto.contactContextId)
+      : null;
+    const projectId = contactContext
+      ? await this.resolveProjectForContactContext(contactContext)
+      : dto.projectId;
+
     return this.createRequirementTaskBundle({
       ...dto,
+      projectId,
+      customerId: contactContext?.customer_id ?? dto.customerId,
+      contactContextId: contactContext?.id ?? dto.contactContextId,
+      businessName: dto.businessName,
+      businessPlatform: dto.businessPlatform ?? contactContext?.business_platform ?? null,
+      businessCategory: contactContext?.business_category ?? null,
+      secondaryCategory: contactContext?.secondary_category ?? null,
+      tertiaryCategory:
+        dto.tertiaryCategory ?? contactContext?.tertiary_category ?? null,
       sourceType: 'manual',
     });
   }
@@ -366,6 +408,9 @@ export class RequirementsService {
       priority: dto.priority ?? requirement.priority,
       project_id: targetProjectId,
       customer_id: targetCustomerId,
+      business_name: dto.businessName ?? requirement.business_name,
+      business_platform: dto.businessPlatform ?? requirement.business_platform,
+      tertiary_category: dto.tertiaryCategory ?? requirement.tertiary_category,
       raw_content: dto.rawContent ?? requirement.raw_content,
       summary: dto.summary ?? requirement.summary,
     });
@@ -430,21 +475,34 @@ export class RequirementsService {
         })
       : [];
     const taskIds = tasks.map((task) => task.id);
+    const mappings = itemIds.length
+      ? await this.mappingsRepository.find({
+          where: { requirement_item_id: In(itemIds) },
+        })
+      : [];
+    const quotationItemIds = this.uniqueQuotationItemIds(mappings);
 
     if (taskIds.length > 0) {
       await this.taskResultFilesRepository.softDelete({ task_id: In(taskIds) });
       await this.taskDirectoriesRepository.softDelete({ task_id: In(taskIds) });
       await this.tasksRepository.softDelete({ id: In(taskIds) });
     }
+    if (mappings.length > 0) {
+      await this.mappingsRepository.delete({
+        id: In(mappings.map((mapping) => mapping.id)),
+      });
+    }
     if (itemIds.length > 0) {
       await this.requirementItemsRepository.softDelete({ id: In(itemIds) });
     }
     await this.requirementsRepository.softDelete({ id });
+    await this.syncQuotationItemMatchStatuses(quotationItemIds);
 
     return {
       requirementId: id,
       deletedItemCount: itemIds.length,
       deletedTaskCount: taskIds.length,
+      deletedMappingCount: mappings.length,
     };
   }
 
@@ -589,6 +647,12 @@ export class RequirementsService {
     rawContent?: string;
     priority?: string;
     estimatedHours?: string;
+    contactContextId?: string | null;
+    businessName?: string | null;
+    businessPlatform?: string | null;
+    businessCategory?: string | null;
+    secondaryCategory?: string | null;
+    tertiaryCategory?: string | null;
     sourceType: string;
     match?: {
       customerId: string | null;
@@ -609,6 +673,13 @@ export class RequirementsService {
         customer_id: input.customerId,
         title: input.title,
         source_type: input.sourceType,
+        source_ref_id: input.contactContextId ?? null,
+        business_name: input.businessName ?? null,
+        business_platform: input.businessPlatform ?? null,
+        business_category: input.businessCategory ?? null,
+        secondary_category: input.secondaryCategory ?? null,
+        tertiary_category:
+          input.tertiaryCategory ?? null,
         status: 'draft',
         priority: input.priority ?? 'high',
         raw_content: input.rawContent ?? null,
@@ -673,6 +744,36 @@ export class RequirementsService {
       return match ? Math.max(max, Number(match[1])) : max;
     }, 0);
     return `TASK-${String(maxNo + 1).padStart(4, '0')}`;
+  }
+
+  private async resolveContactContext(id: string) {
+    const config = await this.contactContextsRepository.findOne({
+      where: { id, status: 'active' },
+    });
+    if (!config) {
+      throw new BadRequestException('Contact context config not found');
+    }
+    return config;
+  }
+
+  private async resolveProjectForContactContext(
+    contactContext: ContactContextConfigEntity,
+  ) {
+    const project = await this.projectsRepository.findOne({
+      where: {
+        customer_id: contactContext.customer_id,
+        project_type: contactContext.business_category,
+      },
+      order: { created_at: 'DESC' },
+    });
+    if (!project) {
+      const created = await this.ensureProjectForAiRequirement({
+        customerId: contactContext.customer_id,
+        projectType: contactContext.business_category,
+      });
+      return created.id;
+    }
+    return project.id;
   }
 
   private async nextRequirementCode() {
@@ -840,8 +941,8 @@ export class RequirementsService {
             role: 'system',
             content: [
               '你是项目管理系统的需求归类助手。',
-              '请从给定客户列表和项目大类列表中，选择最匹配的客户和项目大类。',
-              '只能从 options 中选择，不要编造客户或项目类型。',
+              '请从给定客户列表和业务大类列表中，选择最匹配的客户和业务大类。',
+              '只能从 options 中选择，不要编造客户或业务大类。',
               '只输出 JSON：{"customerId":"客户id或空字符串","projectType":"项目类型value","confidence":0到1,"reason":"简短原因"}',
             ].join('\n'),
           },
@@ -920,7 +1021,7 @@ export class RequirementsService {
         customerId: ruleMatch.customerId,
         customerName: ruleMatch.customerName,
         confidence: Math.max(modelMatch.confidence, ruleMatch.confidence),
-        reason: `客户按原文明确名称锁定为${ruleMatch.customerName}；项目大类${modelMatch.reason}`,
+        reason: `客户按原文明确名称锁定为${ruleMatch.customerName}；业务大类${modelMatch.reason}`,
       };
     }
 
@@ -974,7 +1075,7 @@ export class RequirementsService {
       reason:
         bestScore > 0
           ? '根据文件内容中的客户名称和项目关键词匹配。'
-          : '未识别到明确客户名称，仅根据关键词匹配项目大类。',
+          : '未识别到明确客户名称，仅根据关键词匹配业务大类。',
     };
   }
 
@@ -1000,7 +1101,7 @@ export class RequirementsService {
       projectType,
       projectTypeLabel: this.projectTypeLabel(projectType),
       confidence: Number(input.confidence ?? 0.6),
-      reason: input.reason ?? '模型根据文件内容匹配客户和项目大类。',
+      reason: input.reason ?? '模型根据文件内容匹配客户和业务大类。',
     };
   }
 
@@ -1331,6 +1432,48 @@ export class RequirementsService {
       return value;
     }
     return this.detectPriority(value ?? '');
+  }
+
+  private uniqueQuotationItemIds(mappings: RequirementQuotationMappingEntity[]) {
+    return Array.from(
+      new Set(
+        mappings
+          .map((mapping) => mapping.quotation_item_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+  }
+
+  private async syncQuotationItemMatchStatuses(quotationItemIds: string[]) {
+    for (const quotationItemId of quotationItemIds) {
+      const item = await this.quotationItemsRepository.findOne({
+        where: { id: quotationItemId },
+      });
+      if (!item) {
+        continue;
+      }
+      const mappings = await this.mappingsRepository.find({
+        where: { quotation_item_id: quotationItemId },
+      });
+      const activeMappings = mappings.filter((mapping) =>
+        this.isActiveQuoteMapping(mapping),
+      );
+      if (
+        activeMappings.some((mapping) => mapping.mapping_status === 'matched')
+      ) {
+        item.match_status = 'confirmed';
+      } else if (activeMappings.length > 0) {
+        item.match_status = 'matched';
+      } else {
+        item.match_status =
+          Number(item.line_amount || 0) > 0 ? 'unmatched' : 'price_missing';
+      }
+      await this.quotationItemsRepository.save(item);
+    }
+  }
+
+  private isActiveQuoteMapping(mapping: RequirementQuotationMappingEntity) {
+    return !['rejected', 'obsolete'].includes(mapping.mapping_status);
   }
 
   private projectTypeLabel(value: string) {

@@ -22,6 +22,7 @@ DROP TABLE IF EXISTS `feishu_object_links`;
 DROP TABLE IF EXISTS `requirement_quotation_mappings`;
 DROP TABLE IF EXISTS `change_request_items`;
 DROP TABLE IF EXISTS `change_requests`;
+DROP TABLE IF EXISTS `quotation_item_dimension_rules`;
 DROP TABLE IF EXISTS `quotation_items`;
 DROP TABLE IF EXISTS `quotations`;
 DROP TABLE IF EXISTS `weekly_reports`;
@@ -37,6 +38,7 @@ DROP TABLE IF EXISTS `requirement_versions`;
 DROP TABLE IF EXISTS `requirements`;
 DROP TABLE IF EXISTS `project_members`;
 DROP TABLE IF EXISTS `projects`;
+DROP TABLE IF EXISTS `contact_context_configs`;
 DROP TABLE IF EXISTS `customers`;
 DROP TABLE IF EXISTS `user_roles`;
 DROP TABLE IF EXISTS `roles`;
@@ -104,6 +106,29 @@ CREATE TABLE `customers` (
   KEY `idx_customers_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户表';
 
+CREATE TABLE `contact_context_configs` (
+  `id` CHAR(36) NOT NULL,
+  `contact_name` VARCHAR(64) NOT NULL,
+  `contact_mobile` VARCHAR(32) NULL,
+  `contact_email` VARCHAR(128) NULL,
+  `customer_id` CHAR(36) NOT NULL,
+  `business_platform` VARCHAR(64) NULL,
+  `business_category` VARCHAR(32) NOT NULL,
+  `secondary_category` VARCHAR(64) NULL,
+  `tertiary_category` VARCHAR(64) NULL,
+  `status` VARCHAR(32) NOT NULL,
+  `remark` VARCHAR(255) NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_contact_context_customer_id` (`customer_id`),
+  KEY `idx_contact_context_contact_name` (`contact_name`),
+  KEY `idx_contact_context_status` (`status`),
+  KEY `idx_contact_context_business` (`business_platform`, `business_category`, `secondary_category`, `tertiary_category`),
+  CONSTRAINT `fk_contact_context_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='对接人上下文配置表';
+
 CREATE TABLE `projects` (
   `id` CHAR(36) NOT NULL,
   `project_code` VARCHAR(32) NOT NULL,
@@ -154,6 +179,11 @@ CREATE TABLE `requirements` (
   `title` VARCHAR(256) NOT NULL,
   `source_type` VARCHAR(32) NOT NULL,
   `source_ref_id` VARCHAR(128) NULL,
+  `business_name` VARCHAR(128) NULL,
+  `business_platform` VARCHAR(64) NULL,
+  `business_category` VARCHAR(32) NULL,
+  `secondary_category` VARCHAR(64) NULL,
+  `tertiary_category` VARCHAR(64) NULL,
   `status` VARCHAR(32) NOT NULL,
   `priority` VARCHAR(32) NULL,
   `raw_content` TEXT NULL,
@@ -475,6 +505,29 @@ CREATE TABLE `quotation_items` (
   KEY `idx_quotation_items_match_status` (`match_status`),
   CONSTRAINT `fk_quotation_items_quotation` FOREIGN KEY (`quotation_id`) REFERENCES `quotations` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='报价项表';
+
+CREATE TABLE `quotation_item_dimension_rules` (
+  `id` CHAR(36) NOT NULL,
+  `quotation_item_id` CHAR(36) NOT NULL,
+  `customer_id` CHAR(36) NULL,
+  `business_platform` VARCHAR(64) NULL,
+  `business_category` VARCHAR(32) NULL,
+  `secondary_category` VARCHAR(64) NULL,
+  `tertiary_category` VARCHAR(64) NULL,
+  `priority` INT NOT NULL DEFAULT 100,
+  `status` VARCHAR(32) NOT NULL,
+  `remark` VARCHAR(255) NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_qidr_quotation_item_id` (`quotation_item_id`),
+  KEY `idx_qidr_customer_id` (`customer_id`),
+  KEY `idx_qidr_dimensions` (`business_category`, `secondary_category`, `tertiary_category`),
+  KEY `idx_qidr_status_priority` (`status`, `priority`),
+  CONSTRAINT `fk_qidr_quotation_item` FOREIGN KEY (`quotation_item_id`) REFERENCES `quotation_items` (`id`),
+  CONSTRAINT `fk_qidr_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='报价子项维度映射规则表';
 
 CREATE TABLE `change_requests` (
   `id` CHAR(36) NOT NULL,

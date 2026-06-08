@@ -11,6 +11,7 @@ erDiagram
     USERS ||--o{ USER_ROLES : has
     ROLES ||--o{ USER_ROLES : assigned
     CUSTOMERS ||--o{ PROJECTS : owns
+    CUSTOMERS ||--o{ CONTACT_CONTEXT_CONFIGS : configures
     USERS ||--o{ PROJECTS : manages
     PROJECTS ||--o{ PROJECT_MEMBERS : includes
     USERS ||--o{ PROJECT_MEMBERS : joins
@@ -31,6 +32,7 @@ erDiagram
 
     PROJECTS ||--o{ QUOTATIONS : has
     QUOTATIONS ||--o{ QUOTATION_ITEMS : contains
+    QUOTATION_ITEMS ||--o{ QUOTATION_ITEM_DIMENSION_RULES : filters
     REQUIREMENT_ITEMS ||--o{ REQUIREMENT_QUOTATION_MAPPINGS : maps
     QUOTATION_ITEMS ||--o{ REQUIREMENT_QUOTATION_MAPPINGS : maps
 
@@ -50,24 +52,27 @@ erDiagram
 
 ```mermaid
 flowchart LR
+    A0[对接人配置<br/>基金/平台/分类]
     A[客户需求<br/>飞书文档/消息/手工录入]
     B[需求管理<br/>Requirement]
     C[需求项拆解<br/>RequirementItem]
     D[任务生成与分配<br/>Task]
     E[执行与工时记录<br/>Worklog]
     F[进度跟进与风险预警<br/>RiskAlert/WeeklyReport]
-    G[需求报价适配<br/>RequirementQuotationMapping]
-    H[报价单草稿<br/>Quotation/QuotationItem]
-    I[财务审核与确认]
+    G[需求报价子项选择<br/>RequirementQuotationMapping]
+    H[报价单与子项<br/>Quotation/QuotationItem]
+    H0[报价子项维度规则<br/>DimensionRule]
+    I[映射确认]
     J[结算与经营分析]
 
+    A0 --> B
     A --> B
     B --> C
     C --> D
     D --> E
     E --> F
     C --> G
-    E --> G
+    H0 --> G
     G --> H
     H --> I
     I --> J
@@ -81,6 +86,7 @@ flowchart TB
       FEI[飞书文档/消息/任务]
       MANUAL[手工录入]
       IMPORT[模板导入]
+      CONTACT[对接人配置]
     end
 
     subgraph Core["核心业务层"]
@@ -88,7 +94,7 @@ flowchart TB
       RM[需求管理]
       TM[任务管理]
       FM[项目跟进]
-      QM[需求报价适配]
+      QM[需求报价子项映射]
       BM[报价与结算]
     end
 
@@ -97,7 +103,7 @@ flowchart TB
       AI2[任务分配建议]
       AI3[风险识别]
       AI4[周报生成]
-      AI5[报价适配建议]
+      AI5[报价映射建议]
       AI6[报价草稿建议]
     end
 
@@ -117,6 +123,8 @@ flowchart TB
     FEI --> RM
     MANUAL --> RM
     IMPORT --> RM
+    CONTACT --> RM
+    CONTACT --> QM
 
     PM --> RM
     RM --> TM
@@ -155,29 +163,28 @@ flowchart TB
     Integration --> FSLOG
 ```
 
-## 5. 需求报价适配专题图
+## 5. 需求报价子项选择专题图
 
 这是本项目最关键的断层修复模块。
 
 ```mermaid
 flowchart LR
+    R0[需求维度<br/>基金/对接人/平台/分类/员工]
     R1[需求项]
-    R2[任务]
-    R3[工时]
-    M[适配引擎<br/>规则 + AI]
-    Q1[报价项建议]
-    Q2[财务确认]
-    Q3[正式报价单]
-    C1[变更单]
+    R2[任务资产数]
+    M[报价子项选择<br/>人工 + 规则建议]
+    Q0[报价子项维度规则]
+    Q1[报价子项]
+    Q2[映射确认]
+    Q3[结算预览]
 
+    R0 --> M
     R1 --> M
     R2 --> M
-    R3 --> M
-    M --> Q1
-    Q1 --> Q2
+    Q0 --> M
+    Q1 --> M
+    M --> Q2
     Q2 --> Q3
-    R1 --> C1
-    C1 --> M
 ```
 
 ## 6. 后端服务建议关系图
@@ -229,6 +236,6 @@ flowchart LR
 ## 7. 建议阅读顺序
 
 1. 先看“核心业务链路图”
-2. 再看“需求报价适配专题图”
+2. 再看“需求报价子项选择专题图”
 3. 然后看“核心 ER 图”
-4. 最后结合 [DB_SCHEMA.md](C:/Code/xlyq-efficiency-engine/DB_SCHEMA.md) 和 [API_SPEC.md](C:/Code/xlyq-efficiency-engine/API_SPEC.md) 进入开发
+4. 最后结合 [DB_SCHEMA.md](DB_SCHEMA.md) 和 [API_SPEC.md](API_SPEC.md) 进入开发

@@ -22,4 +22,20 @@ export class CreateRequirementWithTaskDto {
   @IsOptional()
   @IsString()
   estimatedHours?: string;
+
+  @IsOptional()
+  @IsUUID()
+  contactContextId?: string;
+
+  @IsOptional()
+  @IsString()
+  businessName?: string;
+
+  @IsOptional()
+  @IsString()
+  businessPlatform?: string;
+
+  @IsOptional()
+  @IsString()
+  tertiaryCategory?: string;
 }

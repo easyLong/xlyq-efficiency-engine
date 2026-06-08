@@ -4,16 +4,16 @@
 
 ### 静态页面
 
-- `GET /`：MVP 登录、需求录入、任务指派、报价单、报价适配、结算单、统计分析页面。
+- `GET /`：MVP 登录、需求录入、任务指派、报价单、报价子项选择、结算单、统计分析页面。
 - `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>`：本地兜底资产登记表，员工填写资产地址 URL。
 
 ### 需求与任务
 
 - `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务。
-- `POST /api/v1/requirements/ai-match-context`：根据文件内容匹配客户和项目大类。
+- `POST /api/v1/requirements/ai-match-context`：根据文件内容匹配客户和业务大类。
 - `POST /api/v1/requirements/ai-split-with-tasks`：使用 OpenAI 兼容模型拆分需求，并为每条需求生成任务。
 - `PATCH /api/v1/requirements/{id}`：人工编辑历史需求任务，自动同步需求项和任务标题/描述/优先级。
-- `DELETE /api/v1/requirements/{id}/bundle`：软删除需求、需求项、任务、工作目录和资产记录。
+- `DELETE /api/v1/requirements/{id}/bundle`：软删除需求、需求项、任务、工作目录和资产记录，并清理关联报价映射。
 - `POST /api/v1/tasks/{id}/assign`：指派任务；`provisionWorkspace=true` 时创建资产入口并发送一条带按钮的飞书消息。
 - `POST /api/v1/tasks/{id}/asset-sheet/local-assets`：本地资产表保存资产 URL，系统去重统计，并将任务推进到待验收。
 - `POST /api/v1/tasks/{id}/asset-sheet/sync`：读取飞书在线表资产 URL 并同步统计。
@@ -31,12 +31,20 @@
 - `POST /api/v1/quotations/parse-text`：预览解析报价单文本，返回将生成的细粒度报价子项。
 - `POST /api/v1/quotations/import-text`：导入报价单文本并生成报价单与报价子项。
 - `GET /api/v1/quotations/{id}/items`：查看报价单子项。
-- `DELETE /api/v1/quotations/{id}`：软删除报价单及其子项。
-- `GET /api/v1/quote-mappings/quarter-workbench?customerId=<id>&quarter=YYYY-Qn`：按基金和季度加载需求报价适配工作台。
+- `POST /api/v1/quotations/{id}/items`：人工新增报价子项。
+- `PATCH /api/v1/quotations/items/{itemId}`：编辑报价子项。
+- `DELETE /api/v1/quotations/items/{itemId}`：删除报价子项，并清理关联映射和维度规则。
+- `DELETE /api/v1/quotations/{id}`：软删除报价单及其子项，并清理关联映射和维度规则。
+- `GET /api/v1/quote-mappings/quarter-workbench?customerId=<id>&quarter=YYYY-Qn`：按基金和季度加载需求报价子项映射工作台。
 - `GET /api/v1/quote-mappings/quarter-workbenches?customerIds=<id1,id2>&quarter=YYYY-Qn`：批量加载多基金季度适配工作台，用于统计分析和结算页减少多次请求。
 - `POST /api/v1/quote-mappings/quarter-suggest`：按基金、季度和报价单生成需求项到报价子项的自动适配建议。
-- `PATCH /api/v1/quote-mappings/{mappingId}`：保存或确认单条需求报价适配。
-- `DELETE /api/v1/quote-mappings/{mappingId}`：删除单条需求报价适配。
+- `POST /api/v1/quote-mappings`：手工创建需求任务与报价子项映射，后端校验基金客户和报价子项归属。
+- `PATCH /api/v1/quote-mappings/{mappingId}`：保存或确认单条需求报价映射。
+- `DELETE /api/v1/quote-mappings/{mappingId}`：删除单条需求报价映射，并同步需求项和报价子项状态。
+- `GET /api/v1/quote-mappings/dimension-rules`：查看报价子项维度规则。
+- `POST /api/v1/quote-mappings/dimension-rules`：创建报价子项维度规则。
+- `PATCH /api/v1/quote-mappings/dimension-rules/{ruleId}`：更新报价子项维度规则。
+- `DELETE /api/v1/quote-mappings/dimension-rules/{ruleId}`：删除报价子项维度规则。
 
 ## 1. 文档目标
 
@@ -47,7 +55,7 @@
 - 协议：HTTPS
 - 风格：RESTful + 少量动作型接口
 - Base Path：`/api/v1`
-- 鉴权：`Authorization: Bearer <token>`
+- 鉴权：当前 MVP 暂未启用接口鉴权；正式上线前需要补齐登录、角色和接口权限
 - 返回格式：JSON
 - 时间格式：ISO 8601
 - 主键类型：UUID 字符串
@@ -230,10 +238,10 @@
 - 拆分口径：只提取客户真实需求；确认事项、跟进记录、进度反馈、催办和负责人安排不生成任务
 
 ### `POST /requirements/ai-match-context`
-- 说明：AI 文件录入时，根据文件内容匹配客户和项目大类
+- 说明：AI 文件录入时，根据文件内容匹配客户和业务大类
 - 关键字段：`rawContent`、`fileName`
 - 返回：`customerId`、`customerName`、`projectType`、`projectTypeLabel`、`confidence`、`reason`、`mode`
-- 当前策略：优先使用 OpenAI 兼容模型从客户池和项目大类选项中匹配；模型失败时回退客户名称和项目关键词规则
+- 当前策略：优先使用 OpenAI 兼容模型从客户池和业务大类选项中匹配；模型失败时回退客户名称和分类关键词规则
 
 ### `GET /requirements/{requirementId}`
 - 说明：需求详情
@@ -393,7 +401,7 @@
 ### `POST /weekly-reports/{reportId}/send-feishu`
 - 说明：发送周报到飞书
 
-## 12. 需求报价适配
+## 12. 需求报价子项映射
 
 ### `GET /quote-mappings/workbench`
 - 说明：适配工作台数据
@@ -405,12 +413,12 @@
   - 当前报价单草稿
 
 ### `POST /quote-mappings/suggest`
-- 说明：生成需求报价适配建议
+- 说明：生成需求报价子项映射建议
 - 入参：`projectId`
 - 返回：`aiLogId`、`mappingSuggestions`
 
 ### `GET /quote-mappings/quarter-workbench`
-- 说明：按基金客户和季度加载需求报价适配工作台
+- 说明：按基金客户和季度加载需求报价子项映射工作台
 - 查询：`customerId`、`quarter`、`quotationId?`
 - 返回：季度内需求项、可选报价单、当前报价子项、已有映射、汇总指标
 
@@ -431,9 +439,11 @@
 
 ### `POST /quote-mappings`
 - 说明：手工创建映射
+- 校验：需求项必须属于项目；报价单客户必须与需求客户一致；报价子项必须属于所选报价单
 
 ### `PATCH /quote-mappings/{mappingId}`
 - 说明：修改映射
+- 校验：同创建映射；失效状态 `rejected/obsolete` 不再占用报价子项
 
 ### `DELETE /quote-mappings/{mappingId}`
 - 说明：删除映射，并同步需求项和报价子项挂靠状态
@@ -478,16 +488,16 @@
 - 说明：更新报价单头信息
 
 ### `DELETE /quotations/{quotationId}`
-- 说明：软删除报价单及报价子项
+- 说明：软删除报价单及报价子项，并清理关联报价映射和报价子项维度规则
 
 ### `POST /quotations/{quotationId}/items`
 - 说明：新增报价项
 
-### `PATCH /quotation-items/{quotationItemId}`
+### `PATCH /quotations/items/{quotationItemId}`
 - 说明：修改报价项
 
-### `DELETE /quotation-items/{quotationItemId}`
-- 说明：删除报价项
+### `DELETE /quotations/items/{quotationItemId}`
+- 说明：删除报价项，并清理关联报价映射和报价子项维度规则
 
 ### `POST /quotations/{quotationId}/submit-review`
 - 说明：提交审核
@@ -580,7 +590,7 @@
 - 说明：通用风险识别接口
 
 ### `POST /ai/quote-mapping`
-- 说明：通用需求报价适配接口
+- 说明：通用需求报价子项映射接口
 
 ### `POST /ai/quote-draft`
 - 说明：通用报价草稿建议接口
@@ -600,7 +610,7 @@
 ### `GET /enum/options`
 - 说明：获取前端所需状态枚举
 
-### `GET /health`
+### `GET /api/v1/health`
 - 说明：健康检查
 
 ## 18. 核心对象最小响应字段

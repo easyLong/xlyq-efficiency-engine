@@ -9,8 +9,10 @@ import {
   Query,
 } from '@nestjs/common';
 import { BatchConfirmQuoteMappingsDto } from './dto/batch-confirm-quote-mappings.dto';
+import { CreateQuotationItemDimensionRuleDto } from './dto/create-quotation-item-dimension-rule.dto';
 import { CreateQuoteMappingDto } from './dto/create-quote-mapping.dto';
 import { QuarterQuoteMappingDto } from './dto/quarter-quote-mapping.dto';
+import { UpdateQuotationItemDimensionRuleDto } from './dto/update-quotation-item-dimension-rule.dto';
 import { UpdateQuoteMappingDto } from './dto/update-quote-mapping.dto';
 import { QuoteMappingsService } from './quote-mappings.service';
 
@@ -68,6 +70,35 @@ export class QuoteMappingsController {
       requirementItemId,
       mappingStatus,
     );
+  }
+
+  @Get('dimension-rules')
+  findDimensionRules(
+    @Query('quotationItemId') quotationItemId?: string,
+    @Query('quotationId') quotationId?: string,
+  ) {
+    return this.quoteMappingsService.findDimensionRules(
+      quotationItemId,
+      quotationId,
+    );
+  }
+
+  @Post('dimension-rules')
+  createDimensionRule(@Body() dto: CreateQuotationItemDimensionRuleDto) {
+    return this.quoteMappingsService.createDimensionRule(dto);
+  }
+
+  @Patch('dimension-rules/:ruleId')
+  updateDimensionRule(
+    @Param('ruleId') ruleId: string,
+    @Body() dto: UpdateQuotationItemDimensionRuleDto,
+  ) {
+    return this.quoteMappingsService.updateDimensionRule(ruleId, dto);
+  }
+
+  @Delete('dimension-rules/:ruleId')
+  removeDimensionRule(@Param('ruleId') ruleId: string) {
+    return this.quoteMappingsService.removeDimensionRule(ruleId);
   }
 
   @Post()

@@ -1,37 +1,21 @@
 import { IsOptional, IsString, IsUUID } from 'class-validator';
 
-export class UpdateRequirementDto {
+export class UpdateContactContextConfigDto {
   @IsOptional()
   @IsString()
-  title?: string;
+  contactName?: string;
 
   @IsOptional()
   @IsString()
-  status?: string;
+  contactMobile?: string;
 
   @IsOptional()
   @IsString()
-  priority?: string;
+  contactEmail?: string;
 
   @IsOptional()
   @IsUUID()
   customerId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  projectId?: string;
-
-  @IsOptional()
-  @IsString()
-  rawContent?: string;
-
-  @IsOptional()
-  @IsString()
-  summary?: string;
-
-  @IsOptional()
-  @IsString()
-  businessName?: string;
 
   @IsOptional()
   @IsString()
@@ -39,5 +23,21 @@ export class UpdateRequirementDto {
 
   @IsOptional()
   @IsString()
+  businessCategory?: string;
+
+  @IsOptional()
+  @IsString()
+  secondaryCategory?: string;
+
+  @IsOptional()
+  @IsString()
   tertiaryCategory?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  remark?: string;
 }

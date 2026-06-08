@@ -1,77 +1,45 @@
 # 效能引擎
 
-## 最新 MVP 摘要（2026-05-28）
+更新时间：2026-06-04
 
-当前代码已落地一版可运行的端到端 MVP：项目经理可以登录系统，手动录入需求或通过 OpenAI 兼容模型从文件中拆分需求；系统按“一条需求对应一个任务”生成待指派任务；历史需求任务支持人工编辑和删除，便于修正 AI 拆分不准的结果；任务指派给飞书用户后，员工会收到一条带“填写资产地址”按钮的飞书消息；员工进入资产表填写 URL 后，系统按链接去重统计资产个数，并自动把任务推进到待验收状态。
+效能引擎是一套面向基金客户服务团队的项目效能系统，用来把“需求录入、任务指派、资产登记、报价子项选择、结算预览、统计分析”串成一条可追踪的数据链路。
 
-核心看板已支持按基金客户和季度筛选，统计口径从“进度百分比”调整为“资产链接个数”。系统已补齐报价单上传拆分、季度需求报价适配、结算单实时预览和管理驾驶舱 Top 指标；结算口径按“已确认报价子项单价 × 任务资产个数”计算。飞书消息投递已验证可用；飞书在线表格创建依赖应用权限 `drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create`，权限不足时系统会降级到本地资产表。若员工需要从飞书移动端访问本地兜底资产表，请将 `APP_PUBLIC_BASE_URL` 配置为公网可访问地址。
+当前仓库已落地可运行 MVP：后端为 NestJS + TypeORM + MySQL，前端暂时是后端托管的静态页面。
 
-最近验证命令：
+## 当前能力
 
-```bash
-cd backend
-npm run build
-npm run test -- --runInBand
-```
+- 管理端页面：`http://localhost:3000/`
+- 后端 API：`http://localhost:3000/api/v1`
+- 健康检查：`GET /api/v1/health`
+- 员工本地兜底资产表：`GET /asset-sheet.html`
+- 当前默认数据库：`ops_platform`
 
-效能引擎是一套面向项目制团队的 AI 项目管理软件。当前仓库已落地后端 MVP，核心目标是把客户需求收集、任务分配、进度跟进、在线资产表、飞书通知、报价适配和财务结算串成可追踪的业务闭环。
-
-项目的关键业务特点是：项目部按需求和任务推进，财务侧按报价单结算。因此系统需要在“需求项、任务、资产地址、报价项”之间建立可审核、可追踪、可调整的映射关系。
-
-## 当前状态
-
-- 后端技术栈：NestJS + TypeORM + MySQL。
-- 飞书能力：企业自建应用消息、机器人消息、通讯录同步、事件回调、同步日志。
-- 消息机制：站内消息、飞书个人消息、飞书群机器人消息、投递状态记录。
-- MVP 主链路：手工/AI 需求录入 -> 自动生成任务 -> 飞书员工指派 -> 在线资产表开通 -> 员工填写资产地址 -> 报价子项适配 -> 结算预览与统计分析。
-- 已验证：`npm run build`、`npm run test -- --runInBand`。
-
-详细实现状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)。
-
-## 文档导航
-
-建议先看“状态与范围”，再看产品、数据库和接口设计。
-
-| 文档 | 用途 |
-| --- | --- |
-| [PROJECT_STATUS.md](PROJECT_STATUS.md) | 当前实现状态、已完成功能、待办和验证结果 |
-| [MVP_SCOPE.md](MVP_SCOPE.md) | 第一版最小 MVP 范围和验收闭环 |
-| [NOTIFICATION_RULES.md](NOTIFICATION_RULES.md) | 消息通知规则、触发场景和渠道策略 |
-| [PROJECT_PLAN.md](PROJECT_PLAN.md) | 项目整体规划、业务目标、MVP 范围、实施路线 |
-| [PRD.md](PRD.md) | 产品需求文档，包含角色、场景、功能范围和业务流程 |
-| [DB_SCHEMA.md](DB_SCHEMA.md) | 数据库表结构设计说明 |
-| [mysql_schema.sql](mysql_schema.sql) | MySQL 建库建表 SQL |
-| [API_SPEC.md](API_SPEC.md) | 后端 REST API 清单 |
-| [DIAGRAMS.md](DIAGRAMS.md) | ER 图、模块关系图、核心流程图 |
-| [backend/README.md](backend/README.md) | 后端服务启动、环境变量和接口模块说明 |
-| [pm_dashboard_prototype.html](pm_dashboard_prototype.html) | 项目管理工作台 HTML 原型 |
-| [pm_workflow_diagram.svg](pm_workflow_diagram.svg) | 项目流程图 SVG |
-
-## 最小 MVP 主线
+核心闭环：
 
 ```text
-飞书员工同步 / 手工用户维护
-  -> 手工录入客户需求
-  -> 拆分并确认需求项
-  -> 从需求项生成任务
-  -> 分配任务给员工
-  -> 自动开通在线资产表和权限状态
-  -> 员工进入资产表填写资产地址
-  -> 按季度适配报价单子项
-  -> 生成结算预览和统计分析
+对接人/基金/平台/业务分类
+  -> 录入需求并自动生成任务
+  -> 指派员工并发送飞书消息
+  -> 员工填写资产地址
+  -> 导入报价单并生成报价子项
+  -> 历史需求任务中选择报价子项
+  -> 按资产个数 × 已确认报价单价生成结算预览
+  -> 统计分析按基金、对接人、平台、分类、员工过滤
 ```
 
-## 核心模块
+## 关键业务维度
 
-- 客户与项目：客户档案、项目生命周期、项目负责人。
-- 需求管理：需求录入、需求项拆分、确认、变更提醒。
-- 任务管理：任务 CRUD、指派、状态更新、看板、在线资产表入口。
-- 资产表同步：员工只填写资产地址，系统同步后用于统计和结算挂靠。
-- 工时与进度：工时记录、任务实际工时回写、逾期扫描。
-- 消息通知：站内消息、飞书应用消息、飞书机器人消息。
-- 飞书集成：配置检测、通讯录同步、应用消息、机器人消息、事件回调、同步日志。
-- 报价适配：报价单文本导入、细粒度报价子项解析、需求项与报价项映射、待确认差异。
-- 结算与报表：按基金/季度生成结算预览，展示需求数、资产数、员工完成 Top、基金需求 Top 和结算金额 Top。
+需求与后续筛选统一使用这些维度：
+
+- 基金客户
+- 对接人
+- 业务平台：招行、工行、交行、理财通、蚂蚁、天天基金
+- 业务大类：设计、文案、运营、社区
+- 二级分类
+- 三级分类
+- 员工
+
+报价单本身只选择基金客户和报价文件；报价合同内可以覆盖多个业务大类。报价子项通过“报价子项维度规则”和人工选择挂到具体需求任务。
 
 ## 快速启动
 
@@ -82,46 +50,70 @@ copy .env.example .env
 npm run start:dev
 ```
 
-默认服务端口为 `3000`，健康检查：
-
-```text
-GET http://localhost:3000/api/v1/health
-```
-
-## 数据库初始化
+生产方式启动当前构建：
 
 ```bash
-mysql -u <user> -p < mysql_schema.sql
+cd backend
+npm run build
+npm run start:prod
 ```
 
-或使用脚本：
+常用验证：
 
 ```bash
-# 脚本读取 DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME
+cd backend
+npm run build
+npm test -- --runInBand
+npm run test:e2e -- --runInBand
+```
+
+## 数据库
+
+建表脚本：
+
+```bash
+mysql -u <user> -p ops_platform < mysql_schema.sql
+```
+
+初始化/种子脚本读取环境变量：
+
+```bash
 python scripts/deploy_mysql_schema.py
 python scripts/seed_mysql_base_data.py
 python scripts/seed_app_demo_data.py
 ```
 
-## 飞书配置
+跨库迁移项目相关表：
 
-在 `backend/.env` 中配置：
-
-```env
-FEISHU_APP_ID=
-FEISHU_APP_SECRET=
-FEISHU_BOT_WEBHOOK_URL=
-FEISHU_EVENT_VERIFICATION_TOKEN=
-FEISHU_DEFAULT_DEPARTMENT_ID=0
+```bash
+cd backend
+npm run migrate:project-tables -- --help
+npm run migrate:project-tables -- --execute
 ```
 
-飞书企业自建应用需要开通通讯录读取和消息发送相关权限。员工同步后，本地用户会通过 `feishu_open_id` 与飞书员工关联，用于任务通知和个人消息投递。
+迁移脚本默认读取 `backend/.env` 的源库配置，目标库通过 `TARGET_DB_NAME` 指定。
 
-## 推荐阅读顺序
+## 文档导航
 
-1. [PROJECT_STATUS.md](PROJECT_STATUS.md)
-2. [MVP_SCOPE.md](MVP_SCOPE.md)
-3. [NOTIFICATION_RULES.md](NOTIFICATION_RULES.md)
-4. [API_SPEC.md](API_SPEC.md)
-5. [DB_SCHEMA.md](DB_SCHEMA.md)
-6. [backend/README.md](backend/README.md)
+| 文档 | 用途 |
+| --- | --- |
+| [PROJECT_STATUS.md](PROJECT_STATUS.md) | 当前实现状态、验证结果、已知限制 |
+| [DATA_FLOW.md](DATA_FLOW.md) | 需求、任务、报价、结算的数据链路和一致性规则 |
+| [MVP_SCOPE.md](MVP_SCOPE.md) | MVP 范围和验收闭环 |
+| [API_SPEC.md](API_SPEC.md) | 当前主要 API 清单和联调说明 |
+| [DB_SCHEMA.md](DB_SCHEMA.md) | 数据库表结构设计说明 |
+| [mysql_schema.sql](mysql_schema.sql) | MySQL 建表 SQL |
+| [DIAGRAMS.md](DIAGRAMS.md) | ER 图、模块关系图、核心流程图 |
+| [backend/README.md](backend/README.md) | 后端启动、环境变量、脚本和模块说明 |
+| [NOTIFICATION_RULES.md](NOTIFICATION_RULES.md) | 消息通知规则 |
+| [FEISHU_INTEGRATION_RUNBOOK.md](FEISHU_INTEGRATION_RUNBOOK.md) | 飞书集成配置和排障 |
+| [PROJECT_PLAN.md](PROJECT_PLAN.md) | 产品规划文档 |
+| [PRD.md](PRD.md) | 产品需求文档 |
+
+## 当前已知限制
+
+- 登录仍是 MVP 本地登录，没有完整账号密码、RBAC 和接口鉴权。
+- 管理端前端仍是单个静态 HTML，后续应工程化为 Vue/React 项目。
+- 飞书在线表格依赖企业应用权限；权限不足时自动降级到本地资产表。
+- 结算单目前是实时预览，还没有正式结算单持久化、审批和导出流程。
+- 定时扫描类通知当前保留手动触发接口，尚未接入调度器。

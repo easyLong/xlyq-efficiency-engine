@@ -18,6 +18,24 @@ export class RequirementEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 32 })
   source_type!: string;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  source_ref_id!: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  business_name!: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  business_platform!: string | null;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  business_category!: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  secondary_category!: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  tertiary_category!: string | null;
+
   @Column({ type: 'varchar', length: 32 })
   status!: string;
 

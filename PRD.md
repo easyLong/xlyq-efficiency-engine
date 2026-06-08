@@ -1,12 +1,14 @@
 # 效能引擎 PRD
 
+> 说明：本文档保留 V1 产品需求和长期目标，当前 MVP 已实现范围请以 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[MVP_SCOPE.md](MVP_SCOPE.md) 和 [DATA_FLOW.md](DATA_FLOW.md) 为准。
+
 ## 1. 文档信息
 
 - 产品名称：效能引擎
 - 文档类型：产品需求文档（PRD）
 - 当前版本：V1.0
 - 文档状态：可用于需求评审 / 原型细化 / 技术设计
-- 关联文档：[PROJECT_PLAN.md](C:/Code/xlyq-efficiency-engine/PROJECT_PLAN.md)
+- 关联文档：[PROJECT_PLAN.md](PROJECT_PLAN.md)
 
 ## 2. 产品背景
 

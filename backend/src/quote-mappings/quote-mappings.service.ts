@@ -9,13 +9,16 @@ import { In, Repository } from 'typeorm';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { WorklogEntity } from '../common/entities/worklog.entity';
 import { QuotationEntity } from '../quotations/entities/quotation.entity';
+import { QuotationItemDimensionRuleEntity } from '../quotations/entities/quotation-item-dimension-rule.entity';
 import { QuotationItemEntity } from '../quotations/entities/quotation-item.entity';
 import { RequirementQuotationMappingEntity } from '../quotations/entities/requirement-quotation-mapping.entity';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
 import { RequirementEntity } from '../requirements/entities/requirement.entity';
 import { BatchConfirmQuoteMappingsDto } from './dto/batch-confirm-quote-mappings.dto';
+import { CreateQuotationItemDimensionRuleDto } from './dto/create-quotation-item-dimension-rule.dto';
 import { CreateQuoteMappingDto } from './dto/create-quote-mapping.dto';
 import { QuarterQuoteMappingDto } from './dto/quarter-quote-mapping.dto';
+import { UpdateQuotationItemDimensionRuleDto } from './dto/update-quotation-item-dimension-rule.dto';
 import { UpdateQuoteMappingDto } from './dto/update-quote-mapping.dto';
 
 @Injectable()
@@ -31,6 +34,8 @@ export class QuoteMappingsService {
     private readonly quotationsRepository: Repository<QuotationEntity>,
     @InjectRepository(QuotationItemEntity)
     private readonly quotationItemsRepository: Repository<QuotationItemEntity>,
+    @InjectRepository(QuotationItemDimensionRuleEntity)
+    private readonly dimensionRulesRepository: Repository<QuotationItemDimensionRuleEntity>,
     @InjectRepository(WorklogEntity)
     private readonly worklogsRepository: Repository<WorklogEntity>,
     @InjectRepository(AiExecutionLogEntity)
@@ -159,6 +164,7 @@ export class QuoteMappingsService {
       selectedQuotation: context.selectedQuotation,
       requirementItems: context.requirementItems,
       quotationItems: context.quotationItems,
+      dimensionRules: context.dimensionRules,
       mappings: context.mappings,
       rows,
       summary: {
@@ -255,7 +261,12 @@ export class QuoteMappingsService {
       const candidates = context.quotationItems
         .map((quotationItem) => ({
           quotationItem,
-          score: this.scoreQuoteMapping(item, quotationItem),
+          score: this.scoreQuoteMapping(
+            item,
+            requirement,
+            quotationItem,
+            context.rulesByQuotationItemId.get(quotationItem.id) ?? [],
+          ),
         }))
         .sort((a, b) => b.score - a.score);
       const best =
@@ -340,17 +351,23 @@ export class QuoteMappingsService {
     return this.mappingsRepository.find({
       where,
       order: { created_at: 'DESC' },
-      take: 200,
+      take: 1000,
     });
   }
 
   async create(dto: CreateQuoteMappingDto) {
+    const scope = await this.validateMappingScope({
+      projectId: dto.projectId,
+      requirementItemId: dto.requirementItemId,
+      quotationId: dto.quotationId,
+      quotationItemId: dto.quotationItemId,
+    });
     const mapping = this.mappingsRepository.create({
       id: randomUUID(),
       project_id: dto.projectId,
       requirement_item_id: dto.requirementItemId,
-      quotation_id: dto.quotationId ?? null,
-      quotation_item_id: dto.quotationItemId ?? null,
+      quotation_id: scope.quotationId,
+      quotation_item_id: scope.quotationItemId,
       mapping_status: dto.mappingStatus ?? 'pending_confirm',
       mapping_type: dto.mappingType ?? 'manual',
       matched_ratio: dto.matchedRatio ?? null,
@@ -362,15 +379,113 @@ export class QuoteMappingsService {
     return saved;
   }
 
+  async findDimensionRules(quotationItemId?: string, quotationId?: string) {
+    const query = this.dimensionRulesRepository
+      .createQueryBuilder('rule')
+      .leftJoin(
+        'quotation_items',
+        'quotationItem',
+        'quotationItem.id = rule.quotation_item_id',
+      )
+      .where('rule.deleted_at IS NULL');
+    if (quotationItemId) {
+      query.andWhere('rule.quotation_item_id = :quotationItemId', {
+        quotationItemId,
+      });
+    }
+    if (quotationId) {
+      query.andWhere('quotationItem.quotation_id = :quotationId', {
+        quotationId,
+      });
+    }
+    return query
+      .orderBy('rule.priority', 'DESC')
+      .addOrderBy('rule.created_at', 'DESC')
+      .getMany();
+  }
+
+  async createDimensionRule(dto: CreateQuotationItemDimensionRuleDto) {
+    await this.ensureQuotationItem(dto.quotationItemId);
+    return this.dimensionRulesRepository.save(
+      this.dimensionRulesRepository.create({
+        quotation_item_id: dto.quotationItemId,
+        customer_id: this.emptyToNull(dto.customerId),
+        business_platform: this.emptyToNull(dto.businessPlatform),
+        business_category: this.emptyToNull(dto.businessCategory),
+        secondary_category: this.emptyToNull(dto.secondaryCategory),
+        tertiary_category: this.emptyToNull(dto.tertiaryCategory),
+        priority: dto.priority ?? 100,
+        status: dto.status ?? 'active',
+        remark: this.emptyToNull(dto.remark),
+      }),
+    );
+  }
+
+  async updateDimensionRule(
+    id: string,
+    dto: UpdateQuotationItemDimensionRuleDto,
+  ) {
+    const rule = await this.dimensionRulesRepository.findOne({ where: { id } });
+    if (!rule) {
+      throw new NotFoundException('Quotation item dimension rule not found');
+    }
+    if (dto.quotationItemId) {
+      await this.ensureQuotationItem(dto.quotationItemId);
+    }
+    Object.assign(rule, {
+      quotation_item_id: dto.quotationItemId ?? rule.quotation_item_id,
+      customer_id:
+        dto.customerId !== undefined
+          ? this.emptyToNull(dto.customerId)
+          : rule.customer_id,
+      business_platform:
+        dto.businessPlatform !== undefined
+          ? this.emptyToNull(dto.businessPlatform)
+          : rule.business_platform,
+      business_category:
+        dto.businessCategory !== undefined
+          ? this.emptyToNull(dto.businessCategory)
+          : rule.business_category,
+      secondary_category:
+        dto.secondaryCategory !== undefined
+          ? this.emptyToNull(dto.secondaryCategory)
+          : rule.secondary_category,
+      tertiary_category:
+        dto.tertiaryCategory !== undefined
+          ? this.emptyToNull(dto.tertiaryCategory)
+          : rule.tertiary_category,
+      priority: dto.priority ?? rule.priority,
+      status: dto.status ?? rule.status,
+      remark:
+        dto.remark !== undefined ? this.emptyToNull(dto.remark) : rule.remark,
+    });
+    return this.dimensionRulesRepository.save(rule);
+  }
+
+  async removeDimensionRule(id: string) {
+    const rule = await this.dimensionRulesRepository.findOne({ where: { id } });
+    if (!rule) {
+      throw new NotFoundException('Quotation item dimension rule not found');
+    }
+    await this.dimensionRulesRepository.softDelete(id);
+    return { ruleId: id, success: true };
+  }
+
   async update(id: string, dto: UpdateQuoteMappingDto) {
     const mapping = await this.mappingsRepository.findOne({ where: { id } });
     if (!mapping) {
       throw new NotFoundException('Quote mapping not found');
     }
+    const scope = await this.validateMappingScope({
+      projectId: mapping.project_id,
+      requirementItemId: mapping.requirement_item_id,
+      quotationId: dto.quotationId ?? mapping.quotation_id,
+      quotationItemId: dto.quotationItemId ?? mapping.quotation_item_id,
+    });
     const previousQuotationItemId = mapping.quotation_item_id;
     Object.assign(mapping, {
-      quotation_id: dto.quotationId ?? mapping.quotation_id,
-      quotation_item_id: dto.quotationItemId ?? mapping.quotation_item_id,
+      quotation_id: scope.quotationId,
+      quotation_item_id: scope.quotationItemId,
       mapping_status: dto.mappingStatus ?? mapping.mapping_status,
       mapping_type: dto.mappingType ?? mapping.mapping_type,
       matched_ratio: dto.matchedRatio ?? mapping.matched_ratio,
@@ -491,6 +606,26 @@ export class QuoteMappingsService {
           take: 500,
         })
       : [];
+    const quotationItemIds = quotationItems.map((item) => item.id);
+    const dimensionRules = quotationItemIds.length
+      ? await this.dimensionRulesRepository.find({
+          where: {
+            quotation_item_id: In(quotationItemIds),
+            status: 'active',
+          },
+          order: { priority: 'DESC', created_at: 'DESC' },
+          take: 1000,
+        })
+      : [];
+    const rulesByQuotationItemId = new Map<
+      string,
+      QuotationItemDimensionRuleEntity[]
+    >();
+    for (const rule of dimensionRules) {
+      const current = rulesByQuotationItemId.get(rule.quotation_item_id) ?? [];
+      current.push(rule);
+      rulesByQuotationItemId.set(rule.quotation_item_id, current);
+    }
     const requirementItemIds = requirementItems.map((item) => item.id);
     const mappings = requirementItemIds.length
       ? await this.mappingsRepository.find({
@@ -517,8 +652,23 @@ export class QuoteMappingsService {
       quotations,
       selectedQuotation,
       quotationItems,
+      dimensionRules,
+      rulesByQuotationItemId,
       mappings,
     };
+  }
+
+  private async ensureQuotationItem(id: string) {
+    const item = await this.quotationItemsRepository.findOne({ where: { id } });
+    if (!item) {
+      throw new NotFoundException('Quotation item not found');
+    }
+    return item;
+  }
+
+  private emptyToNull(value?: string | null) {
+    const trimmed = String(value ?? '').trim();
+    return trimmed ? trimmed : null;
   }
 
   private async syncRequirementQuoteScopeStatus(requirementItemId: string) {
@@ -548,15 +698,84 @@ export class QuoteMappingsService {
     const mappings = await this.mappingsRepository.find({
       where: { quotation_item_id: quotationItemId },
     });
-    if (mappings.some((mapping) => mapping.mapping_status === 'matched')) {
+    const activeMappings = mappings.filter((mapping) =>
+      this.isActiveQuoteMapping(mapping),
+    );
+    if (
+      activeMappings.some((mapping) => mapping.mapping_status === 'matched')
+    ) {
       item.match_status = 'confirmed';
-    } else if (mappings.length > 0) {
+    } else if (activeMappings.length > 0) {
       item.match_status = 'matched';
     } else {
       item.match_status =
         Number(item.line_amount || 0) > 0 ? 'unmatched' : 'price_missing';
     }
     await this.quotationItemsRepository.save(item);
+  }
+
+  private async validateMappingScope(input: {
+    projectId: string;
+    requirementItemId: string;
+    quotationId?: string | null;
+    quotationItemId?: string | null;
+  }) {
+    const requirementItem = await this.requirementItemsRepository.findOne({
+      where: { id: input.requirementItemId },
+    });
+    if (!requirementItem) {
+      throw new NotFoundException('Requirement item not found');
+    }
+    const requirement = await this.requirementsRepository.findOne({
+      where: { id: requirementItem.requirement_id },
+    });
+    if (!requirement) {
+      throw new NotFoundException('Requirement not found');
+    }
+    if (requirement.project_id !== input.projectId) {
+      throw new BadRequestException('Requirement item does not belong to project');
+    }
+
+    let quotationItem: QuotationItemEntity | null = null;
+    if (input.quotationItemId) {
+      quotationItem = await this.quotationItemsRepository.findOne({
+        where: { id: input.quotationItemId },
+      });
+      if (!quotationItem) {
+        throw new NotFoundException('Quotation item not found');
+      }
+    }
+
+    const quotationId = input.quotationId ?? quotationItem?.quotation_id ?? null;
+    let quotation: QuotationEntity | null = null;
+    if (quotationId) {
+      quotation = await this.quotationsRepository.findOne({
+        where: { id: quotationId },
+      });
+      if (!quotation) {
+        throw new NotFoundException('Quotation not found');
+      }
+    }
+
+    if (
+      quotationItem &&
+      quotationId &&
+      quotationItem.quotation_id !== quotationId
+    ) {
+      throw new BadRequestException('Quotation item does not belong to quotation');
+    }
+    if (quotation && quotation.customer_id !== requirement.customer_id) {
+      throw new BadRequestException('Quotation customer does not match requirement customer');
+    }
+
+    return {
+      quotationId,
+      quotationItemId: quotationItem?.id ?? input.quotationItemId ?? null,
+    };
+  }
+
+  private isActiveQuoteMapping(mapping: RequirementQuotationMappingEntity) {
+    return !['rejected', 'obsolete'].includes(mapping.mapping_status);
   }
 
   private resolveQuoteScopeStatus(
@@ -602,7 +821,9 @@ export class QuoteMappingsService {
 
   private scoreQuoteMapping(
     requirementItem: RequirementItemEntity,
+    requirement: RequirementEntity,
     quotationItem: QuotationItemEntity,
+    rules: QuotationItemDimensionRuleEntity[] = [],
   ) {
     const requirementText = [
       requirementItem.item_title,
@@ -614,8 +835,9 @@ export class QuoteMappingsService {
     );
     const requirementTokens = this.textTokens(requirementText);
     const quotationTokens = this.textTokens(quotationText);
+    const dimensionScore = this.scoreDimensionRules(requirement, rules);
     if (requirementTokens.size === 0 || quotationTokens.size === 0) {
-      return 0;
+      return dimensionScore;
     }
 
     const intersection = [...requirementTokens].filter((token) =>
@@ -626,7 +848,56 @@ export class QuoteMappingsService {
       requirementText,
       quotationText,
     );
-    return Math.min(1, intersection / union + keywordBoost);
+    const textScore = intersection / union + keywordBoost;
+    return Math.min(1, Math.max(textScore, dimensionScore + textScore * 0.2));
+  }
+
+  private scoreDimensionRules(
+    requirement: RequirementEntity,
+    rules: QuotationItemDimensionRuleEntity[],
+  ) {
+    if (!rules.length) {
+      return 0;
+    }
+    const snapshot = {
+      customer_id: requirement.customer_id,
+      business_platform: requirement.business_platform,
+      business_category: requirement.business_category,
+      secondary_category: requirement.secondary_category,
+      tertiary_category: requirement.tertiary_category,
+    };
+    const weights = {
+      customer_id: 0.15,
+      business_platform: 0.15,
+      business_category: 0.25,
+      secondary_category: 0.25,
+      tertiary_category: 0.3,
+    };
+    return rules.reduce((bestScore, rule) => {
+      let score = 0.18;
+      let specified = 0;
+      for (const key of Object.keys(weights) as Array<keyof typeof weights>) {
+        const ruleValue = this.normalizeDimensionValue(rule[key]);
+        if (!ruleValue) {
+          continue;
+        }
+        specified += 1;
+        const requirementValue = this.normalizeDimensionValue(snapshot[key]);
+        if (requirementValue !== ruleValue) {
+          return bestScore;
+        }
+        score += weights[key];
+      }
+      if (specified === 0) {
+        return bestScore;
+      }
+      score += Math.min(0.07, Math.max(0, rule.priority || 0) / 2000);
+      return Math.max(bestScore, Math.min(1, score));
+    }, 0);
+  }
+
+  private normalizeDimensionValue(value?: string | null) {
+    return String(value ?? '').trim().toLowerCase();
   }
 
   private textTokens(value: string) {

@@ -1,5 +1,7 @@
 # 效能引擎项目规划
 
+> 说明：本文档保留早期产品规划和阶段路线，部分“当前阶段判断”已经被 MVP 实现推进所覆盖。当前真实实现状态请以 [PROJECT_STATUS.md](PROJECT_STATUS.md) 和 [DATA_FLOW.md](DATA_FLOW.md) 为准。
+
 ## 1. 项目概述
 
 ### 1.1 项目定位
