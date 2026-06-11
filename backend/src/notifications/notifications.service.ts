@@ -15,9 +15,11 @@ import { UserEntity } from '../users/entities/user.entity';
 import { ScanFeishuSyncFailuresDto } from './dto/scan-feishu-sync-failures.dto';
 import { ScanResultFileMissingDto } from './dto/scan-result-file-missing.dto';
 import { ScanTaskDeadlinesDto } from './dto/scan-task-deadlines.dto';
+import { ScanTaskProgressFeedbackDto } from './dto/scan-task-progress-feedback.dto';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { SendWorklogRemindersDto } from './dto/send-worklog-reminders.dto';
 import { NotificationMessageEntity } from './entities/notification-message.entity';
+import { createHmac } from 'node:crypto';
 
 @Injectable()
 export class NotificationsService {
@@ -90,6 +92,7 @@ export class NotificationsService {
         result.feishu_app = await this.sendFeishuAppMessage(message, {
           actionUrl: dto.actionUrl,
           actionText: dto.actionText,
+          actions: dto.actions,
         });
       } catch (error) {
         const errorMessage =
@@ -139,10 +142,12 @@ export class NotificationsService {
       title: `新任务：${task.task_name}`,
       content:
         message ??
-        `你收到一个新任务 ${task.task_no}，请按消息中的资产表入口填写资产地址。`,
+        `你收到一个新任务 ${task.task_no}，请点击下方按钮填写项目资产。`,
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
+      actionUrl: this.buildTaskAssetSheetUrl(task),
+      actionText: '填写项目资产',
     });
   }
 
@@ -177,16 +182,13 @@ export class NotificationsService {
         `**截止时间**：${this.formatDate(task.planned_end_at)}`,
         `**优先级**：${this.priorityLabel(task.priority)}`,
         `**任务执行人**：${assignee?.display_name ?? '-'}`,
-        directoryUrl
-          ? `点击进入登记页：${directoryUrl}`
-          : '请在任务详情中查看登记页。',
-        '登记页支持保存多张图片和一个交付链接，系统会同步到统计分析。',
+        directoryUrl ? '请点击下方按钮填写项目资产。' : '请在任务详情中填写项目资产。',
       ].join('\n'),
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
-      actionUrl: directoryUrl ?? undefined,
-      actionText: '填写图片和链接',
+      actionUrl: directoryUrl ?? this.buildTaskAssetSheetUrl(task),
+      actionText: '填写项目资产',
     });
   }
 
@@ -231,11 +233,13 @@ export class NotificationsService {
       content: [
         `任务 ${task.task_no} 验收未通过，需要按反馈修改后重新提交。`,
         `退回原因：${reason}`,
-        '请修改在线资产表中的资产地址或任务内容后重新提交。',
+        '请点击下方按钮修改项目资产，完成后重新提交交付。',
       ].join('\n'),
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
+      actionUrl: this.buildTaskAssetSheetUrl(task),
+      actionText: '继续修改',
     });
   }
 
@@ -341,6 +345,61 @@ export class NotificationsService {
       reason: 'Worklog reminders are excluded from MVP notification v1.',
       scannedTaskCount: 0,
       reminderCount: 0,
+    };
+  }
+
+  async scanTaskProgressFeedback(dto: ScanTaskProgressFeedbackDto) {
+    const daysAfterStart = Number(dto.daysAfterStart ?? 2);
+    const startedBefore = new Date(
+      Date.now() - daysAfterStart * 24 * 60 * 60 * 1000,
+    );
+    const qb = this.tasksRepository
+      .createQueryBuilder('task')
+      .where('task.assignee_user_id IS NOT NULL')
+      .andWhere('task.created_at <= :startedBefore', { startedBefore })
+      .andWhere('task.status IN (:...statuses)', {
+        statuses: ['todo', 'in_progress', 'blocked'],
+      });
+
+    if (dto.projectId) {
+      qb.andWhere('task.project_id = :projectId', { projectId: dto.projectId });
+    }
+
+    const tasks = await qb.orderBy('task.created_at', 'ASC').getMany();
+    let notificationCount = 0;
+    let skippedDuplicateCount = 0;
+
+    for (const task of tasks) {
+      const existing = await this.notificationsRepository.count({
+        where: {
+          recipient_user_id: task.assignee_user_id!,
+          object_type: 'task_progress_feedback',
+          object_id: task.id,
+        },
+      });
+      if (existing > 0) {
+        skippedDuplicateCount += 1;
+        continue;
+      }
+
+      const messages = await this.sendToUsers([task.assignee_user_id!], {
+        title: `请更新项目资产：${task.task_name}`,
+        content: [
+          `任务 ${task.task_no} 已开始超过 ${daysAfterStart} 天，请进入项目资产页更新进度或提交交付。`,
+        ].join('\n'),
+        objectType: 'task_progress_feedback',
+        objectId: task.id,
+        channels: ['in_app', 'feishu_app'],
+        actionUrl: this.buildTaskAssetSheetUrl(task),
+        actionText: '填写项目资产',
+      });
+      notificationCount += messages.length;
+    }
+
+    return {
+      scannedTaskCount: tasks.length,
+      skippedDuplicateCount,
+      notificationCount,
     };
   }
 
@@ -462,9 +521,41 @@ export class NotificationsService {
     return `${value.getFullYear()}/${String(value.getMonth() + 1).padStart(2, '0')}/${String(value.getDate()).padStart(2, '0')}`;
   }
 
+  private buildTaskProgressFeedbackUrl(task: TaskEntity) {
+    const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
+    const token = this.taskAccessToken(task);
+    return `${baseUrl.replace(/\/$/, '')}/task-progress.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}&token=${encodeURIComponent(token)}`;
+  }
+
+  private buildTaskAssetSheetUrl(task: TaskEntity) {
+    const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
+    const token = this.taskAccessToken(task);
+    return `${baseUrl.replace(/\/$/, '')}/asset-sheet.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}&token=${encodeURIComponent(token)}`;
+  }
+
+  private taskAccessToken(task: TaskEntity) {
+    const secret =
+      process.env.TASK_ACCESS_TOKEN_SECRET ??
+      process.env.APP_SECRET ??
+      process.env.DB_PASSWORD ??
+      'xlyq-efficiency-engine-local-secret';
+    return createHmac('sha256', secret)
+      .update(`${task.id}:${task.task_no}`)
+      .digest('hex');
+  }
+
   private async sendFeishuAppMessage(
     message: NotificationMessageEntity,
-    action?: { actionUrl?: string; actionText?: string },
+    action?: {
+      actionUrl?: string;
+      actionText?: string;
+      actions?: Array<{
+        text: string;
+        url?: string;
+        type?: string;
+        value?: Record<string, unknown>;
+      }>;
+    },
   ) {
     if (!message.recipient_user_id) {
       return { status: 'skipped', reason: 'recipientUserId is empty' };
@@ -493,6 +584,7 @@ export class NotificationsService {
       text: message.content,
       actionUrl: action?.actionUrl,
       actionText: action?.actionText,
+      actions: action?.actions,
       objectType: message.object_type ?? undefined,
       objectId: message.object_id ?? undefined,
     });

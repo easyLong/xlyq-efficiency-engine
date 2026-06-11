@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
@@ -196,10 +196,10 @@
       </div>
 
       <div class="panel save-bar">
-        <div id="saveStatus" class="status">添加图片或链接后点击保存。</div>
+        <div id="saveStatus" class="status">添加图片或交付链接后提交交付，提交后进入管理者验收。</div>
         <div>
           <button class="secondary" onclick="reloadContext()">刷新</button>
-          <button id="saveButton" onclick="saveDelivery()">保存并同步统计</button>
+          <button id="saveButton" onclick="saveDelivery()">提交交付</button>
         </div>
       </div>
     </section>
@@ -436,13 +436,17 @@
       const draft = loadDraft();
       const imageUrls = unique(draft.imageUrls.map(url => url.trim()).filter(Boolean));
       const linkUrl = draft.linkUrl.trim();
+      if (!imageUrls.length && !linkUrl) {
+        setStatus("请至少上传一张图片或填写一个交付链接后再提交交付。", "error");
+        return;
+      }
       if (imageUrls.length > maxImageCount || imageUrls.some(url => url.length > maxUrlLength) || linkUrl.length > maxUrlLength) {
         setStatus(`最多 ${maxImageCount} 张图片，且每个链接不能超过 ${maxUrlLength} 个字符。`, "error");
         return;
       }
       const button = document.getElementById("saveButton");
       button.disabled = true;
-      setStatus("正在同步到统计分析...", "");
+      setStatus("正在提交交付...", "");
       try {
         const response = await fetch(taskAssetApi("local-assets"), {
           method: "POST",
@@ -453,12 +457,22 @@
         if (!response.ok) throw new Error(result.message || "同步失败");
         localStorage.setItem(storageKey, JSON.stringify(normalizeDraft({ imageUrls, linkUrl })));
         renderAssets();
-        setStatus(`已保存 ${imageUrls.length} 张图片${linkUrl ? "和 1 个链接" : ""}，统计分析将显示 ${result.assetCount || 0} 个资产。`, "ok");
+        context = { ...(context || {}), task: result.task || context?.task };
+        renderTaskDetails();
+        setStatus(`已提交 ${imageUrls.length} 张图片${linkUrl ? "和 1 个链接" : ""}，任务已进入待验收。页面即将自动关闭。`, "ok");
+        closeAfterSubmit();
       } catch (error) {
-        setStatus(`已保存在当前浏览器，但同步后台失败：${error.message}`, "error");
+        setStatus(`提交失败：${error.message}`, "error");
       } finally {
         button.disabled = false;
       }
+    }
+
+    function closeAfterSubmit() {
+      setTimeout(() => {
+        window.close();
+        setStatus("已提交成功，可以关闭当前页面。", "ok");
+      }, 900);
     }
 
     function setupUploadInteractions() {

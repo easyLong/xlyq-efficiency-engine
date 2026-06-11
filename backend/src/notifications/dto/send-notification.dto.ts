@@ -1,10 +1,31 @@
 import {
   IsArray,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class NotificationActionDto {
+  @IsString()
+  @IsNotEmpty()
+  text!: string;
+
+  @IsOptional()
+  @IsString()
+  url?: string;
+
+  @IsOptional()
+  @IsObject()
+  value?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
+}
 
 export class SendNotificationDto {
   @IsOptional()
@@ -43,4 +64,10 @@ export class SendNotificationDto {
   @IsOptional()
   @IsString()
   actionText?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NotificationActionDto)
+  actions?: NotificationActionDto[];
 }

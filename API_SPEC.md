@@ -33,6 +33,7 @@
 - `POST /api/v1/integrations/feishu/contacts/sync-users`：同步飞书员工到本地用户。
 - `GET /api/v1/integrations/feishu/sync-logs`：查看飞书消息、表格创建、授权、同步日志。
 - `POST /api/v1/notifications/result-file-missing-scan`：扫描缺失资产 URL 的任务并提醒负责人。
+- `POST /api/v1/notifications/task-progress-feedback-scan`：扫描开始超过 2 天且未完成的已指派任务，提醒员工进入反馈页选择“进行中 / 已完成”。
 
 ### 报价、适配与结算
 
@@ -342,6 +343,15 @@
 - 查询：`token`
 - 入参：`assets[]`、`imageUrls[]`、`linkUrl`
 - 约束：图片最多 80 张，资产 URL 最多 200 条，单个 URL 最长 500 字符；最终交付链接不计入结算资产个数
+
+### `GET /tasks/{taskId}/progress-feedback/context`
+- 说明：员工任务进度反馈页加载任务上下文
+- 查询：`token`
+
+### `POST /tasks/{taskId}/progress-feedback/status`
+- 说明：员工从消息进入反馈页后选择任务进度
+- 查询：`token`
+- 入参：`status`，可选 `in_progress`、`completed`
 
 ### `POST /tasks/{taskId}/result-files`
 - 说明：兼容旧版手动登记结果文件流程，当前 MVP 主链路不再使用

@@ -14,6 +14,7 @@ import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
 import { ReturnTaskRevisionDto } from './dto/return-task-revision.dto';
 import { SaveLocalAssetSheetDto } from './dto/save-local-asset-sheet.dto';
+import { SubmitTaskProgressFeedbackDto } from './dto/submit-task-progress-feedback.dto';
 import { UploadLocalAssetImageDto } from './dto/upload-local-asset-image.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -76,8 +77,12 @@ export class TasksController {
 
   @Public()
   @Get(':id/asset-sheet/context')
-  getAssetSheetContext(@Param('id') id: string, @Query('token') token?: string) {
-    return this.tasksService.getAssetSheetContext(id, token);
+  getAssetSheetContext(
+    @Param('id') id: string,
+    @Query('token') token?: string,
+    @Query('reopen') reopen?: string,
+  ) {
+    return this.tasksService.getAssetSheetContext(id, token, reopen === '1');
   }
 
   @Post(':id/workspace/provision')
@@ -116,6 +121,25 @@ export class TasksController {
     @Body() dto: UploadLocalAssetImageDto,
   ) {
     return this.tasksService.uploadLocalAssetImage(id, dto, token);
+  }
+
+  @Public()
+  @Get(':id/progress-feedback/context')
+  getProgressFeedbackContext(
+    @Param('id') id: string,
+    @Query('token') token?: string,
+  ) {
+    return this.tasksService.getProgressFeedbackContext(id, token);
+  }
+
+  @Public()
+  @Post(':id/progress-feedback/status')
+  submitProgressFeedback(
+    @Param('id') id: string,
+    @Query('token') token: string | undefined,
+    @Body() dto: SubmitTaskProgressFeedbackDto,
+  ) {
+    return this.tasksService.submitProgressFeedback(id, dto, token);
   }
 
   @Post(':id/result-files')

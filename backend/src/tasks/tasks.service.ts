@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -22,6 +22,7 @@ import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
 import { ReturnTaskRevisionDto } from './dto/return-task-revision.dto';
 import { SaveLocalAssetSheetDto } from './dto/save-local-asset-sheet.dto';
+import { SubmitTaskProgressFeedbackDto } from './dto/submit-task-progress-feedback.dto';
 import { UploadLocalAssetImageDto } from './dto/upload-local-asset-image.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -398,9 +399,10 @@ export class TasksService {
     };
   }
 
-  async getAssetSheetContext(id: string, token?: string) {
-    const task = await this.findOne(id);
+  async getAssetSheetContext(id: string, token?: string, reopen = false) {
+    let task = await this.findOne(id);
     this.assertAssetSheetAccess(task, token);
+    task = await this.markTaskInProgressWhenAssetOpened(task, reopen);
     const [project, requirementItem, assignee, workspace, files] =
       await Promise.all([
         this.projectsRepository.findOne({ where: { id: task.project_id } }),
@@ -452,6 +454,65 @@ export class TasksService {
         ),
         linkUrl: localLink?.file_url ?? '',
       },
+    };
+  }
+
+  async getProgressFeedbackContext(id: string, token?: string) {
+    const task = await this.findOne(id);
+    this.assertAssetSheetAccess(task, token);
+    const [project, requirementItem, assignee, workspace] = await Promise.all([
+      this.projectsRepository.findOne({ where: { id: task.project_id } }),
+      task.requirement_item_id
+        ? this.requirementItemsRepository.findOne({
+            where: { id: task.requirement_item_id },
+          })
+        : Promise.resolve(null),
+      task.assignee_user_id
+        ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
+        : Promise.resolve(null),
+      this.taskDirectoriesRepository.findOne({ where: { task_id: id } }),
+    ]);
+
+    return {
+      task,
+      project,
+      requirementItem,
+      assignee: assignee
+        ? {
+            id: assignee.id,
+            username: assignee.username,
+            display_name: assignee.display_name,
+            avatar_url: assignee.avatar_url,
+          }
+        : null,
+      workspace,
+      statusLabel: this.publicTaskStatusLabel(task.status),
+      assetSheetUrl:
+        workspace?.directory_url ?? this.buildLocalAssetSheetUrl(task),
+    };
+  }
+
+  async submitProgressFeedback(
+    id: string,
+    dto: SubmitTaskProgressFeedbackDto,
+    token?: string,
+  ) {
+    const task = await this.findOne(id);
+    this.assertAssetSheetAccess(task, token);
+    task.status = dto.status;
+    if (dto.status === 'in_progress') {
+      task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
+      task.actual_end_at = null;
+    }
+    if (dto.status === 'completed') {
+      task.progress_percent = 100;
+      task.actual_end_at = new Date();
+    }
+    const saved = await this.tasksRepository.save(task);
+    return {
+      task: saved,
+      statusLabel: this.publicTaskStatusLabel(saved.status),
+      assetSheetUrl: this.buildLocalAssetSheetUrl(saved),
     };
   }
 
@@ -700,6 +761,11 @@ export class TasksService {
     const imageUrls = this.uniqueTextValues(dto.imageUrls ?? []);
     const linkUrl = (dto.linkUrl ?? '').trim();
     this.assertDeliveryUrls(assetUrls, imageUrls, linkUrl);
+    if (!assetUrls.length && !imageUrls.length && !linkUrl) {
+      throw new BadRequestException(
+        '请至少上传一张图片或填写一个交付链接后再提交交付',
+      );
+    }
 
     const { created, savedTask } = await this.dataSource.transaction(
       async (manager) => {
@@ -909,6 +975,40 @@ export class TasksService {
     return createHmac('sha256', secret)
       .update(`${task.id}:${task.task_no}`)
       .digest('hex');
+  }
+
+  private async markTaskInProgressWhenAssetOpened(
+    task: TaskEntity,
+    reopen = false,
+  ) {
+    if (
+      [
+        'todo',
+        'pending',
+        'assigned',
+        'returned',
+        ...(reopen ? ['completed'] : []),
+      ].includes(task.status) &&
+      task.assignee_user_id
+    ) {
+      task.status = 'in_progress';
+      task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
+      task.actual_end_at = null;
+      return this.tasksRepository.save(task);
+    }
+    return task;
+  }
+
+  private publicTaskStatusLabel(status: string | null) {
+    return (
+      {
+        in_progress: '进行中',
+        pending_review: '待验收',
+        completed: '已完成',
+      }[status ?? ''] ??
+      status ??
+      '-'
+    );
   }
 
   private assertAssetSheetAccess(task: TaskEntity, token?: string) {

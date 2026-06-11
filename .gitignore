@@ -19,6 +19,7 @@ __pycache__/
 backend/node_modules/
 backend/dist/
 backend/coverage/
+backend/public/uploads/
 
 # Env files
 .env

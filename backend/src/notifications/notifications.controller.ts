@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ScanFeishuSyncFailuresDto } from './dto/scan-feishu-sync-failures.dto';
 import { ScanResultFileMissingDto } from './dto/scan-result-file-missing.dto';
 import { ScanTaskDeadlinesDto } from './dto/scan-task-deadlines.dto';
+import { ScanTaskProgressFeedbackDto } from './dto/scan-task-progress-feedback.dto';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { SendWorklogRemindersDto } from './dto/send-worklog-reminders.dto';
 import { TaskNotificationDto } from './dto/task-notification.dto';
@@ -40,6 +41,11 @@ export class NotificationsController {
   @Post('task-deadline-scan')
   taskDeadlineScan(@Body() dto: ScanTaskDeadlinesDto) {
     return this.notificationsService.scanTaskDeadlines(dto);
+  }
+
+  @Post('task-progress-feedback-scan')
+  taskProgressFeedbackScan(@Body() dto: ScanTaskProgressFeedbackDto) {
+    return this.notificationsService.scanTaskProgressFeedback(dto);
   }
 
   @Post('worklog-reminders')

@@ -1,8 +1,20 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { randomUUID } from 'node:crypto';
+import {
+  createLarkChannel,
+  LoggerLevel,
+  type CardActionEvent,
+  type LarkChannel,
+} from '@larksuiteoapi/node-sdk';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Repository } from 'typeorm';
+import { TaskEntity } from '../../tasks/entities/task.entity';
 import { UserEntity } from '../../users/entities/user.entity';
 import { SendAppMessageDto } from './dto/send-app-message.dto';
 import { SendBotMessageDto } from './dto/send-bot-message.dto';
@@ -39,17 +51,20 @@ type FeishuUserItem = {
 };
 
 @Injectable()
-export class FeishuService {
+export class FeishuService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly configService: ConfigService,
     @InjectRepository(FeishuSyncLogEntity)
     private readonly syncLogsRepository: Repository<FeishuSyncLogEntity>,
     @InjectRepository(UserEntity)
     private readonly usersRepository: Repository<UserEntity>,
+    @InjectRepository(TaskEntity)
+    private readonly tasksRepository: Repository<TaskEntity>,
   ) {}
 
   private tenantAccessToken: string | null = null;
   private tenantAccessTokenExpiresAt = 0;
+  private larkChannel: LarkChannel | null = null;
 
   getConfigStatus() {
     const publicBaseUrl =
@@ -80,6 +95,8 @@ export class FeishuService {
       botWebhookAvailable: Boolean(
         this.configService.get<string>('FEISHU_BOT_WEBHOOK_URL'),
       ),
+      websocketCallbackEnabled: this.shouldEnableWebsocketCallbacks(),
+      websocketCallbackConnected: Boolean(this.larkChannel),
       publicBaseUrl,
       localSheetPubliclyReachable,
       assetSheetMode: localSheetPubliclyReachable
@@ -100,6 +117,42 @@ export class FeishuService {
         '若在线资产表创建失败，请在飞书开放平台为应用开通 drive:drive 或 sheets:spreadsheet/sheets:spreadsheet:create，并发布/启用权限变更。',
       mvpMode: 'feishu-contact-sync-and-notification-ready',
     };
+  }
+
+  async onModuleInit() {
+    if (!this.shouldEnableWebsocketCallbacks()) {
+      return;
+    }
+
+    const appId = this.configService.get<string>('FEISHU_APP_ID');
+    const appSecret = this.configService.get<string>('FEISHU_APP_SECRET');
+    if (!appId || !appSecret) {
+      return;
+    }
+
+    const channel = createLarkChannel({
+      appId,
+      appSecret,
+      loggerLevel: LoggerLevel.warn,
+      includeRawEvent: true,
+      source: 'xlyq-efficiency-engine',
+    });
+    channel.on('cardAction', (evt) => this.handleWebsocketCardAction(evt));
+    channel.on('error', (error) => {
+      console.error('[feishu websocket callback] error', error);
+    });
+
+    await channel.connect();
+    this.larkChannel = channel;
+    console.info('[feishu websocket callback] connected');
+  }
+
+  async onModuleDestroy() {
+    if (!this.larkChannel) {
+      return;
+    }
+    await this.larkChannel.disconnect();
+    this.larkChannel = null;
   }
 
   async sendBotMessage(dto: SendBotMessageDto) {
@@ -161,19 +214,30 @@ export class FeishuService {
   }
 
   async sendAppMessage(dto: SendAppMessageDto) {
-    const content = dto.actionUrl
+    const actions =
+      dto.actions?.length
+        ? dto.actions
+        : dto.actionUrl
+          ? [
+              {
+                text: dto.actionText ?? '查看详情',
+                url: dto.actionUrl,
+                type: 'primary',
+              },
+            ]
+          : [];
+    const content = actions.length
       ? JSON.stringify(
           this.buildInteractiveCard({
             title: dto.title ?? '项目通知',
             text: dto.text,
-            actionUrl: dto.actionUrl,
-            actionText: dto.actionText ?? '查看详情',
+            actions,
           }),
         )
       : JSON.stringify({ text: dto.text });
     const payload = {
       receive_id: dto.receiveId,
-      msg_type: dto.actionUrl ? 'interactive' : 'text',
+      msg_type: actions.length ? 'interactive' : 'text',
       content,
     };
 
@@ -317,6 +381,19 @@ export class FeishuService {
       return { challenge };
     }
 
+    const cardActionResult = await this.handleCardAction(body);
+    if (cardActionResult) {
+      log.response_payload_json = {
+        accepted: true,
+        handled: cardActionResult.handled,
+        action: cardActionResult.action,
+        taskId: cardActionResult.taskId,
+      };
+      log.status = cardActionResult.handled ? 'success' : 'received';
+      await this.syncLogsRepository.save(log);
+      return cardActionResult.response;
+    }
+
     return {
       success: true,
       logId: log.id,
@@ -334,6 +411,69 @@ export class FeishuService {
       order: { triggered_at: 'DESC' },
       take: 100,
     });
+  }
+
+  private async handleWebsocketCardAction(evt: CardActionEvent) {
+    const result = await this.handleCardAction({
+      header: {
+        event_type: 'card.action.trigger',
+      },
+      event: {
+        action: evt.action,
+        message_id: evt.messageId,
+        chat_id: evt.chatId,
+        operator: evt.operator,
+      },
+    });
+    if (!result?.handled) {
+      return;
+    }
+
+    const card = this.asRecord(result.response)?.card;
+    const updateResults: Array<{ delayMs: number; status: string; error?: string }> =
+      [];
+    if (card && this.larkChannel) {
+      for (const delayMs of [800, 2000]) {
+        await this.delay(delayMs);
+        try {
+          await this.larkChannel.updateCard(evt.messageId, card);
+          updateResults.push({ delayMs, status: 'success' });
+        } catch (error) {
+          updateResults.push({
+            delayMs,
+            status: 'failed',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+    }
+
+    const log = this.syncLogsRepository.create({
+      object_type: 'feishu_card_action',
+      object_id: result.taskId,
+      action_type: String(result.action),
+      feishu_object_type: 'message_id',
+      feishu_object_id: evt.messageId,
+      request_payload_json: evt as unknown as Record<string, unknown>,
+      response_payload_json: {
+        ...(result.response as Record<string, unknown>),
+        updateResults,
+      },
+      status: updateResults.some((item) => item.status === 'failed')
+        ? 'partial_success'
+        : 'success',
+      error_code: null,
+      error_message: null,
+      triggered_at: new Date(),
+      finished_at: new Date(),
+    });
+    await this.syncLogsRepository.save(log);
+  }
+
+  private shouldEnableWebsocketCallbacks() {
+    return (
+      this.configService.get<string>('FEISHU_ENABLE_WS_CALLBACKS') !== 'false'
+    );
   }
 
   async createTaskAssetSpreadsheet(input: {
@@ -759,8 +899,12 @@ export class FeishuService {
   private buildInteractiveCard(input: {
     title: string;
     text: string;
-    actionUrl: string;
-    actionText: string;
+    actions: Array<{
+      text: string;
+      url?: string;
+      type?: string;
+      value?: Record<string, unknown>;
+    }>;
   }) {
     return {
       config: {
@@ -783,20 +927,296 @@ export class FeishuService {
         },
         {
           tag: 'action',
-          actions: [
-            {
-              tag: 'button',
-              text: {
-                tag: 'plain_text',
-                content: input.actionText,
-              },
-              type: 'primary',
-              url: input.actionUrl,
+          actions: input.actions.map((action) => ({
+            tag: 'button',
+            text: {
+              tag: 'plain_text',
+              content: action.text,
             },
+            type: action.type ?? 'primary',
+            ...(action.url ? { url: action.url } : {}),
+            ...(action.value ? { value: action.value } : {}),
+          })),
+        },
+      ],
+    };
+  }
+
+  private async handleCardAction(body: Record<string, unknown>) {
+    const payload = this.getCardActionPayload(body);
+    if (!payload) {
+      return null;
+    }
+
+    const action = this.asRecord(payload.action);
+    const value = this.asRecord(action?.value);
+    const actionName = this.asString(value?.action);
+    if (
+      actionName !== 'task_progress_completed' &&
+      actionName !== 'task_progress_reopen'
+    ) {
+      return {
+        handled: false,
+        action: actionName ?? 'unknown',
+        taskId: this.asString(value?.taskId) ?? null,
+        response: {
+          toast: {
+            type: 'warning',
+            content: '暂不支持该操作。',
+          },
+        },
+      };
+    }
+
+    const taskId = this.asString(value?.taskId);
+    const taskNo = this.asString(value?.taskNo);
+    const token = this.asString(value?.token);
+    if (!taskId || !taskNo || !token) {
+      return {
+        handled: false,
+        action: actionName,
+        taskId: taskId ?? null,
+        response: {
+          toast: {
+            type: 'error',
+            content: '任务参数不完整，请联系管理员。',
+          },
+        },
+      };
+    }
+
+    const task = await this.tasksRepository.findOne({
+      where: { id: taskId, task_no: taskNo },
+    });
+    if (!task || !this.isValidTaskAccessToken(task, token)) {
+      return {
+        handled: false,
+        action: actionName,
+        taskId,
+        response: {
+          toast: {
+            type: 'error',
+            content: '任务校验失败，请联系管理员。',
+          },
+        },
+      };
+    }
+
+    if (actionName === 'task_progress_reopen') {
+      task.status = 'in_progress';
+      task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
+      task.actual_end_at = null;
+      await this.tasksRepository.save(task);
+
+      return {
+        handled: true,
+        action: actionName,
+        taskId,
+        response: {
+          toast: {
+            type: 'success',
+            content: `已重新打开 ${task.task_no} 任务。`,
+          },
+          card: this.buildActiveProgressCard(task),
+        },
+      };
+    }
+
+    task.status = 'completed';
+    task.progress_percent = 100;
+    task.actual_end_at = task.actual_end_at ?? new Date();
+    await this.tasksRepository.save(task);
+
+    return {
+      handled: true,
+      action: actionName,
+      taskId,
+      response: {
+        toast: {
+          type: 'success',
+          content: `已完成 ${task.task_no} 任务。`,
+        },
+        card: this.buildCompletedProgressCard(task),
+      },
+    };
+  }
+
+  private getCardActionPayload(body: Record<string, unknown>) {
+    const event = this.asRecord(body.event);
+    const header = this.asRecord(body.header);
+    const eventType =
+      this.asString(header?.event_type) ??
+      this.asString(body.type) ??
+      this.asString(event?.type);
+    const hasAction = Boolean(
+      this.asRecord(event?.action) ?? this.asRecord(body.action),
+    );
+    if (
+      eventType !== 'card.action.trigger' &&
+      eventType !== 'card_action' &&
+      !hasAction
+    ) {
+      return null;
+    }
+    return event ?? body;
+  }
+
+  private buildCompletedProgressCard(task: TaskEntity) {
+    return {
+      config: {
+        wide_screen_mode: true,
+      },
+      header: {
+        template: 'green',
+        title: {
+          tag: 'plain_text',
+          content: '任务进度反馈',
+        },
+      },
+      elements: [
+        {
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: `任务 ${task.task_no}「${task.task_name}」已标记为已完成。`,
+          },
+        },
+        {
+          tag: 'action',
+          actions: [
+            this.buildCallbackButton('再次打开', {
+              action: 'task_progress_reopen',
+              taskId: task.id,
+              taskNo: task.task_no,
+              token: this.taskAccessToken(task),
+            }),
+            this.buildDisabledButton('已完成'),
           ],
         },
       ],
     };
+  }
+
+  private buildActiveProgressCard(task: TaskEntity) {
+    return {
+      config: {
+        wide_screen_mode: true,
+      },
+      header: {
+        template: 'green',
+        title: {
+          tag: 'plain_text',
+          content: '任务进度反馈',
+        },
+      },
+      elements: [
+        {
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: `任务 ${task.task_no}「${task.task_name}」已重新打开，请继续反馈当前进度。`,
+          },
+        },
+        {
+          tag: 'action',
+          actions: [
+            this.buildUrlButton('进行中', this.buildTaskAssetSheetUrl(task)),
+            this.buildCallbackButton('已完成', {
+              action: 'task_progress_completed',
+              taskId: task.id,
+              taskNo: task.task_no,
+              token: this.taskAccessToken(task),
+            }),
+          ],
+        },
+      ],
+    };
+  }
+
+  private buildDisabledButton(text: string) {
+    return {
+      tag: 'button',
+      text: {
+        tag: 'plain_text',
+        content: text,
+      },
+      type: 'default',
+      disabled: true,
+    };
+  }
+
+  private buildUrlButton(text: string, url: string) {
+    return {
+      tag: 'button',
+      text: {
+        tag: 'plain_text',
+        content: text,
+      },
+      type: 'primary',
+      url,
+    };
+  }
+
+  private buildCallbackButton(text: string, value: Record<string, unknown>) {
+    return {
+      tag: 'button',
+      text: {
+        tag: 'plain_text',
+        content: text,
+      },
+      type: 'primary',
+      value,
+    };
+  }
+
+  private isValidTaskAccessToken(task: TaskEntity, token: string) {
+    const expected = this.taskAccessToken(task);
+    if (token.length !== expected.length) {
+      return false;
+    }
+    return timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+  }
+
+  private taskAccessToken(task: TaskEntity) {
+    const secret =
+      this.configService.get<string>('TASK_ACCESS_TOKEN_SECRET') ??
+      this.configService.get<string>('APP_SECRET') ??
+      this.configService.get<string>('DB_PASSWORD') ??
+      'xlyq-efficiency-engine-local-secret';
+    return createHmac('sha256', secret)
+      .update(`${task.id}:${task.task_no}`)
+      .digest('hex');
+  }
+
+  private buildTaskAssetSheetUrl(
+    task: TaskEntity,
+    options?: { reopen?: boolean },
+  ) {
+    const baseUrl =
+      this.configService.get<string>('APP_PUBLIC_BASE_URL') ??
+      'http://localhost:3000';
+    const url = new URL(`${baseUrl.replace(/\/$/, '')}/asset-sheet.html`);
+    url.searchParams.set('taskId', task.id);
+    url.searchParams.set('taskNo', task.task_no);
+    url.searchParams.set('token', this.taskAccessToken(task));
+    if (options?.reopen) {
+      url.searchParams.set('reopen', '1');
+    }
+    return url.toString();
+  }
+
+  private asRecord(value: unknown) {
+    return value && typeof value === 'object'
+      ? (value as Record<string, unknown>)
+      : null;
+  }
+
+  private asString(value: unknown) {
+    return typeof value === 'string' ? value : null;
+  }
+
+  private delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async createSyncLog(input: {
