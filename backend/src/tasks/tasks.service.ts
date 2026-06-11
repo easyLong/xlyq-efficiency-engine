@@ -2,6 +2,7 @@
   BadRequestException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -29,9 +30,16 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskDirectoryEntity } from './entities/task-directory.entity';
 import { TaskEntity } from './entities/task.entity';
 import { TaskResultFileEntity } from './entities/task-result-file.entity';
+import { TaskStatusHistoryEntity } from './entities/task-status-history.entity';
+import {
+  assertTaskStatusTransition,
+  TaskStatus,
+  taskStatusLabel,
+} from './task-status';
+import { buildTaskWorkflowSnapshot } from './task-workflow';
 
 @Injectable()
-export class TasksService {
+export class TasksService implements OnModuleInit {
   private readonly liveAssetSyncTtlMs = 2 * 60 * 1000;
   private readonly liveAssetSyncConcurrency = 5;
   private readonly defaultListLimit = 500;
@@ -49,6 +57,8 @@ export class TasksService {
     private readonly taskDirectoriesRepository: Repository<TaskDirectoryEntity>,
     @InjectRepository(TaskResultFileEntity)
     private readonly taskResultFilesRepository: Repository<TaskResultFileEntity>,
+    @InjectRepository(TaskStatusHistoryEntity)
+    private readonly taskStatusHistoriesRepository: Repository<TaskStatusHistoryEntity>,
     @InjectRepository(FeishuSyncLogEntity)
     private readonly feishuSyncLogsRepository: Repository<FeishuSyncLogEntity>,
     @InjectRepository(ProjectEntity)
@@ -59,6 +69,10 @@ export class TasksService {
     private readonly feishuService: FeishuService,
     private readonly notificationsService: NotificationsService,
   ) {}
+
+  async onModuleInit() {
+    await this.ensureTaskStatusHistoryTable();
+  }
 
   async findAll(projectId?: string, assigneeUserId?: string) {
     const where = {
@@ -81,6 +95,44 @@ export class TasksService {
     return task;
   }
 
+  async listStatusHistory(id: string) {
+    await this.findOne(id);
+    return this.taskStatusHistoriesRepository.find({
+      where: { task_id: id },
+      order: { created_at: 'DESC' },
+      take: 100,
+    });
+  }
+
+  async getWorkflow(id: string) {
+    const task = await this.findOne(id);
+    const [workspace, assetCount, statusHistory] = await Promise.all([
+      this.taskDirectoriesRepository.findOne({ where: { task_id: id } }),
+      this.countAssetsByTaskIds([id]).then((counts) => counts.get(id) ?? 0),
+      this.taskStatusHistoriesRepository.find({
+        where: { task_id: id },
+        order: { created_at: 'DESC' },
+        take: 10,
+      }),
+    ]);
+
+    return {
+      task,
+      workflow: buildTaskWorkflowSnapshot(task),
+      workspace: workspace
+        ? {
+            ...workspace,
+            directory_url: this.ensureSignedLocalAssetSheetUrl(
+              task,
+              workspace.directory_url,
+            ),
+          }
+        : null,
+      assetCount,
+      statusHistory,
+    };
+  }
+
   async board(projectId?: string, liveAssetCount = false, customerId?: string) {
     const tasks = await this.findBoardTasks(projectId, customerId);
     const assetCountByTaskId = await this.countAssetsByTaskIds(
@@ -92,14 +144,21 @@ export class TasksService {
     const rows = tasks.map((task) => ({
       ...task,
       asset_count: assetCountByTaskId.get(task.id) ?? 0,
+      workflow: buildTaskWorkflowSnapshot(task),
     }));
 
     return {
-      todo: rows.filter((task) => task.status === 'todo'),
-      in_progress: rows.filter((task) => task.status === 'in_progress'),
-      blocked: rows.filter((task) => task.status === 'blocked'),
-      pending_review: rows.filter((task) => task.status === 'pending_review'),
-      completed: rows.filter((task) => task.status === 'completed'),
+      todo: rows.filter((task) =>
+        [TaskStatus.Todo, TaskStatus.Pending, TaskStatus.Assigned].includes(
+          task.status as TaskStatus,
+        ),
+      ),
+      in_progress: rows.filter((task) => task.status === TaskStatus.InProgress),
+      blocked: rows.filter((task) => task.status === TaskStatus.Blocked),
+      pending_review: rows.filter(
+        (task) => task.status === TaskStatus.PendingReview,
+      ),
+      completed: rows.filter((task) => task.status === TaskStatus.Completed),
     };
   }
 
@@ -214,7 +273,7 @@ export class TasksService {
       task_no: await this.nextTaskNo(dto.projectId),
       task_name: dto.taskName,
       description: dto.description ?? null,
-      status: 'todo',
+      status: TaskStatus.Todo,
       priority: dto.priority ?? 'medium',
       assignee_user_id: dto.assigneeUserId ?? null,
       estimated_hours: dto.estimatedHours ?? null,
@@ -272,10 +331,14 @@ export class TasksService {
 
   async update(id: string, dto: UpdateTaskDto) {
     const task = await this.findOne(id);
+    const fromStatus = task.status;
+    const nextStatus = dto.status
+      ? assertTaskStatusTransition(task.status, dto.status)
+      : task.status;
     Object.assign(task, {
       task_name: dto.taskName ?? task.task_name,
       description: dto.description ?? task.description,
-      status: dto.status ?? task.status,
+      status: nextStatus,
       priority: dto.priority ?? task.priority,
       assignee_user_id: dto.assigneeUserId ?? task.assignee_user_id,
       planned_end_at: dto.plannedEndAt
@@ -291,11 +354,28 @@ export class TasksService {
           : task.progress_percent,
       blocked_reason: dto.blockedReason ?? task.blocked_reason,
     });
-    return this.tasksRepository.save(task);
+    const saved = await this.tasksRepository.save(task);
+    await this.recordTaskStatusHistory(
+      saved,
+      fromStatus,
+      saved.status,
+      'manual_update',
+      dto.blockedReason,
+    );
+    return saved;
   }
 
   async assign(id: string, dto: AssignTaskDto) {
-    const task = await this.update(id, { assigneeUserId: dto.assigneeUserId });
+    const current = await this.findOne(id);
+    const shouldMarkAssigned = [
+      TaskStatus.Todo,
+      TaskStatus.Pending,
+      TaskStatus.Returned,
+    ].includes(current.status as TaskStatus);
+    const task = await this.update(id, {
+      assigneeUserId: dto.assigneeUserId,
+      status: shouldMarkAssigned ? TaskStatus.Assigned : undefined,
+    });
     if (!dto.provisionWorkspace) {
       const notification =
         await this.notificationsService.notifyTaskAssigned(task);
@@ -324,7 +404,7 @@ export class TasksService {
       status: dto.status,
       blockedReason: dto.blockedReason,
     };
-    if (dto.status === 'completed') {
+    if (dto.status === TaskStatus.Completed) {
       patch.progressPercent = '100';
       patch.actualEndAt = new Date().toISOString();
     }
@@ -339,13 +419,21 @@ export class TasksService {
 
   async returnRevision(id: string, dto: ReturnTaskRevisionDto) {
     const task = await this.findOne(id);
+    const fromStatus = task.status;
     Object.assign(task, {
-      status: 'in_progress',
+      status: assertTaskStatusTransition(task.status, TaskStatus.InProgress),
       progress_percent: Number(dto.progressPercent ?? 60),
       blocked_reason: dto.reason,
       actual_end_at: null,
     });
     const saved = await this.tasksRepository.save(task);
+    await this.recordTaskStatusHistory(
+      saved,
+      fromStatus,
+      saved.status,
+      'return_revision',
+      dto.reason,
+    );
     const notification =
       await this.notificationsService.notifyTaskReturnedForRevision(
         saved,
@@ -412,7 +500,9 @@ export class TasksService {
             })
           : Promise.resolve(null),
         task.assignee_user_id
-          ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
+          ? this.usersRepository.findOne({
+              where: { id: task.assignee_user_id },
+            })
           : Promise.resolve(null),
         this.taskDirectoriesRepository.findOne({ where: { task_id: id } }),
         this.listResultFiles(id),
@@ -448,6 +538,7 @@ export class TasksService {
         : null,
       workspace,
       files,
+      workflow: buildTaskWorkflowSnapshot(task),
       delivery: {
         imageUrls: (localImages.length ? localImages : legacyLocalAssets).map(
           (file) => file.file_url,
@@ -487,6 +578,7 @@ export class TasksService {
         : null,
       workspace,
       statusLabel: this.publicTaskStatusLabel(task.status),
+      workflow: buildTaskWorkflowSnapshot(task),
       assetSheetUrl:
         workspace?.directory_url ?? this.buildLocalAssetSheetUrl(task),
     };
@@ -499,19 +591,28 @@ export class TasksService {
   ) {
     const task = await this.findOne(id);
     this.assertAssetSheetAccess(task, token);
-    task.status = dto.status;
-    if (dto.status === 'in_progress') {
+    const fromStatus = task.status;
+    task.status = assertTaskStatusTransition(task.status, dto.status);
+    if (dto.status === TaskStatus.InProgress) {
       task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
       task.actual_end_at = null;
     }
-    if (dto.status === 'completed') {
+    if (dto.status === TaskStatus.Completed) {
       task.progress_percent = 100;
       task.actual_end_at = new Date();
     }
     const saved = await this.tasksRepository.save(task);
+    await this.recordTaskStatusHistory(
+      saved,
+      fromStatus,
+      saved.status,
+      'public_progress_feedback',
+      null,
+    );
     return {
       task: saved,
       statusLabel: this.publicTaskStatusLabel(saved.status),
+      workflow: buildTaskWorkflowSnapshot(saved),
       assetSheetUrl: this.buildLocalAssetSheetUrl(saved),
     };
   }
@@ -705,9 +806,7 @@ export class TasksService {
           }),
         );
       }
-      for (const [imageIndex, imageUrl] of (
-        asset.imageUrls ?? []
-      ).entries()) {
+      for (const [imageIndex, imageUrl] of (asset.imageUrls ?? []).entries()) {
         created.push(
           await this.createTaskResultFile(task, {
             fileName: `图片-${asset.sequence}-${imageIndex + 1}`,
@@ -737,6 +836,7 @@ export class TasksService {
 
     return {
       task: savedTask,
+      workflow: buildTaskWorkflowSnapshot(savedTask),
       workspace: savedWorkspace,
       assetCount: this.billableAssetCount(created),
       syncedCount: created.length,
@@ -751,6 +851,7 @@ export class TasksService {
   ) {
     const task = await this.findOne(id);
     this.assertAssetSheetAccess(task, token);
+    const fromStatus = task.status;
     const assetUrls = this.uniqueTextValues(
       new Set(
         (dto.assets ?? [])
@@ -830,10 +931,13 @@ export class TasksService {
         let savedTask = task;
         if (
           assetCount > 0 &&
-          task.status !== 'completed' &&
-          task.status !== 'pending_review'
+          task.status !== TaskStatus.Completed &&
+          task.status !== TaskStatus.PendingReview
         ) {
-          task.status = 'pending_review';
+          task.status = assertTaskStatusTransition(
+            task.status,
+            TaskStatus.PendingReview,
+          );
           task.progress_percent = Math.max(
             Number(task.progress_percent ?? 0),
             90,
@@ -843,9 +947,17 @@ export class TasksService {
         return { created, savedTask };
       },
     );
+    await this.recordTaskStatusHistory(
+      savedTask,
+      fromStatus,
+      savedTask.status,
+      'local_asset_submitted',
+      null,
+    );
 
     return {
       task: savedTask,
+      workflow: buildTaskWorkflowSnapshot(savedTask),
       assetCount: this.billableAssetCount(created),
       syncedCount: created.length,
       created,
@@ -860,11 +972,14 @@ export class TasksService {
     const task = await this.findOne(id);
     this.assertAssetSheetAccess(task, token);
     await this.assertUploadCapacity(task.id);
-    const match = /^data:image\/(png|jpe?g|webp|gif);base64,([a-z0-9+/=]+)$/i.exec(
-      dto.dataUrl ?? '',
-    );
+    const match =
+      /^data:image\/(png|jpe?g|webp|gif);base64,([a-z0-9+/=]+)$/i.exec(
+        dto.dataUrl ?? '',
+      );
     if (!match) {
-      throw new BadRequestException('Only png, jpg, webp or gif images are supported');
+      throw new BadRequestException(
+        'Only png, jpg, webp or gif images are supported',
+      );
     }
 
     const ext =
@@ -877,7 +992,13 @@ export class TasksService {
       throw new BadRequestException('Uploaded image must be smaller than 8MB');
     }
 
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'task-assets', task.id);
+    const uploadDir = join(
+      process.cwd(),
+      'public',
+      'uploads',
+      'task-assets',
+      task.id,
+    );
     await mkdir(uploadDir, { recursive: true });
     const safeBaseName = this.safeFileBaseName(dto.fileName) || 'image';
     const fileName = `${safeBaseName}-${randomUUID().slice(0, 8)}.${ext}`;
@@ -917,7 +1038,9 @@ export class TasksService {
     const allUrls = [...assetUrls, ...imageUrls, linkUrl].filter(Boolean);
     for (const url of allUrls) {
       if (url.length > 500) {
-        throw new BadRequestException('Delivery URL cannot exceed 500 characters');
+        throw new BadRequestException(
+          'Delivery URL cannot exceed 500 characters',
+        );
       }
       if (!this.isAllowedDeliveryUrl(url)) {
         throw new BadRequestException(
@@ -983,32 +1106,36 @@ export class TasksService {
   ) {
     if (
       [
-        'todo',
-        'pending',
-        'assigned',
-        'returned',
-        ...(reopen ? ['completed'] : []),
-      ].includes(task.status) &&
+        TaskStatus.Todo,
+        TaskStatus.Pending,
+        TaskStatus.Assigned,
+        TaskStatus.Returned,
+        ...(reopen ? [TaskStatus.Completed] : []),
+      ].includes(task.status as TaskStatus) &&
       task.assignee_user_id
     ) {
-      task.status = 'in_progress';
+      const fromStatus = task.status;
+      task.status = assertTaskStatusTransition(
+        task.status,
+        TaskStatus.InProgress,
+      );
       task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
       task.actual_end_at = null;
-      return this.tasksRepository.save(task);
+      const saved = await this.tasksRepository.save(task);
+      await this.recordTaskStatusHistory(
+        saved,
+        fromStatus,
+        saved.status,
+        'asset_sheet_opened',
+        reopen ? 'reopen' : null,
+      );
+      return saved;
     }
     return task;
   }
 
   private publicTaskStatusLabel(status: string | null) {
-    return (
-      {
-        in_progress: '进行中',
-        pending_review: '待验收',
-        completed: '已完成',
-      }[status ?? ''] ??
-      status ??
-      '-'
-    );
+    return taskStatusLabel(status);
   }
 
   private assertAssetSheetAccess(task: TaskEntity, token?: string) {
@@ -1024,7 +1151,9 @@ export class TasksService {
 
   private safeFileBaseName(value?: string) {
     const raw = (value ?? '').trim();
-    const withoutExt = raw ? raw.slice(0, raw.length - extname(raw).length) : '';
+    const withoutExt = raw
+      ? raw.slice(0, raw.length - extname(raw).length)
+      : '';
     return withoutExt
       .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
       .replace(/-+/g, '-')
@@ -1061,15 +1190,67 @@ export class TasksService {
   ) {
     if (
       assetCount <= 0 ||
-      task.status === 'completed' ||
-      task.status === 'pending_review'
+      task.status === TaskStatus.Completed ||
+      task.status === TaskStatus.PendingReview
     ) {
       return task;
     }
 
-    task.status = 'pending_review';
+    const fromStatus = task.status;
+    task.status = assertTaskStatusTransition(
+      task.status,
+      TaskStatus.PendingReview,
+    );
     task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 90);
-    return this.tasksRepository.save(task);
+    const saved = await this.tasksRepository.save(task);
+    await this.recordTaskStatusHistory(
+      saved,
+      fromStatus,
+      saved.status,
+      'asset_submitted',
+      null,
+    );
+    return saved;
+  }
+
+  private async recordTaskStatusHistory(
+    task: TaskEntity,
+    fromStatus: string,
+    toStatus: string,
+    triggerSource: string,
+    remark: string | null | undefined,
+  ) {
+    if (fromStatus === toStatus) {
+      return null;
+    }
+    return this.taskStatusHistoriesRepository.save(
+      this.taskStatusHistoriesRepository.create({
+        task_id: task.id,
+        from_status: fromStatus,
+        to_status: toStatus,
+        trigger_source: triggerSource,
+        remark: remark ?? null,
+      }),
+    );
+  }
+
+  private async ensureTaskStatusHistoryTable() {
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS task_status_histories (
+        id CHAR(36) NOT NULL,
+        task_id CHAR(36) NOT NULL,
+        from_status VARCHAR(32) NOT NULL,
+        to_status VARCHAR(32) NOT NULL,
+        trigger_source VARCHAR(64) NOT NULL,
+        remark VARCHAR(255) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
+        PRIMARY KEY (id),
+        KEY idx_task_status_histories_task_created (task_id, created_at),
+        CONSTRAINT fk_task_status_histories_task FOREIGN KEY (task_id) REFERENCES tasks (id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务状态历史表'
+    `);
   }
 
   private uniqueAssets(

@@ -1,6 +1,6 @@
 # 数据链路说明
 
-更新时间：2026-06-08
+更新时间：2026-06-11
 
 本文档说明当前 MVP 中“需求、任务、资产、报价、结算”的真实数据链路和一致性规则。
 
@@ -251,3 +251,54 @@ WHERE source IN (
 - 需求项报价状态是否与映射状态一致。
 - 报价子项挂靠状态是否与有效映射一致。
 - 同基金同季度是否有多张需要人工选择的报价单。
+
+## 12. 任务状态与交付闭环
+
+任务状态由 `backend/src/tasks/task-status.ts` 统一定义和校验：
+
+```text
+todo -> assigned -> in_progress -> pending_review -> completed
+                     ^              |
+                     |              v
+                   returned <- return_revision
+```
+
+关键触发点：
+
+- 后台指派任务：`todo/pending/returned -> assigned`。
+- 员工打开项目资产页：`todo/pending/assigned/returned -> in_progress`，带 `reopen=1` 时允许 `completed -> in_progress`。
+- 员工提交本地资产或服务端同步飞书资产表：`assigned/in_progress/returned -> pending_review`。
+- 管理者验收：`pending_review -> completed`。
+- 管理者退回：`pending_review -> in_progress`，并记录退回说明。
+
+每次状态变化都会写入 `task_status_histories`，字段包括 `task_id`、`from_status`、`to_status`、`trigger_source`、`remark`、`created_at`。
+
+前端和通知统一读取 `workflow` 快照，不再各自猜下一步：
+
+- `phase`：当前阶段。
+- `nextAction` / `nextActionLabel`：下一步动作。
+- `availableActions`：当前允许的动作。
+- `canOpenAssetSheet`、`canSubmitDelivery`、`canReviewDelivery`、`canReopen`：关键按钮判断。
+
+## 13. 字典、模型和飞书解耦
+
+维度字典：
+
+- 表：`dimension_dictionaries`
+- 接口：`GET /api/v1/dimensions`、`GET /api/v1/dimensions/grouped`
+- 默认种子：业务平台、业务大类、二级分类。
+
+AI 提示词：
+
+- 文件：`backend/src/ai-prompts/prompt-registry.ts`
+- 当前 key：`requirement.context_match`、`requirement.splitter`、`quotation.parser`
+- 每个提示词带 version，方便后续回滚和对比。
+
+飞书集成拆分：
+
+- `feishu-openapi.client.ts`：tenant token 和通用请求。
+- `feishu-sheet.client.ts`：资产表创建、模板写入、授权、读取。
+- `feishu-card-templates.ts`：卡片模板。
+- `feishu-callback-parser.ts`：回调解析。
+- `feishu-task-card-action.handler.ts`：任务卡片动作业务处理。
+- `feishu-user-sync.service.ts`：通讯录员工同步。

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
-import { Repository } from 'typeorm';
+import { MoreThanOrEqual, Repository } from 'typeorm';
 import { WorklogEntity } from '../common/entities/worklog.entity';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
 import { FeishuService } from '../integrations/feishu/feishu.service';
@@ -11,6 +11,7 @@ import { RequirementEntity } from '../requirements/entities/requirement.entity';
 import { TaskDirectoryEntity } from '../tasks/entities/task-directory.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
 import { TaskResultFileEntity } from '../tasks/entities/task-result-file.entity';
+import { TaskStatus, taskStatusLabel } from '../tasks/task-status';
 import { UserEntity } from '../users/entities/user.entity';
 import { ScanFeishuSyncFailuresDto } from './dto/scan-feishu-sync-failures.dto';
 import { ScanResultFileMissingDto } from './dto/scan-result-file-missing.dto';
@@ -350,15 +351,26 @@ export class NotificationsService {
 
   async scanTaskProgressFeedback(dto: ScanTaskProgressFeedbackDto) {
     const daysAfterStart = Number(dto.daysAfterStart ?? 2);
+    const repeatDays = Number(dto.repeatDays ?? 1);
     const startedBefore = new Date(
       Date.now() - daysAfterStart * 24 * 60 * 60 * 1000,
+    );
+    const duplicateSince = new Date(
+      Date.now() - repeatDays * 24 * 60 * 60 * 1000,
     );
     const qb = this.tasksRepository
       .createQueryBuilder('task')
       .where('task.assignee_user_id IS NOT NULL')
       .andWhere('task.created_at <= :startedBefore', { startedBefore })
       .andWhere('task.status IN (:...statuses)', {
-        statuses: ['todo', 'in_progress', 'blocked'],
+        statuses: [
+          TaskStatus.Todo,
+          TaskStatus.Pending,
+          TaskStatus.Assigned,
+          TaskStatus.InProgress,
+          TaskStatus.Blocked,
+          TaskStatus.Returned,
+        ],
       });
 
     if (dto.projectId) {
@@ -375,6 +387,7 @@ export class NotificationsService {
           recipient_user_id: task.assignee_user_id!,
           object_type: 'task_progress_feedback',
           object_id: task.id,
+          created_at: MoreThanOrEqual(duplicateSince),
         },
       });
       if (existing > 0) {
@@ -493,21 +506,7 @@ export class NotificationsService {
   }
 
   private taskStatusLabel(status: string | null) {
-    return (
-      {
-        todo: '未开始',
-        pending: '未开始',
-        assigned: '已指派',
-        in_progress: '进行中',
-        blocked: '受阻',
-        pending_review: '待验收',
-        completed: '已完成',
-        cancelled: '已取消',
-        returned: '已退回',
-      }[status ?? ''] ??
-      status ??
-      '-'
-    );
+    return taskStatusLabel(status);
   }
 
   private priorityLabel(priority: string | null) {

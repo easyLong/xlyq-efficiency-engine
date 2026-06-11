@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ContactContextsModule } from './contact-contexts/contact-contexts.module';
 import { CustomersModule } from './customers/customers.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { DimensionsModule } from './dimensions/dimensions.module';
 import { HealthModule } from './health/health.module';
 import { FeishuModule } from './integrations/feishu/feishu.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -53,6 +54,7 @@ import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
     QuotationsModule,
     QuoteMappingsModule,
     DashboardModule,
+    DimensionsModule,
   ],
   providers: [
     {

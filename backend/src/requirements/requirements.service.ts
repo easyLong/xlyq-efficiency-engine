@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { randomUUID } from 'node:crypto';
+import { getAiPrompt } from '../ai-prompts/prompt-registry';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
 import { CustomerEntity } from '../customers/entities/customer.entity';
@@ -37,6 +38,7 @@ export class RequirementsService {
       keywords: [
         '配图',
         'banner',
+        'Banner',
         '巨幅',
         '长图',
         '海报',
@@ -86,7 +88,6 @@ export class RequirementsService {
       keywords: ['社区', '粉丝投放', '精华贴', '氛围贴', '讨论区', '配置圈'],
     },
   ];
-
   constructor(
     @InjectRepository(RequirementEntity)
     private readonly requirementsRepository: Repository<RequirementEntity>,
@@ -177,7 +178,8 @@ export class RequirementsService {
       customerId: contactContext?.customer_id ?? dto.customerId,
       contactContextId: contactContext?.id ?? dto.contactContextId,
       businessName: dto.businessName,
-      businessPlatform: dto.businessPlatform ?? contactContext?.business_platform ?? null,
+      businessPlatform:
+        dto.businessPlatform ?? contactContext?.business_platform ?? null,
       businessCategory: contactContext?.business_category ?? null,
       secondaryCategory: contactContext?.secondary_category ?? null,
       tertiaryCategory:
@@ -699,8 +701,7 @@ export class RequirementsService {
         business_platform: input.businessPlatform ?? null,
         business_category: input.businessCategory ?? null,
         secondary_category: input.secondaryCategory ?? null,
-        tertiary_category:
-          input.tertiaryCategory ?? null,
+        tertiary_category: input.tertiaryCategory ?? null,
         status: 'draft',
         priority: input.priority ?? 'high',
         raw_content: input.rawContent ?? null,
@@ -947,6 +948,7 @@ export class RequirementsService {
       name: customer.customer_name,
       industry: customer.industry,
     }));
+    const prompt = getAiPrompt('requirement.context_match');
     const response = await fetch(this.openAiChatCompletionsUrl(), {
       method: 'POST',
       headers: {
@@ -960,12 +962,7 @@ export class RequirementsService {
         messages: [
           {
             role: 'system',
-            content: [
-              '你是项目管理系统的需求归类助手。',
-              '请从给定客户列表和业务大类列表中，选择最匹配的客户和业务大类。',
-              '只能从 options 中选择，不要编造客户或业务大类。',
-              '只输出 JSON：{"customerId":"客户id或空字符串","projectType":"项目类型value","confidence":0到1,"reason":"简短原因"}',
-            ].join('\n'),
+            content: prompt.content,
           },
           {
             role: 'user',
@@ -1130,6 +1127,7 @@ export class RequirementsService {
     rawContent: string,
     modelName: string,
   ) {
+    const prompt = getAiPrompt('requirement.splitter');
     const response = await fetch(this.openAiChatCompletionsUrl(), {
       method: 'POST',
       headers: {
@@ -1143,15 +1141,7 @@ export class RequirementsService {
         messages: [
           {
             role: 'system',
-            content: [
-              '你是项目管理软件的需求分析助手。',
-              '请把用户提供的需求文件内容拆分为可以指派给员工执行的需求任务。',
-              '只提取客户真正提出的需求事项，不要提取确认事项、跟进记录、进度反馈、催办、寒暄、负责人安排、已完成说明。',
-              '如果一句话只是“这个出了吗”“上午做完”“谁去跟进”“确认一下”“请复核”，不要作为需求输出。',
-              '只输出 JSON，不要输出 Markdown。',
-              'JSON 格式：{"requirements":[{"title":"不超过80字","content":"完整需求描述","priority":"high|medium|low","estimatedHours":"数字字符串"}]}',
-              '拆分原则：一条需求对应一个可执行任务；合并重复项；保留客户原始上下文；最多输出30条。',
-            ].join('\n'),
+            content: prompt.content,
           },
           {
             role: 'user',
@@ -1455,7 +1445,9 @@ export class RequirementsService {
     return this.detectPriority(value ?? '');
   }
 
-  private uniqueQuotationItemIds(mappings: RequirementQuotationMappingEntity[]) {
+  private uniqueQuotationItemIds(
+    mappings: RequirementQuotationMappingEntity[],
+  ) {
     return Array.from(
       new Set(
         mappings

@@ -8,7 +8,7 @@
 - 支撑飞书集成、AI 建议、审计日志等辅助能力
 - 为后续接口设计、ORM 建模、SQL 建表脚本提供依据
 
-## 当前实现备注（2026-06-04）
+## 当前实现备注（2026-06-11）
 
 - 当前运行库名为 `ops_platform`。
 - 当前 MVP 仍保留 `projects` 作为后台挂靠对象，但业务筛选不再使用“项目”作为前台维度。
@@ -18,6 +18,8 @@
 - 报价子项维度规则表为 `quotation_item_dimension_rules`，用于给报价子项配置适用平台和分类，提高后续映射准确性。
 - 需求任务与报价子项通过 `requirement_quotation_mappings` 关联；后端会校验基金客户和报价子项归属，避免跨基金挂错报价。
 - 删除需求、报价单、报价子项时，服务层会同步清理相关映射并回算状态。
+- 新增 `task_status_histories`，用于任务状态机审计。
+- 新增 `dimension_dictionaries`，用于业务平台、业务大类、二级分类等维度字典。
 
 ## 2. 技术假设
 
@@ -92,7 +94,41 @@ users 1---n notification_messages
 projects 1---n ai_execution_logs
 users n---n roles (via user_roles)
 projects n---n users (via project_members)
+tasks 1---n task_status_histories
+dimension_dictionaries self parent_value/value hierarchy
 ```
+
+## 6.1 新增流程表
+
+### `task_status_histories`
+
+任务状态流转审计表。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | char(36) | 主键 |
+| task_id | char(36) | 任务 ID |
+| from_status | varchar(32) | 原状态 |
+| to_status | varchar(32) | 新状态 |
+| trigger_source | varchar(64) | 触发来源 |
+| remark | varchar(500) | 备注 |
+| created_at | datetime | 创建时间 |
+
+### `dimension_dictionaries`
+
+维度字典表，用于管理业务平台、业务大类、二级分类等固定或半固定选项。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | char(36) | 主键 |
+| dimension_type | varchar(64) | 字典类型 |
+| value | varchar(128) | 字典值 |
+| label | varchar(128) | 展示名 |
+| parent_value | varchar(128) | 父级值 |
+| sort_order | int | 排序 |
+| status | varchar(32) | active/inactive |
+| remark | varchar(500) | 备注 |
+| created_at / updated_at / deleted_at | datetime | 时间字段 |
 
 ## 7. 用户与权限域
 

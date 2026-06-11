@@ -1,6 +1,6 @@
 # 效能引擎
 
-更新时间：2026-06-08
+更新时间：2026-06-11
 
 效能引擎是一套面向基金客户服务团队的项目效能系统，用来把“需求录入、任务指派、资产登记、报价子项选择、结算预览、统计分析”串成一条可追踪的数据链路。
 
@@ -118,3 +118,23 @@ npm run migrate:project-tables -- --execute
 - 飞书在线表格依赖企业应用权限；权限不足时自动降级到本地交付登记页。
 - 结算单目前是实时预览，还没有正式结算单持久化、审批和导出流程。
 - 定时扫描类通知当前保留手动触发接口，尚未接入调度器。
+
+## 2026-06-11 架构与流程更新
+
+本轮重点完成第二阶段“解耦”和整体流程收口：
+
+- 任务状态机集中到 `backend/src/tasks/task-status.ts`，并新增 `task_status_histories` 记录状态流转审计。
+- 任务流程快照集中到 `backend/src/tasks/task-workflow.ts`，接口会返回当前阶段、下一步动作、可用操作和进度。
+- 飞书集成已拆分为 OpenAPI client、表格 client、卡片模板、回调解析、任务卡片动作处理、员工同步 service。
+- AI 提示词已迁移到 `backend/src/ai-prompts/prompt-registry.ts`，按 key 和 version 管理。
+- 维度字典新增 `dimension_dictionaries` 表和 `/api/v1/dimensions` 接口，业务平台/大类/二级分类由后端统一种子和维护。
+- 前端静态页已开始模块化，新增 `public/js/app-shell.js`、`public/js/api-client.js`、`public/js/domain-config.js`。
+- 员工资产登记页会展示任务“下一步”，提交图片资产或交付链接后任务进入 `pending_review`，统计口径同步使用资产文件表。
+
+最新验证命令：
+
+```bash
+cd backend
+npm test -- --runInBand
+npm run build
+```

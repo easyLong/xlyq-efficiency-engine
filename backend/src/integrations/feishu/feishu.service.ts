@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  OnModuleDestroy,
-  OnModuleInit,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -12,43 +7,21 @@ import {
   type CardActionEvent,
   type LarkChannel,
 } from '@larksuiteoapi/node-sdk';
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Repository } from 'typeorm';
-import { TaskEntity } from '../../tasks/entities/task.entity';
 import { UserEntity } from '../../users/entities/user.entity';
 import { SendAppMessageDto } from './dto/send-app-message.dto';
 import { SendBotMessageDto } from './dto/send-bot-message.dto';
 import { SyncFeishuUsersDto } from './dto/sync-feishu-users.dto';
 import { FeishuSyncLogEntity } from './entities/feishu-sync-log.entity';
-
-type FeishuTokenResponse = {
-  code: number;
-  msg?: string;
-  tenant_access_token?: string;
-  expire?: number;
-};
-
-type FeishuUserItem = {
-  open_id?: string;
-  user_id?: string;
-  union_id?: string;
-  name?: string;
-  en_name?: string;
-  nickname?: string;
-  email?: string;
-  mobile?: string;
-  avatar?: {
-    avatar_72?: string;
-    avatar_240?: string;
-    avatar_640?: string;
-    avatar_origin?: string;
-  };
-  status?: {
-    is_frozen?: boolean;
-    is_resigned?: boolean;
-    is_activated?: boolean;
-  };
-};
+import { buildInteractiveCard } from './feishu-card-templates';
+import { asRecord } from './feishu-callback-parser';
+import { FeishuOpenApiClient } from './feishu-openapi.client';
+import {
+  ASSET_SHEET_HEADERS,
+  FeishuSheetClient,
+} from './feishu-sheet.client';
+import { FeishuTaskCardActionHandler } from './feishu-task-card-action.handler';
+import { FeishuUserSyncService } from './feishu-user-sync.service';
 
 @Injectable()
 export class FeishuService implements OnModuleInit, OnModuleDestroy {
@@ -58,12 +31,12 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
     private readonly syncLogsRepository: Repository<FeishuSyncLogEntity>,
     @InjectRepository(UserEntity)
     private readonly usersRepository: Repository<UserEntity>,
-    @InjectRepository(TaskEntity)
-    private readonly tasksRepository: Repository<TaskEntity>,
+    private readonly openApiClient: FeishuOpenApiClient,
+    private readonly sheetClient: FeishuSheetClient,
+    private readonly taskCardActionHandler: FeishuTaskCardActionHandler,
+    private readonly userSyncService: FeishuUserSyncService,
   ) {}
 
-  private tenantAccessToken: string | null = null;
-  private tenantAccessTokenExpiresAt = 0;
   private larkChannel: LarkChannel | null = null;
 
   getConfigStatus() {
@@ -214,21 +187,20 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
   }
 
   async sendAppMessage(dto: SendAppMessageDto) {
-    const actions =
-      dto.actions?.length
-        ? dto.actions
-        : dto.actionUrl
-          ? [
-              {
-                text: dto.actionText ?? '查看详情',
-                url: dto.actionUrl,
-                type: 'primary',
-              },
-            ]
-          : [];
+    const actions = dto.actions?.length
+      ? dto.actions
+      : dto.actionUrl
+        ? [
+            {
+              text: dto.actionText ?? '查看详情',
+              url: dto.actionUrl,
+              type: 'primary',
+            },
+          ]
+        : [];
     const content = actions.length
       ? JSON.stringify(
-          this.buildInteractiveCard({
+          buildInteractiveCard({
             title: dto.title ?? '项目通知',
             text: dto.text,
             actions,
@@ -251,17 +223,9 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
     });
 
     try {
-      const tenantAccessToken = await this.getTenantAccessToken();
-      const response = await fetch(
+      const response = await this.openApiClient.postJson(
         `https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=${dto.receiveIdType}`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${tenantAccessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        },
+        payload,
       );
       await this.finishLogFromResponse(log, response);
     } catch (error) {
@@ -272,86 +236,7 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
   }
 
   async syncUsers(dto: SyncFeishuUsersDto) {
-    const departmentId =
-      dto.departmentId ??
-      this.configService.get<string>('FEISHU_DEFAULT_DEPARTMENT_ID') ??
-      '0';
-    const pageSize = Number(dto.pageSize ?? 50);
-    const synced: UserEntity[] = [];
-    let pageToken = '';
-
-    const log = await this.createSyncLog({
-      objectType: 'user',
-      objectId: null,
-      actionType: 'sync_contacts',
-      feishuObjectType: 'department',
-      feishuObjectId: departmentId,
-      requestPayload: { departmentId, pageSize },
-    });
-
-    try {
-      const tenantAccessToken = await this.getTenantAccessToken();
-      do {
-        const url = new URL(
-          'https://open.feishu.cn/open-apis/contact/v3/users',
-        );
-        url.searchParams.set('department_id', departmentId);
-        url.searchParams.set('department_id_type', 'open_department_id');
-        url.searchParams.set('user_id_type', 'open_id');
-        url.searchParams.set('page_size', String(pageSize));
-        if (pageToken) {
-          url.searchParams.set('page_token', pageToken);
-        }
-
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${tenantAccessToken}`,
-          },
-        });
-        const body = (await response.json()) as {
-          code?: number;
-          msg?: string;
-          data?: {
-            items?: FeishuUserItem[];
-            has_more?: boolean;
-            page_token?: string;
-          };
-        };
-
-        if (!response.ok || body.code !== 0) {
-          throw new Error(
-            `Feishu contact sync failed: ${response.status} ${body.msg ?? ''}`,
-          );
-        }
-
-        for (const item of body.data?.items ?? []) {
-          const user = await this.upsertFeishuUser(item);
-          if (user) {
-            synced.push(user);
-          }
-        }
-        pageToken = body.data?.has_more ? (body.data.page_token ?? '') : '';
-      } while (pageToken);
-
-      log.status = 'success';
-      log.response_payload_json = {
-        syncedCount: synced.length,
-        departmentId,
-      };
-    } catch (error) {
-      await this.failLog(log, error);
-    }
-
-    log.finished_at = new Date();
-    await this.syncLogsRepository.save(log);
-
-    return {
-      logId: log.id,
-      status: log.status,
-      errorMessage: log.error_message,
-      syncedCount: synced.length,
-      users: synced,
-    };
+    return this.userSyncService.syncUsers(dto);
   }
 
   async handleWebhookEvent(body: Record<string, unknown>) {
@@ -429,9 +314,12 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const card = this.asRecord(result.response)?.card;
-    const updateResults: Array<{ delayMs: number; status: string; error?: string }> =
-      [];
+    const card = asRecord(result.response)?.card;
+    const updateResults: Array<{
+      delayMs: number;
+      status: string;
+      error?: string;
+    }> = [];
     if (card && this.larkChannel) {
       for (const delayMs of [800, 2000]) {
         await this.delay(delayMs);
@@ -484,7 +372,7 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
     const requestPayload = {
       title: input.title,
       folderToken: input.folderToken ?? null,
-      columns: ['编号', '资产地址', '图片地址（可多张）', '交付链接'],
+      columns: ASSET_SHEET_HEADERS,
     };
     const log = await this.createSyncLog({
       objectType: 'task',
@@ -496,66 +384,11 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
     });
 
     try {
-      const tenantAccessToken = await this.getTenantAccessToken();
-      const createPayload: Record<string, unknown> = { title: input.title };
-      if (input.folderToken) {
-        createPayload.folder_token = input.folderToken;
-      }
-
-      const createResponse = await fetch(
-        'https://open.feishu.cn/open-apis/sheets/v3/spreadsheets',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${tenantAccessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(createPayload),
-        },
-      );
-      const createBody = (await createResponse.json()) as {
-        code?: number;
-        msg?: string;
-        data?: {
-          spreadsheet?: {
-            spreadsheet_token?: string;
-            url?: string;
-          };
-          spreadsheet_token?: string;
-          url?: string;
-        };
-      };
-
-      if (!createResponse.ok || createBody.code !== 0) {
-        throw new Error(
-          `Feishu spreadsheet create failed: ${createResponse.status} ${createBody.msg ?? ''}`,
-        );
-      }
-
-      const spreadsheetToken =
-        createBody.data?.spreadsheet?.spreadsheet_token ??
-        createBody.data?.spreadsheet_token;
-      const spreadsheetUrl =
-        createBody.data?.spreadsheet?.url ??
-        createBody.data?.url ??
-        (spreadsheetToken
-          ? `https://www.feishu.cn/sheets/${spreadsheetToken}`
-          : null);
-      if (!spreadsheetToken || !spreadsheetUrl) {
-        throw new Error('Feishu spreadsheet create response missing token/url');
-      }
-
-      const sheetId = await this.getFirstSheetId(
-        tenantAccessToken,
-        spreadsheetToken,
-      );
-      if (sheetId) {
-        await this.writeAssetSheetTemplate(
-          tenantAccessToken,
-          spreadsheetToken,
-          sheetId,
-        );
-      }
+      const { spreadsheetToken, spreadsheetUrl, sheetId } =
+        await this.sheetClient.createAssetSpreadsheet({
+          title: input.title,
+          folderToken: input.folderToken,
+        });
 
       log.status = 'success';
       log.feishu_object_id = spreadsheetToken;
@@ -564,7 +397,7 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
         spreadsheetUrl,
         sheetId,
         template: {
-          headers: ['编号', '资产地址', '图片地址（可多张）', '交付链接'],
+          headers: ASSET_SHEET_HEADERS,
           autoNumberFormula: '=ROW()-1',
           preparedRows: 500,
         },
@@ -612,18 +445,10 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
     });
 
     try {
-      const tenantAccessToken = await this.getTenantAccessToken();
-      const response = await fetch(
-        `https://open.feishu.cn/open-apis/drive/v1/permissions/${input.spreadsheetToken}/members?type=sheet`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${tenantAccessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        },
-      );
+      const response = await this.sheetClient.grantSheetEditPermission({
+        spreadsheetToken: input.spreadsheetToken,
+        openId,
+      });
       await this.finishLogFromResponse(log, response);
       await this.syncLogsRepository.save(log);
       if (log.status !== 'success') {
@@ -647,62 +472,14 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
       feishuObjectType: 'sheet',
       feishuObjectId: input.spreadsheetToken,
       requestPayload: {
-        columns: ['编号', '资产地址', '图片地址（可多张）', '交付链接'],
+        columns: ASSET_SHEET_HEADERS,
       },
     });
 
     try {
-      const tenantAccessToken = await this.getTenantAccessToken();
-      const sheetId = await this.getFirstSheetId(
-        tenantAccessToken,
+      const { range, assets } = await this.sheetClient.readAssetSheetRows(
         input.spreadsheetToken,
       );
-      if (!sheetId) {
-        throw new Error('Asset sheet has no sheetId');
-      }
-
-      const range = `${sheetId}!A2:D501`;
-      const url = new URL(
-        `https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/${input.spreadsheetToken}/values_batch_get`,
-      );
-      url.searchParams.append('ranges', range);
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${tenantAccessToken}`,
-        },
-      });
-      const body = (await response.json()) as {
-        code?: number;
-        msg?: string;
-        data?: {
-          valueRanges?: Array<{
-            values?: unknown[][];
-          }>;
-        };
-      };
-      if (!response.ok || body.code !== 0) {
-        throw new Error(
-          `Feishu asset sheet read failed: ${response.status} ${body.msg ?? ''}`,
-        );
-      }
-
-      const rows = body.data?.valueRanges?.[0]?.values ?? [];
-      const assets = rows
-        .map((row, index) => ({
-          sequence: index + 1,
-          assetUrl: String(row[1] ?? '').trim(),
-          imageUrls: String(row[2] ?? '')
-            .split(/\s+/)
-            .map((value) => value.trim())
-            .filter(Boolean),
-          linkUrl: String(row[3] ?? '').trim(),
-        }))
-        .filter(
-          (row) =>
-            row.assetUrl.length > 0 ||
-            row.imageUrls.length > 0 ||
-            row.linkUrl.length > 0,
-        );
 
       log.status = 'success';
       log.response_payload_json = {
@@ -720,501 +497,9 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async getTenantAccessToken() {
-    const now = Date.now();
-    if (
-      this.tenantAccessToken &&
-      this.tenantAccessTokenExpiresAt - 60_000 > now
-    ) {
-      return this.tenantAccessToken;
-    }
-
-    const appId = this.configService.get<string>('FEISHU_APP_ID');
-    const appSecret = this.configService.get<string>('FEISHU_APP_SECRET');
-    if (!appId || !appSecret) {
-      throw new ServiceUnavailableException(
-        'FEISHU_APP_ID and FEISHU_APP_SECRET are required for Feishu app APIs',
-      );
-    }
-
-    const response = await fetch(
-      'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          app_id: appId,
-          app_secret: appSecret,
-        }),
-      },
-    );
-    const body = (await response.json()) as FeishuTokenResponse;
-    if (!response.ok || body.code !== 0 || !body.tenant_access_token) {
-      throw new Error(
-        `Failed to get Feishu tenant_access_token: ${response.status} ${body.msg ?? ''}`,
-      );
-    }
-
-    this.tenantAccessToken = body.tenant_access_token;
-    this.tenantAccessTokenExpiresAt = now + (body.expire ?? 7200) * 1000;
-    return this.tenantAccessToken;
-  }
-
-  private async upsertFeishuUser(item: FeishuUserItem) {
-    const openId = item.open_id;
-    if (!openId) {
-      return null;
-    }
-
-    const existing =
-      (await this.usersRepository.findOne({
-        where: { feishu_open_id: openId },
-      })) ??
-      (item.email
-        ? await this.usersRepository.findOne({ where: { email: item.email } })
-        : null);
-
-    const status =
-      item.status?.is_resigned || item.status?.is_frozen
-        ? 'inactive'
-        : 'active';
-    const username = this.buildUsername(item);
-
-    const user =
-      existing ??
-      this.usersRepository.create({
-        id: randomUUID(),
-        username,
-        display_name: this.getFeishuDisplayName(item) ?? username,
-        email: item.email ?? null,
-        mobile: item.mobile ?? null,
-        avatar_url:
-          item.avatar?.avatar_240 ??
-          item.avatar?.avatar_72 ??
-          item.avatar?.avatar_origin ??
-          null,
-        status,
-        source: 'feishu',
-        feishu_open_id: openId,
-      });
-
-    Object.assign(user, {
-      display_name: this.getFeishuDisplayName(item) ?? user.display_name,
-      email: item.email ?? user.email,
-      mobile: item.mobile ?? user.mobile,
-      avatar_url:
-        item.avatar?.avatar_240 ??
-        item.avatar?.avatar_72 ??
-        item.avatar?.avatar_origin ??
-        user.avatar_url,
-      status,
-      source: 'feishu',
-      feishu_open_id: openId,
-    });
-
-    return this.usersRepository.save(user);
-  }
-
-  private buildUsername(item: FeishuUserItem) {
-    return (
-      item.email?.split('@')[0] ??
-      item.mobile ??
-      item.user_id ??
-      item.open_id ??
-      `feishu_${randomUUID().slice(0, 8)}`
-    ).slice(0, 64);
-  }
-
-  private getFeishuDisplayName(item: FeishuUserItem) {
-    return item.name ?? item.nickname ?? item.en_name ?? null;
-  }
-
-  private async getFirstSheetId(
-    tenantAccessToken: string,
-    spreadsheetToken: string,
-  ) {
-    const response = await fetch(
-      `https://open.feishu.cn/open-apis/sheets/v3/spreadsheets/${spreadsheetToken}/sheets/query`,
-      {
-        headers: {
-          Authorization: `Bearer ${tenantAccessToken}`,
-        },
-      },
-    );
-    const body = (await response.json()) as {
-      code?: number;
-      msg?: string;
-      data?: {
-        sheets?: Array<{
-          sheet_id?: string;
-          sheetId?: string;
-        }>;
-      };
-    };
-    if (!response.ok || body.code !== 0) {
-      throw new Error(
-        `Feishu sheet query failed: ${response.status} ${body.msg ?? ''}`,
-      );
-    }
-    const firstSheet = body.data?.sheets?.[0];
-    return firstSheet?.sheet_id ?? firstSheet?.sheetId ?? null;
-  }
-
-  private async writeAssetSheetTemplate(
-    tenantAccessToken: string,
-    spreadsheetToken: string,
-    sheetId: string,
-  ) {
-    const rows = [
-      ['编号', '资产地址', '图片地址（可多张）', '交付链接'],
-      ...Array.from({ length: 500 }, () => ['=ROW()-1', '', '', '']),
-    ];
-    const response = await fetch(
-      `https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/${spreadsheetToken}/values`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${tenantAccessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          valueRange: {
-            range: `${sheetId}!A1:D501`,
-            values: rows,
-          },
-        }),
-      },
-    );
-    const body = (await response.json()) as {
-      code?: number;
-      msg?: string;
-    };
-    if (!response.ok || body.code !== 0) {
-      throw new Error(
-        `Feishu sheet template write failed: ${response.status} ${body.msg ?? ''}`,
-      );
-    }
-  }
-
-  private buildInteractiveCard(input: {
-    title: string;
-    text: string;
-    actions: Array<{
-      text: string;
-      url?: string;
-      type?: string;
-      value?: Record<string, unknown>;
-    }>;
-  }) {
-    return {
-      config: {
-        wide_screen_mode: true,
-      },
-      header: {
-        template: 'green',
-        title: {
-          tag: 'plain_text',
-          content: input.title,
-        },
-      },
-      elements: [
-        {
-          tag: 'div',
-          text: {
-            tag: 'lark_md',
-            content: input.text,
-          },
-        },
-        {
-          tag: 'action',
-          actions: input.actions.map((action) => ({
-            tag: 'button',
-            text: {
-              tag: 'plain_text',
-              content: action.text,
-            },
-            type: action.type ?? 'primary',
-            ...(action.url ? { url: action.url } : {}),
-            ...(action.value ? { value: action.value } : {}),
-          })),
-        },
-      ],
-    };
-  }
-
   private async handleCardAction(body: Record<string, unknown>) {
-    const payload = this.getCardActionPayload(body);
-    if (!payload) {
-      return null;
-    }
-
-    const action = this.asRecord(payload.action);
-    const value = this.asRecord(action?.value);
-    const actionName = this.asString(value?.action);
-    if (
-      actionName !== 'task_progress_completed' &&
-      actionName !== 'task_progress_reopen'
-    ) {
-      return {
-        handled: false,
-        action: actionName ?? 'unknown',
-        taskId: this.asString(value?.taskId) ?? null,
-        response: {
-          toast: {
-            type: 'warning',
-            content: '暂不支持该操作。',
-          },
-        },
-      };
-    }
-
-    const taskId = this.asString(value?.taskId);
-    const taskNo = this.asString(value?.taskNo);
-    const token = this.asString(value?.token);
-    if (!taskId || !taskNo || !token) {
-      return {
-        handled: false,
-        action: actionName,
-        taskId: taskId ?? null,
-        response: {
-          toast: {
-            type: 'error',
-            content: '任务参数不完整，请联系管理员。',
-          },
-        },
-      };
-    }
-
-    const task = await this.tasksRepository.findOne({
-      where: { id: taskId, task_no: taskNo },
-    });
-    if (!task || !this.isValidTaskAccessToken(task, token)) {
-      return {
-        handled: false,
-        action: actionName,
-        taskId,
-        response: {
-          toast: {
-            type: 'error',
-            content: '任务校验失败，请联系管理员。',
-          },
-        },
-      };
-    }
-
-    if (actionName === 'task_progress_reopen') {
-      task.status = 'in_progress';
-      task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
-      task.actual_end_at = null;
-      await this.tasksRepository.save(task);
-
-      return {
-        handled: true,
-        action: actionName,
-        taskId,
-        response: {
-          toast: {
-            type: 'success',
-            content: `已重新打开 ${task.task_no} 任务。`,
-          },
-          card: this.buildActiveProgressCard(task),
-        },
-      };
-    }
-
-    task.status = 'completed';
-    task.progress_percent = 100;
-    task.actual_end_at = task.actual_end_at ?? new Date();
-    await this.tasksRepository.save(task);
-
-    return {
-      handled: true,
-      action: actionName,
-      taskId,
-      response: {
-        toast: {
-          type: 'success',
-          content: `已完成 ${task.task_no} 任务。`,
-        },
-        card: this.buildCompletedProgressCard(task),
-      },
-    };
+    return this.taskCardActionHandler.handle(body);
   }
-
-  private getCardActionPayload(body: Record<string, unknown>) {
-    const event = this.asRecord(body.event);
-    const header = this.asRecord(body.header);
-    const eventType =
-      this.asString(header?.event_type) ??
-      this.asString(body.type) ??
-      this.asString(event?.type);
-    const hasAction = Boolean(
-      this.asRecord(event?.action) ?? this.asRecord(body.action),
-    );
-    if (
-      eventType !== 'card.action.trigger' &&
-      eventType !== 'card_action' &&
-      !hasAction
-    ) {
-      return null;
-    }
-    return event ?? body;
-  }
-
-  private buildCompletedProgressCard(task: TaskEntity) {
-    return {
-      config: {
-        wide_screen_mode: true,
-      },
-      header: {
-        template: 'green',
-        title: {
-          tag: 'plain_text',
-          content: '任务进度反馈',
-        },
-      },
-      elements: [
-        {
-          tag: 'div',
-          text: {
-            tag: 'lark_md',
-            content: `任务 ${task.task_no}「${task.task_name}」已标记为已完成。`,
-          },
-        },
-        {
-          tag: 'action',
-          actions: [
-            this.buildCallbackButton('再次打开', {
-              action: 'task_progress_reopen',
-              taskId: task.id,
-              taskNo: task.task_no,
-              token: this.taskAccessToken(task),
-            }),
-            this.buildDisabledButton('已完成'),
-          ],
-        },
-      ],
-    };
-  }
-
-  private buildActiveProgressCard(task: TaskEntity) {
-    return {
-      config: {
-        wide_screen_mode: true,
-      },
-      header: {
-        template: 'green',
-        title: {
-          tag: 'plain_text',
-          content: '任务进度反馈',
-        },
-      },
-      elements: [
-        {
-          tag: 'div',
-          text: {
-            tag: 'lark_md',
-            content: `任务 ${task.task_no}「${task.task_name}」已重新打开，请继续反馈当前进度。`,
-          },
-        },
-        {
-          tag: 'action',
-          actions: [
-            this.buildUrlButton('进行中', this.buildTaskAssetSheetUrl(task)),
-            this.buildCallbackButton('已完成', {
-              action: 'task_progress_completed',
-              taskId: task.id,
-              taskNo: task.task_no,
-              token: this.taskAccessToken(task),
-            }),
-          ],
-        },
-      ],
-    };
-  }
-
-  private buildDisabledButton(text: string) {
-    return {
-      tag: 'button',
-      text: {
-        tag: 'plain_text',
-        content: text,
-      },
-      type: 'default',
-      disabled: true,
-    };
-  }
-
-  private buildUrlButton(text: string, url: string) {
-    return {
-      tag: 'button',
-      text: {
-        tag: 'plain_text',
-        content: text,
-      },
-      type: 'primary',
-      url,
-    };
-  }
-
-  private buildCallbackButton(text: string, value: Record<string, unknown>) {
-    return {
-      tag: 'button',
-      text: {
-        tag: 'plain_text',
-        content: text,
-      },
-      type: 'primary',
-      value,
-    };
-  }
-
-  private isValidTaskAccessToken(task: TaskEntity, token: string) {
-    const expected = this.taskAccessToken(task);
-    if (token.length !== expected.length) {
-      return false;
-    }
-    return timingSafeEqual(Buffer.from(token), Buffer.from(expected));
-  }
-
-  private taskAccessToken(task: TaskEntity) {
-    const secret =
-      this.configService.get<string>('TASK_ACCESS_TOKEN_SECRET') ??
-      this.configService.get<string>('APP_SECRET') ??
-      this.configService.get<string>('DB_PASSWORD') ??
-      'xlyq-efficiency-engine-local-secret';
-    return createHmac('sha256', secret)
-      .update(`${task.id}:${task.task_no}`)
-      .digest('hex');
-  }
-
-  private buildTaskAssetSheetUrl(
-    task: TaskEntity,
-    options?: { reopen?: boolean },
-  ) {
-    const baseUrl =
-      this.configService.get<string>('APP_PUBLIC_BASE_URL') ??
-      'http://localhost:3000';
-    const url = new URL(`${baseUrl.replace(/\/$/, '')}/asset-sheet.html`);
-    url.searchParams.set('taskId', task.id);
-    url.searchParams.set('taskNo', task.task_no);
-    url.searchParams.set('token', this.taskAccessToken(task));
-    if (options?.reopen) {
-      url.searchParams.set('reopen', '1');
-    }
-    return url.toString();
-  }
-
-  private asRecord(value: unknown) {
-    return value && typeof value === 'object'
-      ? (value as Record<string, unknown>)
-      : null;
-  }
-
-  private asString(value: unknown) {
-    return typeof value === 'string' ? value : null;
-  }
-
   private delay(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }

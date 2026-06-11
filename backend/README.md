@@ -1,6 +1,6 @@
 # 效能引擎后端
 
-更新时间：2026-06-08
+更新时间：2026-06-11
 
 这是效能引擎的 NestJS 后端服务，同时托管当前 MVP 静态页面。
 
@@ -25,8 +25,10 @@
 ```text
 src/
   common/            通用实体
+  ai-prompts/        AI 提示词注册表和版本管理
   contact-contexts/  对接人维度配置
   customers/         客户管理
+  dimensions/        业务维度字典
   dashboard/         工作台统计
   health/            健康检查
   integrations/      飞书等外部集成
@@ -43,6 +45,7 @@ src/
 public/
   index.html         MVP 管理端
   asset-sheet.html   本地交付登记页
+  js/                管理端静态 JS 模块
 scripts/
   migrate-project-tables.js
 ```
@@ -116,6 +119,7 @@ npm run migrate:project-tables -- --help
 - `/api/v1/users`
 - `/api/v1/customers`
 - `/api/v1/contact-contexts`
+- `/api/v1/dimensions`
 - `/api/v1/projects`
 - `/api/v1/requirements`
 - `/api/v1/requirement-items`
@@ -164,3 +168,13 @@ npm run migrate:project-tables -- --execute
 - 飞书在线表格依赖 `drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create` 权限。
 - 权限不足时，任务指派会降级到本地交付登记页。
 - 移动端员工访问本地交付登记页时，`APP_PUBLIC_BASE_URL` 必须是公网可访问地址。
+
+## 2026-06-11 模块化更新
+
+- `tasks/task-status.ts`：任务状态机和状态流转校验。
+- `tasks/task-workflow.ts`：任务 workflow 快照，供后台看板、资产登记页、通知流程统一判断下一步。
+- `integrations/feishu/feishu-openapi.client.ts`：飞书 OpenAPI token 和请求封装。
+- `integrations/feishu/feishu-sheet.client.ts`：飞书资产表创建、授权、读取。
+- `integrations/feishu/feishu-task-card-action.handler.ts`：飞书卡片按钮回调业务处理。
+- `integrations/feishu/feishu-user-sync.service.ts`：飞书员工同步。
+- `ai-prompts/prompt-registry.ts`：需求识别、需求拆分、报价解析提示词版本管理。

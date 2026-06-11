@@ -8,4 +8,8 @@ export class ScanTaskProgressFeedbackDto {
   @IsOptional()
   @IsString()
   daysAfterStart?: string;
+
+  @IsOptional()
+  @IsString()
+  repeatDays?: string;
 }

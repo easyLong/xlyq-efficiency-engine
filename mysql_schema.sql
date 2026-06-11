@@ -30,6 +30,7 @@ DROP TABLE IF EXISTS `ai_execution_logs`;
 DROP TABLE IF EXISTS `risk_alerts`;
 DROP TABLE IF EXISTS `notification_messages`;
 DROP TABLE IF EXISTS `task_result_files`;
+DROP TABLE IF EXISTS `task_status_histories`;
 DROP TABLE IF EXISTS `task_directories`;
 DROP TABLE IF EXISTS `worklogs`;
 DROP TABLE IF EXISTS `tasks`;
@@ -39,6 +40,7 @@ DROP TABLE IF EXISTS `requirements`;
 DROP TABLE IF EXISTS `project_members`;
 DROP TABLE IF EXISTS `projects`;
 DROP TABLE IF EXISTS `contact_context_configs`;
+DROP TABLE IF EXISTS `dimension_dictionaries`;
 DROP TABLE IF EXISTS `customers`;
 DROP TABLE IF EXISTS `user_roles`;
 DROP TABLE IF EXISTS `roles`;
@@ -128,6 +130,24 @@ CREATE TABLE `contact_context_configs` (
   KEY `idx_contact_context_business` (`business_platform`, `business_category`, `secondary_category`, `tertiary_category`),
   CONSTRAINT `fk_contact_context_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='对接人上下文配置表';
+
+CREATE TABLE `dimension_dictionaries` (
+  `id` CHAR(36) NOT NULL,
+  `dimension_type` VARCHAR(32) NOT NULL,
+  `dimension_code` VARCHAR(64) NOT NULL,
+  `dimension_name` VARCHAR(128) NOT NULL,
+  `parent_code` VARCHAR(64) NULL,
+  `sort_order` INT NOT NULL DEFAULT 100,
+  `status` VARCHAR(32) NOT NULL,
+  `remark` VARCHAR(255) NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_dimension_type_code` (`dimension_type`, `dimension_code`),
+  KEY `idx_dimension_type_parent` (`dimension_type`, `parent_code`),
+  KEY `idx_dimension_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务维度字典表';
 
 CREATE TABLE `projects` (
   `id` CHAR(36) NOT NULL,
@@ -335,6 +355,21 @@ CREATE TABLE `task_result_files` (
   CONSTRAINT `fk_task_result_files_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`),
   CONSTRAINT `fk_task_result_files_uploaded_by_user` FOREIGN KEY (`uploaded_by_user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务结果文件表';
+
+CREATE TABLE `task_status_histories` (
+  `id` CHAR(36) NOT NULL,
+  `task_id` CHAR(36) NOT NULL,
+  `from_status` VARCHAR(32) NOT NULL,
+  `to_status` VARCHAR(32) NOT NULL,
+  `trigger_source` VARCHAR(64) NOT NULL,
+  `remark` VARCHAR(255) NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_task_status_histories_task_created` (`task_id`, `created_at`),
+  CONSTRAINT `fk_task_status_histories_task` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务状态历史表';
 
 CREATE TABLE `notification_messages` (
   `id` CHAR(36) NOT NULL,

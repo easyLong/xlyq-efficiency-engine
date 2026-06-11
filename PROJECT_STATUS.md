@@ -1,6 +1,6 @@
 # 项目实现状态
 
-更新时间：2026-06-08
+更新时间：2026-06-11
 
 ## 总体结论
 
@@ -79,3 +79,23 @@ npm run test:e2e -- --runInBand
 3. 正式结算单：结算单编号、保存、导出、审批、状态回写。
 4. 报价识别增强：沉淀真实报价模板样本，继续优化模型提示词和规则兜底。
 5. 定时任务：资产表同步、逾期扫描、飞书同步失败提醒。
+
+## 2026-06-11 最新状态
+
+### 已完成优化
+
+- 状态机：任务状态由 `task-status.ts` 统一校验，覆盖 `todo / pending / assigned / in_progress / blocked / pending_review / completed / returned`。
+- 状态审计：新增 `task_status_histories`，记录状态变化来源，例如后台手动更新、打开资产目录、提交交付、退回修改。
+- 任务流程快照：新增 `task-workflow.ts`，看板、任务 workflow 接口、资产登记上下文、提交交付结果都会返回统一的 `workflow`。
+- 飞书解耦：`FeishuService` 变为门面，OpenAPI token、表格创建/读写/授权、员工同步、卡片模板、卡片回调处理都拆到独立模块。
+- 模型提示词：需求上下文识别、需求拆分、报价单解析提示词从 service 中移出，集中在 `ai-prompts/prompt-registry.ts` 做版本管理。
+- 维度字典：新增 `dimension_dictionaries`，支持业务平台、业务大类、二级分类的统一后端维护和默认种子。
+- 前端模块化起步：管理端开始抽离 app shell、API client、业务配置，不再把所有基础能力都堆在 `index.html`。
+- 员工提醒流程：进度提醒扫描覆盖已指派未开始任务，并支持 `repeatDays` 冷却周期，避免永远只提醒一次。
+
+### 最新验证结果
+
+- `npm test -- --runInBand`：通过，4 个测试套件，9 个测试。
+- `npm run build`：通过。
+- 前端静态 JS 解析检查：通过。
+- `git diff --check`：通过，仅有 Windows LF/CRLF 提示。

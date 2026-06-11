@@ -10,6 +10,7 @@ import { UserEntity } from '../users/entities/user.entity';
 import { TaskDirectoryEntity } from './entities/task-directory.entity';
 import { TaskEntity } from './entities/task.entity';
 import { TaskResultFileEntity } from './entities/task-result-file.entity';
+import { TaskStatusHistoryEntity } from './entities/task-status-history.entity';
 import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 
@@ -25,6 +26,7 @@ import { TasksService } from './tasks.service';
       UserEntity,
       TaskDirectoryEntity,
       TaskResultFileEntity,
+      TaskStatusHistoryEntity,
       FeishuSyncLogEntity,
     ]),
   ],

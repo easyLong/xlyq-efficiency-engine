@@ -45,6 +45,16 @@ export class TasksController {
     );
   }
 
+  @Get(':id/status-history')
+  listStatusHistory(@Param('id') id: string) {
+    return this.tasksService.listStatusHistory(id);
+  }
+
+  @Get(':id/workflow')
+  getWorkflow(@Param('id') id: string) {
+    return this.tasksService.getWorkflow(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.tasksService.findOne(id);

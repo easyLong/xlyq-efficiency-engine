@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { DataSource, In, Repository } from 'typeorm';
+import { getAiPrompt } from '../ai-prompts/prompt-registry';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
@@ -266,7 +267,8 @@ export class QuotationsService {
         });
       }
       const mappings = await mappingQuery.getMany();
-      const affectedRequirementItemIds = this.uniqueRequirementItemIds(mappings);
+      const affectedRequirementItemIds =
+        this.uniqueRequirementItemIds(mappings);
       if (mappings.length > 0) {
         await manager.getRepository(RequirementQuotationMappingEntity).delete({
           id: In(mappings.map((mapping) => mapping.id)),
@@ -374,7 +376,9 @@ export class QuotationsService {
     );
   }
 
-  private async syncRequirementQuoteScopeStatuses(requirementItemIds: string[]) {
+  private async syncRequirementQuoteScopeStatuses(
+    requirementItemIds: string[],
+  ) {
     for (const requirementItemId of requirementItemIds) {
       const item = await this.requirementItemsRepository.findOne({
         where: { id: requirementItemId },
@@ -549,6 +553,7 @@ export class QuotationsService {
     rawContent: string,
     modelName: string,
   ) {
+    const prompt = getAiPrompt('quotation.parser');
     const response = await fetch(this.openAiChatCompletionsUrl(), {
       method: 'POST',
       headers: {
@@ -563,20 +568,7 @@ export class QuotationsService {
           {
             role: 'system',
             content: [
-              '你是报价单结构化解析助手。',
-              '只提取报价服务明细，不要提取标题、表头、合计、小计、税费说明、付款说明、备注说明。',
-              '一级目录、二级目录、章节标题只作为 hierarchyPath 的上级层级，绝对不要单独输出成 item。',
-              '像“### 一、平台运营服务”“三、线上物料设计”“设计服务”这种目录行不能作为报价子项。',
-              '必须逐行识别报价合同里所有带单价/报价/金额的服务明细行，不能只抽样，不能合并成大项，不能遗漏低价或重复平台的行。',
-              'Markdown 表格、CSV、制表符表格中，每一行只要有服务名称和单价，就必须输出一个 item；表头和分隔线不输出。',
-              '报价子项的 title 必须是报价单层级关系的拼接，例如“设计 > 长图服务 > 长图新设计”；contentDescription 只填写最末级子项描述。',
-              '如果报价单存在章节、一级分类、二级分类、服务项等层级，hierarchyPath 填层级数组，title 用这些层级拼接。',
-              '优先按表格行提取，合并重复项；如果一个合并项明显包含多个服务子项，可以拆成多个 item，拆分后的 title 仍要保留上级层级。',
-              '金额单位如果是万元，必须换算成人民币元。',
-              '如果表格中只有“单价”列，没有“金额/小计”列，lineAmount 填单价，quantity 填 1。',
-              '无法确定数量时填 1；无法确定金额时填 0。',
-              '只输出 JSON，不要输出 Markdown。',
-              'JSON 格式：{"items":[{"title":"层级拼接后的子项title，不超过128字","contentDescription":"最末级子项描述","hierarchyPath":["一级","二级","子项"],"quantity":数字,"unit":"项/张/篇/期/次等","unitPrice":数字,"lineAmount":数字,"pricingMode":"fixed","remark":"原始依据"}]}',
+              prompt.content,
               `最多输出 ${this.maxParsedQuotationItems} 条。`,
             ].join('\n'),
           },
@@ -664,8 +656,9 @@ export class QuotationsService {
           pricingMode: 'fixed',
           quantity,
           unit:
-            String(item.unit ?? '').trim().slice(0, 16) ||
-            this.guessUnit(`${itemName} ${remark}`),
+            String(item.unit ?? '')
+              .trim()
+              .slice(0, 16) || this.guessUnit(`${itemName} ${remark}`),
           unitPrice:
             unitPrice > 0
               ? unitPrice
@@ -799,7 +792,8 @@ export class QuotationsService {
     description: string,
   ) {
     const title = this.compactItemName(this.stripLinePrefix(rawTitle));
-    const leaf = title || this.compactItemName(this.stripLinePrefix(description));
+    const leaf =
+      title || this.compactItemName(this.stripLinePrefix(description));
     if (!leaf) {
       return '';
     }
@@ -812,7 +806,9 @@ export class QuotationsService {
     if (parts.length === 0) {
       return leaf;
     }
-    const lastPartKey = this.normalizeQuotationTitleKey(parts[parts.length - 1]);
+    const lastPartKey = this.normalizeQuotationTitleKey(
+      parts[parts.length - 1],
+    );
     if (lastPartKey !== titleKey) {
       parts.push(leaf);
     }
@@ -1188,19 +1184,13 @@ export class QuotationsService {
         lineAmount:
           index === parts.length - 1
             ? Number(
-                (
-                  item.lineAmount -
-                  splitAmount * (parts.length - 1)
-                ).toFixed(2),
+                (item.lineAmount - splitAmount * (parts.length - 1)).toFixed(2),
               )
             : splitAmount,
         unitPrice:
           index === parts.length - 1
             ? Number(
-                (
-                  item.lineAmount -
-                  splitAmount * (parts.length - 1)
-                ).toFixed(2),
+                (item.lineAmount - splitAmount * (parts.length - 1)).toFixed(2),
               )
             : splitAmount,
         remark: `${item.remark}；由合并报价项拆分为 ${parts.length} 个子项`,
@@ -1275,8 +1265,9 @@ export class QuotationsService {
       return null;
     }
     return (
-      text.match(/(?:元|￥|¥)?\s*\/\s*(项|套|份|篇|张|个|条|期|页|次|场|小时|工作日)/)
-        ?.[1] ??
+      text.match(
+        /(?:元|￥|¥)?\s*\/\s*(项|套|份|篇|张|个|条|期|页|次|场|小时|工作日)/,
+      )?.[1] ??
       text.match(/^(项|套|份|篇|张|个|条|期|页|次|场|小时|工作日)$/)?.[1] ??
       null
     );

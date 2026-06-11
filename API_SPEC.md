@@ -1,5 +1,7 @@
 # 效能引擎后端接口设计 API 清单
 
+更新时间：2026-06-11
+
 ## 最新 MVP 重点接口
 
 ### 静态页面
@@ -26,6 +28,15 @@
 - `POST /api/v1/tasks/{id}/asset-sheet/local-assets?token=<token>`：保存图片资产 URL 和单个最终交付链接，图片资产去重统计，并将任务推进到待验收。
 - `POST /api/v1/tasks/{id}/asset-sheet/sync`：读取飞书在线表资产 URL 并同步统计。
 - `GET /api/v1/tasks/board?liveAssetCount=true&customerId=<customerId>`：任务看板，支持实时资产数和基金客户筛选。
+- `GET /api/v1/tasks/{id}/workflow`：返回任务、资产数、工作目录、最近状态历史和统一 workflow 快照。
+- `GET /api/v1/tasks/{id}/status-history`：返回任务状态流转审计记录。
+
+### 维度字典
+
+- `GET /api/v1/dimensions`：查询维度字典，支持按 `dimensionType`、`parentValue`、`status` 过滤。
+- `GET /api/v1/dimensions/grouped`：按类型分组返回业务平台、业务大类、二级分类等字典。
+- `POST /api/v1/dimensions`：新增或更新字典项。
+- `PATCH /api/v1/dimensions/{id}`：更新字典项名称、排序、状态等。
 
 ### 飞书与通知
 

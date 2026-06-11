@@ -1,5 +1,7 @@
 # 飞书联调说明
 
+更新时间：2026-06-11
+
 ## 当前联调结论
 
 - 飞书企业自建应用的个人消息投递已跑通，任务指派后可以向员工 `open_id` 发送卡片消息。
@@ -161,3 +163,31 @@ Invoke-RestMethod `
 - 选择一个明确的员工 `open_id` 作为测试接收人，避免随机打扰真实员工。
 - 用公网 HTTPS `APP_PUBLIC_BASE_URL` 跑通移动端点击，确认 token 链接可打开。
 - 跑通一次 `任务指派 -> 飞书卡片 -> 上传图片/填写链接 -> 后台统计` 的端到端测试。
+
+## 2026-06-11 模块拆分说明
+
+飞书集成现在按职责拆开，排查问题时优先定位到对应模块：
+
+- `feishu-openapi.client.ts`：负责 tenant access token 缓存和通用 OpenAPI 请求。
+- `feishu-sheet.client.ts`：负责创建资产表、写入模板、授权编辑、读取资产行。
+- `feishu-card-templates.ts`：负责构建任务进度卡片和交互卡片。
+- `feishu-callback-parser.ts`：负责兼容不同飞书回调 payload 的解析。
+- `feishu-task-card-action.handler.ts`：负责“已完成 / 再次打开”等卡片动作的任务状态变更。
+- `feishu-user-sync.service.ts`：负责通讯录分页拉取和本地用户 upsert。
+- `feishu.service.ts`：保留为集成门面和同步日志入口。
+
+## 任务交付消息当前闭环
+
+1. 管理后台指派任务并开通资产入口。
+2. 系统优先尝试创建飞书在线资产表；失败时降级为本地 `asset-sheet.html`。
+3. 飞书消息中展示“填写项目资产”按钮。
+4. 员工打开资产页后，任务自动进入 `in_progress`。
+5. 员工上传多张图片和一个最终交付链接，提交后任务进入 `pending_review`。
+6. 管理者在后台验收，通过后进入 `completed`，退回则回到 `in_progress`。
+
+进度提醒扫描：
+
+- 接口：`POST /api/v1/notifications/task-progress-feedback-scan`
+- 默认扫描开始 2 天后的未完成任务。
+- 覆盖状态：`todo/pending/assigned/in_progress/blocked/returned`。
+- `repeatDays` 控制重复提醒冷却，默认 1 天。

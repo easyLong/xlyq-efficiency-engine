@@ -56,6 +56,16 @@
     .summary-box { border: 1px solid #e5e9f0; border-radius: 9px; padding: 10px; background: #fafbfd; }
     .summary-box span { display: block; color: #667085; font-size: 12px; margin-bottom: 4px; }
     .summary-box strong { font-size: 20px; }
+    .workflow-box {
+      border: 1px solid #dbeafe;
+      border-radius: 9px;
+      background: #f8fbff;
+      padding: 11px;
+      display: grid;
+      gap: 5px;
+    }
+    .workflow-box span { color: #667085; font-size: 12px; font-weight: 900; }
+    .workflow-box strong { color: #1d4ed8; font-size: 15px; line-height: 1.45; }
     h2 { margin: 0 0 10px; font-size: 18px; color: #111827; }
     .section-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
     .section-head p { margin: 3px 0 0; color: #667085; font-size: 13px; line-height: 1.55; }
@@ -135,6 +145,10 @@
         <div class="summary-box"><span>图片</span><strong id="imageCount">0</strong></div>
         <div class="summary-box"><span>链接</span><strong id="linkCount">0</strong></div>
         <div class="summary-box"><span>状态</span><strong id="briefStatus">-</strong></div>
+      </div>
+      <div class="workflow-box">
+        <span>下一步</span>
+        <strong id="nextAction">读取中...</strong>
       </div>
       <div id="taskDetails" class="detail-list"></div>
     </aside>
@@ -395,6 +409,7 @@
       document.getElementById("taskTitle").textContent = `${taskNo} 任务详情`;
       document.getElementById("taskSub").textContent = "本地登记模式";
       document.getElementById("briefStatus").textContent = "未开始";
+      document.getElementById("nextAction").textContent = "提交交付";
       document.getElementById("taskDetails").innerHTML = detailRows([
         ["任务", taskNo],
         ["状态", `<span class="tag">未开始</span>`],
@@ -406,9 +421,11 @@
       const project = context?.project || {};
       const item = context?.requirementItem || {};
       const assignee = context?.assignee || {};
+      const workflow = context?.workflow || {};
       document.getElementById("taskTitle").textContent = task.task_name || `${taskNo} 任务详情`;
       document.getElementById("taskSub").textContent = `${task.task_no || taskNo} · ${project.project_name || "未关联项目"}`;
-      document.getElementById("briefStatus").textContent = statusLabel(task.status);
+      document.getElementById("briefStatus").textContent = workflow.statusLabel || statusLabel(task.status);
+      document.getElementById("nextAction").textContent = workflow.nextActionLabel || nextActionLabel(task.status);
       document.getElementById("taskDetails").innerHTML = detailRows([
         ["任务", escapeHtml(task.task_name || item.item_title || "-")],
         ["所属项目", escapeHtml(project.project_name || "-")],
@@ -457,7 +474,7 @@
         if (!response.ok) throw new Error(result.message || "同步失败");
         localStorage.setItem(storageKey, JSON.stringify(normalizeDraft({ imageUrls, linkUrl })));
         renderAssets();
-        context = { ...(context || {}), task: result.task || context?.task };
+        context = { ...(context || {}), task: result.task || context?.task, workflow: result.workflow || context?.workflow };
         renderTaskDetails();
         setStatus(`已提交 ${imageUrls.length} 张图片${linkUrl ? "和 1 个链接" : ""}，任务已进入待验收。页面即将自动关闭。`, "ok");
         closeAfterSubmit();
@@ -546,6 +563,19 @@
       if (status === "completed") return "ok";
       if (status === "blocked" || status === "returned") return "warn";
       return "";
+    }
+
+    function nextActionLabel(status) {
+      return {
+        todo: "等待指派执行人",
+        pending: "等待处理",
+        assigned: "填写项目资产",
+        in_progress: "提交交付",
+        blocked: "处理阻塞后提交交付",
+        pending_review: "等待管理者验收",
+        completed: "已完成",
+        returned: "根据反馈修改后重新提交",
+      }[status] || "暂无下一步";
     }
 
     function priorityLabel(priority) {

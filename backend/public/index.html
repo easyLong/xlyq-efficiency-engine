@@ -1161,57 +1161,14 @@
 
   <div id="toast" class="toast"></div>
 
+  <script src="/js/app-shell.js"></script>
+  <script src="/js/api-client.js"></script>
+  <script src="/js/domain-config.js"></script>
   <script>
     const apiBase = "/api/v1";
-    const businessPlatforms = ["招行", "工行", "交行", "理财通", "蚂蚁", "天天基金"];
-    const businessCategoryDefs = [
-      {
-        value: "design",
-        label: "设计",
-        secondaries: ["配图拓展", "banner新设计", "巨幅新设计", "长图新设计", "长图拓展", "长图套模板", "（其他）"],
-      },
-      {
-        value: "copywriting",
-        label: "文案",
-        secondaries: ["数据更新", "已有素材新编辑", "原创文案", "共建文案", "（其他）"],
-      },
-      {
-        value: "operation",
-        label: "运营",
-        secondaries: ["发布陪伴", "活动配置", "魔秀搭建", "页面推厂", "直播配置", "（其他）"],
-      },
-      {
-        value: "community",
-        label: "社区",
-        secondaries: ["粉丝投放", "精华贴", "氛围贴", "（其他）"],
-      },
-    ];
-    const projectTypes = [
-      {
-        value: "design",
-        label: "设计",
-        budgetAmount: "300000",
-        description: "配图、banner、巨幅、长图与模板类设计服务。",
-      },
-      {
-        value: "copywriting",
-        label: "文案",
-        budgetAmount: "180000",
-        description: "数据更新、已有素材编辑、原创与共建文案。",
-      },
-      {
-        value: "operation",
-        label: "运营",
-        budgetAmount: "220000",
-        description: "发布陪伴、活动配置、魔秀搭建、页面推厂和直播配置。",
-      },
-      {
-        value: "community",
-        label: "社区",
-        budgetAmount: "160000",
-        description: "粉丝投放、精华贴、氛围贴等社区服务。",
-      },
-    ];
+    const businessPlatforms = window.XlyqDomainConfig.businessPlatforms;
+    const businessCategoryDefs = window.XlyqDomainConfig.businessCategories;
+    const projectTypes = window.XlyqDomainConfig.projectTypes;
     const state = {
       user: null,
       accessToken: null,
@@ -1266,6 +1223,10 @@
       addingQuotationItem: false,
       busyActionId: null,
     };
+    const api = window.XlyqApiClient.create({
+      apiBase,
+      getAccessToken: () => state.accessToken,
+    });
     const stepDefs = [
       ["requirement", "需求已录入", "手动保存客户需求"],
       ["task", "任务已生成", "一个需求对应一个任务"],
@@ -1288,64 +1249,31 @@
       renderState();
     }
     async function request(path, options = {}) {
-      const init = { ...options, headers: { ...(options.headers || {}) } };
-      if (state.accessToken && !init.headers.Authorization) {
-        init.headers.Authorization = `Bearer ${state.accessToken}`;
-      }
-      if (init.body && typeof init.body !== "string") {
-        init.headers["Content-Type"] = "application/json; charset=utf-8";
-        init.body = JSON.stringify(init.body);
-      }
-      const res = await fetch(apiBase + path, init);
-      const text = await res.text();
-      let data = null;
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch {
-        data = text;
-      }
-      if (!res.ok) throw new Error(data?.message || text || res.statusText);
-      return data;
+      return api.request(path, options);
     }
     async function loadBootstrap() {
-      const [users, health] = await Promise.all([
-        request("/auth/login-users"),
-        request("/health"),
-      ]);
-      state.users = unwrap(users);
-      qs("healthPill").textContent = `后端 ${health.status} / 数据库 ${health.database}`;
+      const { users, health } = await api.loadBootstrap();
+      state.users = users;
+      qs("healthPill").textContent = `后端 ${appData.health.status} / 数据库 ${appData.health.database}`;
       renderLoginUsers();
       qs("loginHint").textContent = "请选择用户登录。";
     }
     async function loadAppData() {
-      const [projects, customers, contactContexts, users, requirements, requirementItems, tasks, quotations, quoteMappings, health] = await Promise.all([
-        request("/projects"),
-        request("/customers"),
-        request("/contact-contexts?status=active").catch(() => []),
-        request("/users"),
-        request("/requirements"),
-        request("/requirement-items"),
-        request("/tasks"),
-        request("/quotations"),
-        request("/quote-mappings").catch(() => []),
-        request("/health"),
-      ]);
-      state.projects = unwrap(projects);
-      state.customers = unwrap(customers);
-      state.contactContexts = unwrap(contactContexts);
-      state.users = unwrap(users);
-      state.requirements = unwrap(requirements);
-      state.requirementItems = unwrap(requirementItems);
-      state.tasks = unwrap(tasks);
-      state.quotations = unwrap(quotations);
-      state.quoteMappings = unwrap(quoteMappings);
+      const appData = await api.loadAppData();
+      state.projects = appData.projects;
+      state.customers = appData.customers;
+      state.contactContexts = appData.contactContexts;
+      state.users = appData.users;
+      state.requirements = appData.requirements;
+      state.requirementItems = appData.requirementItems;
+      state.tasks = appData.tasks;
+      state.quotations = appData.quotations;
+      state.quoteMappings = appData.quoteMappings;
       qs("healthPill").textContent = `后端 ${health.status} / 数据库 ${health.database}`;
       renderBootstrap();
     }
     function unwrap(value) {
-      if (Array.isArray(value)) return value;
-      if (Array.isArray(value?.value)) return value.value;
-      return value ? [value] : [];
+      return api.unwrap(value);
     }
     function renderBootstrap() {
       renderLoginUsers();
@@ -1459,8 +1387,7 @@
     function enterApp(user, accessToken = null) {
       state.user = user;
       state.accessToken = accessToken || `mvp-${user.id}`;
-      localStorage.setItem("mvpSession", JSON.stringify({ user: state.user, accessToken: state.accessToken }));
-      localStorage.removeItem("mvpUser");
+      window.XlyqAppShell.session.write({ user: state.user, accessToken: state.accessToken });
       qs("loginView").classList.add("hidden");
       qs("appView").classList.remove("hidden");
       qs("currentUser").textContent = state.user.display_name || state.user.username;
@@ -1482,16 +1409,14 @@
       }
     }
     function resetLocalSession() {
-      localStorage.removeItem("mvpSession");
-      localStorage.removeItem("mvpUser");
+      window.XlyqAppShell.session.clear();
       sessionStorage.clear();
       qs("loginUsername").value = "";
       qs("loginHint").textContent = "已清理本地登录状态，请重新选择用户进入。";
       toast("已清理本地登录状态");
     }
     function logout() {
-      localStorage.removeItem("mvpSession");
-      localStorage.removeItem("mvpUser");
+      window.XlyqAppShell.session.clear();
       location.reload();
     }
     function startAutoRefresh() {
@@ -1924,14 +1849,10 @@
       }
     }
     function escapeHtml(value) {
-      return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;");
+      return window.XlyqAppShell.escapeHtml(value);
     }
     function escapeAttr(value) {
-      return escapeHtml(value).replaceAll("'", "&#39;");
+      return window.XlyqAppShell.escapeAttr(value);
     }
     function priorityLabel(value) {
       return { high: "高", medium: "中", low: "低" }[value] || value || "-";
@@ -4490,15 +4411,14 @@
     window.addEventListener("DOMContentLoaded", async () => {
       try {
         await loadBootstrap();
-        const savedSession = localStorage.getItem("mvpSession");
-        const legacyUser = localStorage.getItem("mvpUser");
+        const savedSession = window.XlyqAppShell.session.read();
+        const legacyUser = window.XlyqAppShell.session.readLegacyUser();
         if (savedSession || legacyUser) {
           let session = null;
           try {
             session = savedSession ? JSON.parse(savedSession) : { user: JSON.parse(legacyUser), accessToken: null };
           } catch {
-            localStorage.removeItem("mvpSession");
-            localStorage.removeItem("mvpUser");
+            window.XlyqAppShell.session.clear();
           }
           if (session?.user?.username) {
             if (!session.accessToken) {
@@ -4508,13 +4428,11 @@
             enterApp(session.user, session.accessToken);
             await initializeAppAfterLogin();
           } else {
-            localStorage.removeItem("mvpSession");
-            localStorage.removeItem("mvpUser");
+            window.XlyqAppShell.session.clear();
           }
         }
       } catch (error) {
-        localStorage.removeItem("mvpSession");
-        localStorage.removeItem("mvpUser");
+        window.XlyqAppShell.session.clear();
         qs("loginHint").textContent = error.message;
         toast(error.message);
       }
