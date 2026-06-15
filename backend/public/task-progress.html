@@ -64,7 +64,7 @@
     <div class="meta">
       <div class="meta-item"><span>任务编号</span><strong id="taskNo">-</strong></div>
       <div class="meta-item"><span>当前状态</span><strong id="taskStatus">-</strong></div>
-      <div class="meta-item"><span>所属项目</span><strong id="projectName">-</strong></div>
+      <div class="meta-item"><span>基金平台</span><strong id="projectName">-</strong></div>
       <div class="meta-item"><span>执行人</span><strong id="assigneeName">-</strong></div>
     </div>
     <div class="actions">
@@ -112,7 +112,7 @@
         qs("taskSub").textContent = "如需继续处理，请进入项目资产；完成后可直接反馈已完成。";
         qs("taskNo").textContent = task.task_no || taskNo || "-";
         qs("taskStatus").textContent = statusLabel(task.status);
-        qs("projectName").textContent = result.project?.project_name || "-";
+        qs("projectName").textContent = result.fundPlatformLabel || result.project?.project_name || "-";
         qs("assigneeName").textContent = result.assignee?.display_name || result.assignee?.username || "-";
         if (["in_progress", "completed"].includes(requestedStatus) && !autoSubmitted) {
           autoSubmitted = true;

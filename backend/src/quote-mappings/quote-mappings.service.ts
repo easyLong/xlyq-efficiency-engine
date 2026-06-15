@@ -2,12 +2,14 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { WorklogEntity } from '../common/entities/worklog.entity';
+import { ensureIndex } from '../common/schema-maintenance';
 import { QuotationEntity } from '../quotations/entities/quotation.entity';
 import { QuotationItemDimensionRuleEntity } from '../quotations/entities/quotation-item-dimension-rule.entity';
 import { QuotationItemEntity } from '../quotations/entities/quotation-item.entity';
@@ -22,7 +24,7 @@ import { UpdateQuotationItemDimensionRuleDto } from './dto/update-quotation-item
 import { UpdateQuoteMappingDto } from './dto/update-quote-mapping.dto';
 
 @Injectable()
-export class QuoteMappingsService {
+export class QuoteMappingsService implements OnModuleInit {
   constructor(
     @InjectRepository(RequirementQuotationMappingEntity)
     private readonly mappingsRepository: Repository<RequirementQuotationMappingEntity>,
@@ -40,7 +42,12 @@ export class QuoteMappingsService {
     private readonly worklogsRepository: Repository<WorklogEntity>,
     @InjectRepository(AiExecutionLogEntity)
     private readonly aiExecutionLogsRepository: Repository<AiExecutionLogEntity>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  async onModuleInit() {
+    await this.ensureQuoteMappingsSchema();
+  }
 
   async workbench(projectId: string) {
     const [requirementItems, mappings, worklogRaw] = await Promise.all([
@@ -362,8 +369,22 @@ export class QuoteMappingsService {
       quotationId: dto.quotationId,
       quotationItemId: dto.quotationItemId,
     });
-    const mapping = this.mappingsRepository.create({
-      id: randomUUID(),
+    const existingMappings = await this.mappingsRepository.find({
+      where: {
+        project_id: dto.projectId,
+        requirement_item_id: dto.requirementItemId,
+      },
+      order: { updated_at: 'DESC', created_at: 'DESC' },
+    });
+    const previousQuotationItemIds = new Set(
+      existingMappings
+        .map((mapping) => mapping.quotation_item_id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const mapping =
+      existingMappings[0] ??
+      this.mappingsRepository.create({ id: randomUUID() });
+    Object.assign(mapping, {
       project_id: dto.projectId,
       requirement_item_id: dto.requirementItemId,
       quotation_id: scope.quotationId,
@@ -374,8 +395,23 @@ export class QuoteMappingsService {
       remark: dto.remark ?? null,
     });
     const saved = await this.mappingsRepository.save(mapping);
+    const obsoleteMappings = existingMappings.filter(
+      (item) => item.id !== saved.id && this.isActiveQuoteMapping(item),
+    );
+    for (const item of obsoleteMappings) {
+      item.mapping_status = 'obsolete';
+      item.remark = item.remark
+        ? `${item.remark}；已被新的报价选择替代`
+        : '已被新的报价选择替代';
+    }
+    if (obsoleteMappings.length > 0) {
+      await this.mappingsRepository.save(obsoleteMappings);
+    }
     await this.syncRequirementQuoteScopeStatus(saved.requirement_item_id);
-    await this.syncQuotationItemMatchStatus(saved.quotation_item_id);
+    await this.syncQuotationItemMatchStatuses([
+      ...previousQuotationItemIds,
+      saved.quotation_item_id,
+    ]);
     return saved;
   }
 
@@ -566,12 +602,16 @@ export class QuoteMappingsService {
     quotationId?: string,
   ) {
     const period = this.parseQuarter(quarter);
-    const [requirements, quotations] = await Promise.all([
-      this.requirementsRepository.find({
-        where: { customer_id: customerId },
-        order: { created_at: 'DESC' },
-        take: 500,
-      }),
+    const [quarterRequirements, quotations] = await Promise.all([
+      this.requirementsRepository
+        .createQueryBuilder('requirement')
+        .where('requirement.customer_id = :customerId', { customerId })
+        .andWhere('requirement.created_at >= :startAt', {
+          startAt: period.startAt,
+        })
+        .andWhere('requirement.created_at < :endAt', { endAt: period.endAt })
+        .orderBy('requirement.created_at', 'DESC')
+        .getMany(),
       this.quotationsRepository
         .createQueryBuilder('quotation')
         .where('quotation.customer_id = :customerId', { customerId })
@@ -582,17 +622,11 @@ export class QuoteMappingsService {
         .orderBy('quotation.created_at', 'DESC')
         .getMany(),
     ]);
-    const quarterRequirements = requirements.filter(
-      (requirement) =>
-        requirement.created_at >= period.startAt &&
-        requirement.created_at < period.endAt,
-    );
     const requirementIds = quarterRequirements.map((item) => item.id);
     const requirementItems = requirementIds.length
       ? await this.requirementItemsRepository.find({
           where: { requirement_id: In(requirementIds) },
           order: { created_at: 'ASC' },
-          take: 500,
         })
       : [];
     const selectedQuotation =
@@ -636,7 +670,6 @@ export class QuoteMappingsService {
               : {}),
           },
           order: { created_at: 'DESC' },
-          take: 500,
         })
       : [];
 
@@ -714,6 +747,17 @@ export class QuoteMappingsService {
     await this.quotationItemsRepository.save(item);
   }
 
+  private async syncQuotationItemMatchStatuses(
+    quotationItemIds: Array<string | null>,
+  ) {
+    const uniqueIds = Array.from(
+      new Set(quotationItemIds.filter((id): id is string => Boolean(id))),
+    );
+    for (const quotationItemId of uniqueIds) {
+      await this.syncQuotationItemMatchStatus(quotationItemId);
+    }
+  }
+
   private async validateMappingScope(input: {
     projectId: string;
     requirementItemId: string;
@@ -733,7 +777,9 @@ export class QuoteMappingsService {
       throw new NotFoundException('Requirement not found');
     }
     if (requirement.project_id !== input.projectId) {
-      throw new BadRequestException('Requirement item does not belong to project');
+      throw new BadRequestException(
+        'Requirement item does not belong to project',
+      );
     }
 
     let quotationItem: QuotationItemEntity | null = null;
@@ -746,7 +792,8 @@ export class QuoteMappingsService {
       }
     }
 
-    const quotationId = input.quotationId ?? quotationItem?.quotation_id ?? null;
+    const quotationId =
+      input.quotationId ?? quotationItem?.quotation_id ?? null;
     let quotation: QuotationEntity | null = null;
     if (quotationId) {
       quotation = await this.quotationsRepository.findOne({
@@ -762,10 +809,14 @@ export class QuoteMappingsService {
       quotationId &&
       quotationItem.quotation_id !== quotationId
     ) {
-      throw new BadRequestException('Quotation item does not belong to quotation');
+      throw new BadRequestException(
+        'Quotation item does not belong to quotation',
+      );
     }
     if (quotation && quotation.customer_id !== requirement.customer_id) {
-      throw new BadRequestException('Quotation customer does not match requirement customer');
+      throw new BadRequestException(
+        'Quotation customer does not match requirement customer',
+      );
     }
 
     return {
@@ -781,14 +832,19 @@ export class QuoteMappingsService {
   private resolveQuoteScopeStatus(
     mappings: RequirementQuotationMappingEntity[],
   ) {
-    if (mappings.length === 0) {
+    const activeMappings = mappings.filter((mapping) =>
+      this.isActiveQuoteMapping(mapping),
+    );
+    if (activeMappings.length === 0) {
       return 'not_started';
     }
-    if (mappings.some((mapping) => mapping.mapping_status === 'matched')) {
+    if (
+      activeMappings.some((mapping) => mapping.mapping_status === 'matched')
+    ) {
       return 'matched';
     }
     if (
-      mappings.some(
+      activeMappings.some(
         (mapping) =>
           mapping.mapping_status === 'pending_confirm' &&
           mapping.quotation_item_id,
@@ -796,10 +852,33 @@ export class QuoteMappingsService {
     ) {
       return 'pending_confirm';
     }
-    if (mappings.some((mapping) => mapping.mapping_status === 'partial')) {
+    if (
+      activeMappings.some((mapping) => mapping.mapping_status === 'partial')
+    ) {
       return 'partial';
     }
     return 'changed';
+  }
+
+  private async ensureQuoteMappingsSchema() {
+    await ensureIndex(
+      this.dataSource,
+      'requirement_quotation_mappings',
+      'idx_quote_mappings_requirement_created',
+      ['requirement_item_id', 'created_at'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'requirement_quotation_mappings',
+      'idx_quote_mappings_project_status',
+      ['project_id', 'mapping_status'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'requirement_quotation_mappings',
+      'idx_quote_mappings_quotation_item_status',
+      ['quotation_item_id', 'mapping_status'],
+    );
   }
 
   private parseQuarter(quarter: string) {
@@ -897,7 +976,9 @@ export class QuoteMappingsService {
   }
 
   private normalizeDimensionValue(value?: string | null) {
-    return String(value ?? '').trim().toLowerCase();
+    return String(value ?? '')
+      .trim()
+      .toLowerCase();
   }
 
   private textTokens(value: string) {

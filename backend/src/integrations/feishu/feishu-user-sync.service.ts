@@ -150,13 +150,15 @@ export class FeishuUserSyncService {
         ? 'inactive'
         : 'active';
     const username = this.buildUsername(item);
+    const feishuDisplayName = this.getFeishuDisplayName(item);
+    const displayName = this.buildDisplayName(item, username);
 
     const user =
       existing ??
       this.usersRepository.create({
         id: randomUUID(),
         username,
-        display_name: this.getFeishuDisplayName(item) ?? username,
+        display_name: displayName,
         email: item.email ?? null,
         mobile: item.mobile ?? null,
         avatar_url:
@@ -170,7 +172,11 @@ export class FeishuUserSyncService {
       });
 
     Object.assign(user, {
-      display_name: this.getFeishuDisplayName(item) ?? user.display_name,
+      display_name: this.resolveDisplayName(
+        user.display_name,
+        displayName,
+        Boolean(feishuDisplayName),
+      ),
       email: item.email ?? user.email,
       mobile: item.mobile ?? user.mobile,
       avatar_url:
@@ -196,8 +202,47 @@ export class FeishuUserSyncService {
     ).slice(0, 64);
   }
 
+  private buildDisplayName(item: FeishuUserItem, username: string) {
+    return (
+      this.getFeishuDisplayName(item) ??
+      item.email?.split('@')[0] ??
+      item.mobile ??
+      (this.isTechnicalFeishuId(username) ? '未同步昵称' : username)
+    ).slice(0, 64);
+  }
+
   private getFeishuDisplayName(item: FeishuUserItem) {
     return item.name ?? item.nickname ?? item.en_name ?? null;
+  }
+
+  private shouldUpdateDisplayName(current: string | null | undefined) {
+    return (
+      !current ||
+      current === '未同步昵称' ||
+      this.isTechnicalFeishuId(current)
+    );
+  }
+
+  private resolveDisplayName(
+    current: string | null | undefined,
+    candidate: string,
+    fromFeishuNameField: boolean,
+  ) {
+    if (!fromFeishuNameField && current && !this.shouldUpdateDisplayName(current)) {
+      return current;
+    }
+    if (!this.isPlaceholderDisplayName(candidate)) {
+      return candidate;
+    }
+    return this.shouldUpdateDisplayName(current) ? candidate : current;
+  }
+
+  private isPlaceholderDisplayName(value: string | null | undefined) {
+    return !value || value === '未同步昵称' || this.isTechnicalFeishuId(value);
+  }
+
+  private isTechnicalFeishuId(value: string | null | undefined) {
+    return /^ou_[a-z0-9]+$/i.test(value ?? '');
   }
 
   private async createSyncLog(input: {

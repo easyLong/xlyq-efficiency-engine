@@ -24,6 +24,9 @@ export class TaskEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 32, nullable: true })
   priority!: string | null;
 
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  urgency_level!: string | null;
+
   @Column({ type: 'char', length: 36, nullable: true })
   assignee_user_id!: string | null;
 
@@ -41,6 +44,9 @@ export class TaskEntity extends BaseSoftDeleteEntity {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   blocked_reason!: string | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  planned_start_at!: Date | null;
 
   @Column({ type: 'datetime', nullable: true })
   planned_end_at!: Date | null;

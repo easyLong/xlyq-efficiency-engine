@@ -19,15 +19,6 @@ export class ContactContextConfigEntity extends BaseSoftDeleteEntity {
   business_platform!: string | null;
 
   @Column({ type: 'varchar', length: 32 })
-  business_category!: string;
-
-  @Column({ type: 'varchar', length: 64, nullable: true })
-  secondary_category!: string | null;
-
-  @Column({ type: 'varchar', length: 64, nullable: true })
-  tertiary_category!: string | null;
-
-  @Column({ type: 'varchar', length: 32 })
   status!: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })

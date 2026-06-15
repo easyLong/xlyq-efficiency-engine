@@ -20,7 +20,15 @@ export class UpdateTaskDto {
 
   @IsOptional()
   @IsString()
+  urgencyLevel?: string;
+
+  @IsOptional()
+  @IsString()
   assigneeUserId?: string;
+
+  @IsOptional()
+  @IsString()
+  plannedStartAt?: string;
 
   @IsOptional()
   @IsString()

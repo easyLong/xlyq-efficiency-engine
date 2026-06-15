@@ -2,12 +2,14 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { randomUUID } from 'node:crypto';
 import { getAiPrompt } from '../ai-prompts/prompt-registry';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
+import { ensureIndex } from '../common/schema-maintenance';
 import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
 import { CustomerEntity } from '../customers/entities/customer.entity';
 import { ProjectEntity } from '../projects/entities/project.entity';
@@ -28,7 +30,7 @@ import { RequirementItemEntity } from './entities/requirement-item.entity';
 import { RequirementEntity } from './entities/requirement.entity';
 
 @Injectable()
-export class RequirementsService {
+export class RequirementsService implements OnModuleInit {
   private readonly defaultListLimit = 500;
 
   private readonly projectTypes = [
@@ -116,12 +118,76 @@ export class RequirementsService {
     private readonly dataSource: DataSource,
   ) {}
 
+  async onModuleInit() {
+    await this.ensureRequirementsSchema();
+  }
+
   async findAll(projectId?: string) {
     return this.requirementsRepository.find({
       where: projectId ? { project_id: projectId } : {},
       order: { created_at: 'DESC' },
       take: this.defaultListLimit,
     });
+  }
+
+  async historyBoard() {
+    const requirements = await this.findAll();
+    const requirementIds = requirements.map((requirement) => requirement.id);
+    if (requirementIds.length === 0) {
+      return {
+        requirements: [],
+        requirementItems: [],
+        tasks: [],
+        quoteMappings: [],
+      };
+    }
+
+    const requirementItems = await this.requirementItemsRepository.find({
+      where: { requirement_id: In(requirementIds) },
+      order: { created_at: 'ASC' },
+    });
+    const requirementItemIds = requirementItems.map((item) => item.id);
+    if (requirementItemIds.length === 0) {
+      return {
+        requirements,
+        requirementItems,
+        tasks: [],
+        quoteMappings: [],
+      };
+    }
+
+    const [tasks, quoteMappings] = await Promise.all([
+      this.tasksRepository.find({
+        where: { requirement_item_id: In(requirementItemIds) },
+        order: { created_at: 'DESC' },
+      }),
+      this.mappingsRepository.find({
+        where: { requirement_item_id: In(requirementItemIds) },
+        order: { created_at: 'DESC' },
+      }),
+    ]);
+    const mappingsByRequirementItemId = new Map<
+      string,
+      RequirementQuotationMappingEntity[]
+    >();
+    for (const mapping of quoteMappings) {
+      const rows =
+        mappingsByRequirementItemId.get(mapping.requirement_item_id) ?? [];
+      rows.push(mapping);
+      mappingsByRequirementItemId.set(mapping.requirement_item_id, rows);
+    }
+    for (const item of requirementItems) {
+      item.quote_scope_status = this.resolveQuoteScopeStatus(
+        mappingsByRequirementItemId.get(item.id) ?? [],
+      );
+    }
+
+    return {
+      requirements,
+      requirementItems,
+      tasks,
+      quoteMappings,
+    };
   }
 
   async findOne(id: string) {
@@ -156,7 +222,7 @@ export class RequirementsService {
       secondary_category: null,
       tertiary_category: null,
       status: 'draft',
-      priority: 'medium',
+      priority: 'p3',
       raw_content: dto.rawContent ?? null,
       summary: dto.rawContent ?? null,
     });
@@ -168,22 +234,18 @@ export class RequirementsService {
     const contactContext = dto.contactContextId
       ? await this.resolveContactContext(dto.contactContextId)
       : null;
-    const projectId = contactContext
-      ? await this.resolveProjectForContactContext(contactContext)
-      : dto.projectId;
 
     return this.createRequirementTaskBundle({
       ...dto,
-      projectId,
+      projectId: dto.projectId,
       customerId: contactContext?.customer_id ?? dto.customerId,
       contactContextId: contactContext?.id ?? dto.contactContextId,
       businessName: dto.businessName,
       businessPlatform:
         dto.businessPlatform ?? contactContext?.business_platform ?? null,
-      businessCategory: contactContext?.business_category ?? null,
-      secondaryCategory: contactContext?.secondary_category ?? null,
-      tertiaryCategory:
-        dto.tertiaryCategory ?? contactContext?.tertiary_category ?? null,
+      businessCategory: dto.businessCategory ?? null,
+      secondaryCategory: dto.secondaryCategory ?? null,
+      tertiaryCategory: dto.tertiaryCategory ?? null,
       sourceType: 'manual',
     });
   }
@@ -392,6 +454,14 @@ export class RequirementsService {
     const requirement = await this.findOne(id);
     const targetProjectId = dto.projectId ?? requirement.project_id;
     const targetCustomerId = dto.customerId ?? requirement.customer_id;
+    const priority =
+      dto.priority !== undefined
+        ? this.normalizePriority(dto.priority)
+        : requirement.priority;
+    const urgencyLevel =
+      dto.urgencyLevel !== undefined
+        ? this.normalizeUrgencyLevel(dto.urgencyLevel)
+        : requirement.urgency_level;
 
     if (targetProjectId) {
       const project = await this.projectsRepository.findOne({
@@ -408,11 +478,15 @@ export class RequirementsService {
     Object.assign(requirement, {
       title: dto.title ?? requirement.title,
       status: dto.status ?? requirement.status,
-      priority: dto.priority ?? requirement.priority,
+      priority,
+      urgency_level: urgencyLevel,
       project_id: targetProjectId,
       customer_id: targetCustomerId,
       business_name: dto.businessName ?? requirement.business_name,
       business_platform: dto.businessPlatform ?? requirement.business_platform,
+      business_category: dto.businessCategory ?? requirement.business_category,
+      secondary_category:
+        dto.secondaryCategory ?? requirement.secondary_category,
       tertiary_category: dto.tertiaryCategory ?? requirement.tertiary_category,
       raw_content: dto.rawContent ?? requirement.raw_content,
       summary: dto.summary ?? requirement.summary,
@@ -430,12 +504,14 @@ export class RequirementsService {
     const shouldSyncItem =
       dto.title !== undefined ||
       dto.rawContent !== undefined ||
-      dto.priority !== undefined;
+      dto.priority !== undefined ||
+      dto.urgencyLevel !== undefined;
     const shouldSyncTask = shouldSyncItem || dto.projectId !== undefined;
     if (item && shouldSyncItem) {
       item.item_title = dto.title ?? item.item_title;
       item.item_description = dto.rawContent ?? item.item_description;
-      item.priority = dto.priority ?? item.priority;
+      item.priority = priority ?? item.priority;
+      item.urgency_level = urgencyLevel ?? item.urgency_level;
       await this.requirementItemsRepository.save(item);
     }
 
@@ -450,7 +526,8 @@ export class RequirementsService {
         }
         task.task_name = dto.title ?? task.task_name;
         task.description = dto.rawContent ?? task.description;
-        task.priority = dto.priority ?? task.priority;
+        task.priority = priority ?? task.priority;
+        task.urgency_level = urgencyLevel ?? task.urgency_level;
         await this.tasksRepository.save(task);
       }
     }
@@ -537,7 +614,7 @@ export class RequirementsService {
       suggestedItems: [
         {
           itemTitle: requirement.title,
-          priority: requirement.priority ?? 'medium',
+          priority: requirement.priority ?? 'p3',
           estimatedHours: 8,
         },
       ],
@@ -590,7 +667,7 @@ export class RequirementsService {
       item_description: dto.itemDescription ?? null,
       business_goal: dto.businessGoal ?? null,
       acceptance_criteria: dto.acceptanceCriteria ?? null,
-      priority: dto.priority ?? 'medium',
+      priority: dto.priority ?? 'p3',
       estimated_hours: dto.estimatedHours ?? null,
       status: 'pending_confirm',
       quote_scope_status: 'not_started',
@@ -669,7 +746,10 @@ export class RequirementsService {
     title: string;
     rawContent?: string;
     priority?: string;
+    urgencyLevel?: string | null;
     estimatedHours?: string;
+    plannedStartAt?: string | null;
+    plannedEndAt?: string | null;
     contactContextId?: string | null;
     businessName?: string | null;
     businessPlatform?: string | null;
@@ -687,6 +767,8 @@ export class RequirementsService {
     };
   }) {
     const code = await this.nextRequirementCode();
+    const priority = this.normalizePriority(input.priority);
+    const urgencyLevel = this.normalizeUrgencyLevel(input.urgencyLevel);
 
     const requirement = await this.requirementsRepository.save(
       this.requirementsRepository.create({
@@ -703,7 +785,8 @@ export class RequirementsService {
         secondary_category: input.secondaryCategory ?? null,
         tertiary_category: input.tertiaryCategory ?? null,
         status: 'draft',
-        priority: input.priority ?? 'high',
+        priority,
+        urgency_level: urgencyLevel,
         raw_content: input.rawContent ?? null,
         summary: input.rawContent ?? input.title,
       }),
@@ -720,7 +803,8 @@ export class RequirementsService {
         business_goal: null,
         acceptance_criteria:
           '员工收到飞书任务消息；点击后进入在线资产表；只填写资产地址；系统可同步资产表并进入统计。',
-        priority: input.priority ?? 'high',
+        priority,
+        urgency_level: urgencyLevel,
         estimated_hours: input.estimatedHours ?? '6',
         status: 'confirmed',
         quote_scope_status: 'not_started',
@@ -736,10 +820,16 @@ export class RequirementsService {
         task_name: item.item_title,
         description: item.item_description ?? null,
         status: 'todo',
-        priority: item.priority ?? 'medium',
+        priority: item.priority ?? 'p3',
+        urgency_level: item.urgency_level ?? urgencyLevel,
         assignee_user_id: null,
         estimated_hours: item.estimated_hours ?? null,
-        planned_end_at: null,
+        planned_start_at: input.plannedStartAt
+          ? new Date(input.plannedStartAt)
+          : null,
+        planned_end_at: input.plannedEndAt
+          ? new Date(input.plannedEndAt)
+          : null,
         reporter_user_id: null,
         blocked_reason: null,
         progress_percent: 0,
@@ -776,26 +866,6 @@ export class RequirementsService {
       throw new BadRequestException('Contact context config not found');
     }
     return config;
-  }
-
-  private async resolveProjectForContactContext(
-    contactContext: ContactContextConfigEntity,
-  ) {
-    const project = await this.projectsRepository.findOne({
-      where: {
-        customer_id: contactContext.customer_id,
-        project_type: contactContext.business_category,
-      },
-      order: { created_at: 'DESC' },
-    });
-    if (!project) {
-      const created = await this.ensureProjectForAiRequirement({
-        customerId: contactContext.customer_id,
-        projectType: contactContext.business_category,
-      });
-      return created.id;
-    }
-    return project.id;
   }
 
   private async nextRequirementCode() {
@@ -883,7 +953,7 @@ export class RequirementsService {
         owner_user_id: ownerUser.id,
         project_type: input.projectType,
         status: 'pending',
-        priority: 'high',
+        priority: 'p3',
         budget_amount: null,
         planned_end_date: '2026-12-31',
         actual_end_date: null,
@@ -1430,19 +1500,120 @@ export class RequirementsService {
 
   private detectPriority(value: string) {
     if (/紧急|高优|必须|尽快|本周|今天|明天/.test(value)) {
-      return 'high';
+      return 'p0';
     }
     if (/低优|可选|后续|有空/.test(value)) {
-      return 'low';
+      return 'p4';
     }
-    return 'medium';
+    return 'p3';
   }
 
   private normalizePriority(value?: string) {
-    if (value === 'high' || value === 'medium' || value === 'low') {
-      return value;
+    const normalized = String(value ?? '')
+      .trim()
+      .toLowerCase();
+    if (/^p\d+$/.test(normalized)) {
+      const index = Math.min(4, Number(normalized.slice(1)));
+      return `p${Number.isFinite(index) ? index : 4}`;
     }
-    return this.detectPriority(value ?? '');
+    if (normalized === 'high') {
+      return 'p0';
+    }
+    if (normalized === 'medium') {
+      return 'p1';
+    }
+    if (normalized === 'low') {
+      return 'p2';
+    }
+    const detected = this.detectPriority(value ?? '');
+    const match = /^p(\d+)$/.exec(detected);
+    if (match) {
+      return `p${Math.min(4, Number(match[1]))}`;
+    }
+    return detected;
+  }
+
+  private normalizeUrgencyLevel(value?: string | null) {
+    const normalized = String(value ?? '').trim();
+    const allowed = new Set([
+      'important_urgent',
+      'important_not_urgent',
+      'urgent_not_important',
+      'normal',
+    ]);
+    return allowed.has(normalized) ? normalized : 'important_urgent';
+  }
+
+  private async ensureRequirementsSchema() {
+    await this.addColumnIfMissing(
+      'requirements',
+      'urgency_level',
+      'urgency_level VARCHAR(32) NULL AFTER priority',
+    );
+    await this.addColumnIfMissing(
+      'requirement_items',
+      'urgency_level',
+      'urgency_level VARCHAR(32) NULL AFTER priority',
+    );
+    await ensureIndex(
+      this.dataSource,
+      'requirements',
+      'idx_requirements_project_created',
+      ['project_id', 'created_at'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'requirements',
+      'idx_requirements_customer_created',
+      ['customer_id', 'created_at'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'requirements',
+      'idx_requirements_code',
+      ['requirement_code'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'requirement_items',
+      'idx_requirement_items_requirement_created',
+      ['requirement_id', 'created_at'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'requirement_items',
+      'idx_requirement_items_quote_status',
+      ['quote_scope_status', 'created_at'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'requirement_items',
+      'idx_requirement_items_item_no',
+      ['item_no'],
+    );
+  }
+
+  private async addColumnIfMissing(
+    tableName: string,
+    columnName: string,
+    columnDefinition: string,
+  ) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND column_name = ?
+      `,
+      [tableName, columnName],
+    );
+    if (Number(rows?.[0]?.count ?? 0) > 0) {
+      return;
+    }
+    await this.dataSource.query(
+      `ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`,
+    );
   }
 
   private uniqueQuotationItemIds(
@@ -1487,6 +1658,37 @@ export class RequirementsService {
 
   private isActiveQuoteMapping(mapping: RequirementQuotationMappingEntity) {
     return !['rejected', 'obsolete'].includes(mapping.mapping_status);
+  }
+
+  private resolveQuoteScopeStatus(
+    mappings: RequirementQuotationMappingEntity[],
+  ) {
+    const activeMappings = mappings.filter((mapping) =>
+      this.isActiveQuoteMapping(mapping),
+    );
+    if (activeMappings.length === 0) {
+      return 'not_started';
+    }
+    if (
+      activeMappings.some((mapping) => mapping.mapping_status === 'matched')
+    ) {
+      return 'matched';
+    }
+    if (
+      activeMappings.some(
+        (mapping) =>
+          mapping.mapping_status === 'pending_confirm' &&
+          mapping.quotation_item_id,
+      )
+    ) {
+      return 'pending_confirm';
+    }
+    if (
+      activeMappings.some((mapping) => mapping.mapping_status === 'partial')
+    ) {
+      return 'partial';
+    }
+    return 'changed';
   }
 
   private projectTypeLabel(value: string) {

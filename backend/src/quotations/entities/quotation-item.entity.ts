@@ -9,7 +9,7 @@ export class QuotationItemEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 64 })
   item_code!: string;
 
-  @Column({ type: 'varchar', length: 128 })
+  @Column({ type: 'varchar', length: 500 })
   item_name!: string;
 
   @Column({ type: 'varchar', length: 32 })

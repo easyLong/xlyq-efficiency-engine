@@ -20,18 +20,6 @@ export class CreateContactContextConfigDto {
   @IsString()
   businessPlatform?: string;
 
-  @IsString()
-  @IsNotEmpty()
-  businessCategory!: string;
-
-  @IsOptional()
-  @IsString()
-  secondaryCategory?: string;
-
-  @IsOptional()
-  @IsString()
-  tertiaryCategory?: string;
-
   @IsOptional()
   @IsString()
   remark?: string;

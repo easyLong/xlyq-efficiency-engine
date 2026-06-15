@@ -1,6 +1,6 @@
 # 飞书联调说明
 
-更新时间：2026-06-11
+更新时间：2026-06-15
 
 ## 当前联调结论
 
@@ -111,7 +111,7 @@ Invoke-RestMethod `
 ```powershell
 $body = @{
   recipientUserId = "<userId>"
-  title = "效能引擎联调测试"
+  title = "向量引擎管理工作台联调测试"
   content = "如果你看到这条消息，说明飞书应用消息已打通。"
   channels = @("in_app", "feishu_app")
   actionUrl = "https://www.feishu.cn"
@@ -149,7 +149,7 @@ Invoke-RestMethod `
 
 员工会收到两类通知：
 
-- 新任务通知：提示被指派任务。
+- 新任务通知：提示被指派任务，并展示基金与平台信息。
 - 交付登记通知：飞书卡片里包含 `填写项目资产` 按钮。
 
 ## 当前环境验证记录
@@ -184,6 +184,8 @@ Invoke-RestMethod `
 4. 员工打开资产页后，任务自动进入 `in_progress`。
 5. 员工上传多张图片和一个最终交付链接，提交后任务进入 `pending_review`。
 6. 管理者在后台验收，通过后进入 `completed`，退回则回到 `in_progress`。
+
+后台历史需求任务中，已指派任务默认收起负责人；点击“改派”后再展开员工下拉框并确认，减少误操作和页面占用。
 
 进度提醒扫描：
 

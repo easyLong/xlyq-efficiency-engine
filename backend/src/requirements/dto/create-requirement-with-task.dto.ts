@@ -21,7 +21,19 @@ export class CreateRequirementWithTaskDto {
 
   @IsOptional()
   @IsString()
+  urgencyLevel?: string;
+
+  @IsOptional()
+  @IsString()
   estimatedHours?: string;
+
+  @IsOptional()
+  @IsString()
+  plannedStartAt?: string;
+
+  @IsOptional()
+  @IsString()
+  plannedEndAt?: string;
 
   @IsOptional()
   @IsUUID()
@@ -34,6 +46,14 @@ export class CreateRequirementWithTaskDto {
   @IsOptional()
   @IsString()
   businessPlatform?: string;
+
+  @IsOptional()
+  @IsString()
+  businessCategory?: string;
+
+  @IsOptional()
+  @IsString()
+  secondaryCategory?: string;
 
   @IsOptional()
   @IsString()

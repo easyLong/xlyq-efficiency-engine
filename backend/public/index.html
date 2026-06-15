@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>效能引擎 MVP 工作台</title>
+  <title>向量引擎管理工作台</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -236,6 +236,16 @@
     .requirement-row:hover { background: #fff9e8; }
     .requirement-row.active { background: #eef6eb; box-shadow: inset 4px 0 0 #2f6b45; }
     .requirement-list { display: grid; gap: 12px; }
+    .history-load-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      color: #667085;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 12px 0 2px;
+    }
     .requirement-card {
       border: 1px solid #d8dfcf;
       background: #fff;
@@ -334,6 +344,7 @@
     .quote-selected { min-width: 0; }
     .quote-selected .row-sub { word-break: break-word; }
     .assign-action { display: grid; grid-template-columns: minmax(112px, 148px) auto; gap: 5px; align-items: center; justify-content: start; min-width: 0; }
+    .assign-action.compact { grid-template-columns: auto auto; }
     .assign-action select {
       width: 148px;
       max-width: 148px;
@@ -735,6 +746,57 @@
     .edit-panel-actions { display: flex; gap: 10px; flex-wrap: wrap; }
     .toast { position: fixed; right: 22px; bottom: 22px; background: #16221b; color: #fff; border-radius: 14px; padding: 13px 15px; opacity: 0; transform: translateY(14px); transition: .2s; pointer-events: none; }
     .toast.show { opacity: 1; transform: translateY(0); }
+    .dialog-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: block;
+      padding: 18px;
+      background: rgba(18, 29, 23, .34);
+      backdrop-filter: blur(3px);
+    }
+    .confirm-dialog {
+      width: min(420px, 100%);
+      position: fixed;
+      border: 1px solid #ead2c7;
+      border-radius: 16px;
+      background: #fffdf9;
+      box-shadow: 0 24px 70px rgba(22, 34, 27, .22);
+      overflow: hidden;
+    }
+    .confirm-dialog-body {
+      padding: 18px 18px 14px;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .confirm-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: #fff0eb;
+      color: #a13b22;
+      font-weight: 900;
+      font-size: 18px;
+    }
+    .confirm-dialog h3 { margin: 1px 0 6px; font-size: 17px; color: #18231d; }
+    .confirm-dialog p { margin: 0; color: #667163; line-height: 1.6; font-size: 13px; }
+    .confirm-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 14px;
+      background: #fbf8ed;
+      border-top: 1px solid #efe7d3;
+    }
+    .confirm-actions .btn {
+      min-height: 34px;
+      border-radius: 10px;
+      padding: 7px 12px;
+    }
     .hidden { display: none !important; }
     @media (max-width: 980px) {
       .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-kpi-grid, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
@@ -750,8 +812,8 @@
   <div id="loginView" class="login">
     <div class="panel login-card">
       <div class="login-hero">
-        <h1>效能引擎</h1>
-        <p>从登录开始，走完“需求录入 -> 一个需求生成一个任务 -> 指派员工 -> 飞书通知 -> 在线资产表填写 -> 统计分析”的 MVP 全链路。</p>
+        <h1>向量引擎管理工作台</h1>
+        <p>从登录开始，走完“需求录入 -> 一个需求生成一个任务 -> 指派员工 -> 飞书通知 -> 在线资产表填写 -> 需求面板”的 MVP 全链路。</p>
         <p class="muted">当前是 MVP 登录：使用系统已有用户进入，不做密码校验，后续可替换为正式账号密码或飞书登录。</p>
       </div>
       <div class="login-form">
@@ -775,8 +837,8 @@
   <div id="appView" class="shell hidden">
     <aside class="side">
       <div class="brand">
-        <h1>效能引擎</h1>
-        <p>项目管理 MVP 工作台</p>
+        <h1>向量引擎</h1>
+        <p>管理工作台</p>
       </div>
       <div class="user-card">
         <strong id="currentUser">未登录</strong>
@@ -784,9 +846,9 @@
       </div>
       <nav class="nav">
         <button class="active" data-view="requirements" onclick="switchView('requirements')">需求与指派</button>
-        <button data-view="quotations" onclick="switchView('quotations')">报价单</button>
-        <button data-view="settlement" onclick="switchView('settlement')">结算单</button>
-        <button data-view="dashboard" onclick="switchView('dashboard')">统计分析</button>
+        <button data-view="quotations" onclick="switchView('quotations')">合同报价录入</button>
+        <button data-view="settlement" onclick="switchView('settlement')">结算统计</button>
+        <button data-view="dashboard" onclick="switchView('dashboard')">需求面板</button>
         <button data-view="messages" onclick="switchView('messages')">消息记录</button>
       </nav>
       <button class="btn warn" onclick="logout()">退出登录</button>
@@ -825,17 +887,35 @@
                 <label>客户
                   <select id="customerSelect" onchange="syncProjectSelection(false)"></select>
                 </label>
-                <label>业务大类
-                  <select id="projectTypeSelect" onchange="syncProjectSelection(false)"></select>
-                </label>
                 <label>业务平台
                   <select id="businessPlatformInput"></select>
                 </label>
+                <label>业务大类
+                  <select id="projectTypeSelect" onchange="syncProjectSelection(false)"></select>
+                </label>
                 <label>二级分类
-                  <input id="secondaryCategoryInput" readonly />
+                  <select id="secondaryCategoryInput"></select>
                 </label>
                 <label>三级分类
                   <input id="tertiaryCategoryInput" placeholder="可由对接人带出，也可人工修改" />
+                </label>
+                <label>开始时间
+                  <input id="plannedStartAtInput" type="date" />
+                </label>
+                <label>截止时间
+                  <input id="plannedEndAtInput" type="date" onchange="updateRequirementPriorityFromDeadline()" />
+                </label>
+                <label>任务优先级
+                  <input id="requirementPriorityInput" readonly placeholder="请先选择截止时间" />
+                </label>
+                <label>任务紧急程度
+                  <select id="requirementUrgencyInput">
+                    <option value="">请选择紧急程度</option>
+                    <option value="important_urgent">重要且紧急</option>
+                    <option value="important_not_urgent">重要不紧急</option>
+                    <option value="urgent_not_important">紧急不重要</option>
+                    <option value="normal">不紧急不重要</option>
+                  </select>
                 </label>
               </div>
               <div id="projectPreview" class="preview-box muted">请选择客户和业务大类。</div>
@@ -901,26 +981,26 @@
           <div class="section-title">
             <div>
               <div class="kicker">Quotation</div>
-              <h3>上传报价单生成子项</h3>
+              <h3>合同报价录入</h3>
             </div>
           </div>
           <div class="quotation-import-grid">
             <label>基金客户
               <select id="quoteCustomerSelect" onchange="syncQuoteProjectSelection(false)"></select>
             </label>
-            <label>报价单文件
+            <label>合同报价文件
               <input id="quotationFile" type="file" accept=".txt,.md,.csv,.json" onchange="loadQuotationFile()" />
             </label>
             <div class="quotation-import-actions">
               <button class="btn" onclick="previewQuotationItems()">预览</button>
-              <button id="importQuotationButton" class="btn primary" onclick="importQuotation()">生成报价单和子项</button>
+              <button id="importQuotationButton" class="btn primary" onclick="importQuotation()">生成合同报价和子项</button>
               <button class="btn" onclick="clearQuotationForm()">清空</button>
             </div>
-            <label class="wide">报价单内容
-              <textarea id="quotationContent" placeholder="可上传文件，也可以直接粘贴报价单内容"></textarea>
+            <label class="wide">合同报价内容
+              <textarea id="quotationContent" placeholder="可上传文件，也可以直接粘贴合同报价内容"></textarea>
             </label>
             <div class="wide">
-              <div id="quotationPreview" class="split-preview muted">上传或粘贴报价单后，可先预览将生成的细粒度子项。</div>
+              <div id="quotationPreview" class="split-preview muted">上传或粘贴合同报价后，可先预览将生成的细粒度子项。</div>
               <div id="quotationMetrics" class="summary-strip quotation-metrics"></div>
             </div>
             <div id="quoteProjectPreview" class="preview-box muted hidden">请选择基金客户。</div>
@@ -931,9 +1011,9 @@
           <div class="section-title">
             <div>
               <div class="kicker">History</div>
-              <h3>报价单列表</h3>
+              <h3>合同报价列表</h3>
             </div>
-            <button class="btn" onclick="refreshQuotations()">刷新报价单</button>
+            <button class="btn" onclick="refreshQuotations()">刷新合同报价</button>
           </div>
           <div id="quotationsBoard" class="table-wrap"></div>
         </div>
@@ -945,7 +1025,7 @@
               <h3>报价子项明细</h3>
             </div>
             <div class="btns">
-              <span id="selectedQuotationHint" class="tag">请选择报价单</span>
+              <span id="selectedQuotationHint" class="tag">请选择合同报价</span>
               <button class="btn primary" onclick="startAddQuotationItem()">新增子项</button>
             </div>
           </div>
@@ -958,8 +1038,8 @@
           <div class="section-title">
             <div>
               <div class="kicker">Quarter Mapping</div>
-              <h3>需求报价单子项映射</h3>
-              <p>按基金和季度管理，一个季度对应一张报价单；先选基金，再选择报价子项进行适配确认。</p>
+              <h3>需求合同报价子项映射</h3>
+              <p>按基金和季度管理，一个季度对应一张合同报价；先选基金，再选择报价子项进行适配确认。</p>
             </div>
             <span class="tag">季度报价标准</span>
           </div>
@@ -972,7 +1052,7 @@
             </label>
           </div>
           <div class="form-grid">
-            <label>季度报价单
+            <label>季度合同报价
               <select id="mappingQuotationSelect" onchange="loadQuarterMappingWorkbench()"></select>
             </label>
             <label>操作
@@ -1010,47 +1090,57 @@
           <div class="section-title">
             <div>
               <div class="kicker">Settlement</div>
-              <h3>结算单预览</h3>
-              <p>基于“需求报价已确认 + 任务资产个数”实时生成结算明细，可按基金、业务和员工维度统计。</p>
+              <h3>结算统计</h3>
+              <p>基于“已确认报价子项 + 任务资产数量”统计结算金额和资产数量，支持按基金、平台、业务分类和员工维度查看。</p>
             </div>
-            <span class="tag">资产个数 × 报价单价</span>
+            <span class="tag">金额 / 资产 / 维度图表</span>
           </div>
           <div class="form-grid">
             <label>基金维度
               <select id="settlementCustomerSelect" onchange="setSettlementPrimaryCustomer(this.value)"></select>
             </label>
-            <label>季度维度
-              <select id="settlementQuarterSelect" onchange="loadSettlementStatement()"></select>
-            </label>
           </div>
           <div id="settlementDimensionFilters" class="form-grid"></div>
           <div class="btns">
-            <button class="btn primary" onclick="loadSettlementStatement()">生成结算单预览</button>
+            <button class="btn primary" onclick="loadSettlementStatement()">刷新结算统计</button>
             <button class="btn" onclick="switchView('requirements')">回到需求与指派</button>
           </div>
         </div>
 
         <div id="settlementMetrics" class="summary-strip"></div>
 
-        <div class="panel">
-          <div class="section-title">
-            <div>
-              <div class="kicker">Fund Summary</div>
-              <h3>基金维度汇总</h3>
+        <div class="dashboard-board-grid">
+          <div class="panel dashboard-card">
+            <div class="section-title">
+              <div>
+                <div class="kicker">Amount By Dimension</div>
+                <h3>结算金额分布</h3>
+              </div>
+              <span id="settlementAmountChartTag" class="tag">自动联动</span>
             </div>
-            <span id="settlementScopeHint" class="tag">实时统计</span>
+            <div id="settlementAmountChart"></div>
           </div>
-          <div id="settlementFundSummary" class="table-wrap"></div>
+          <div class="panel dashboard-card">
+            <div class="section-title">
+              <div>
+                <div class="kicker">Assets By Dimension</div>
+                <h3>资产数量分布</h3>
+              </div>
+              <span id="settlementAssetChartTag" class="tag">自动联动</span>
+            </div>
+            <div id="settlementAssetChart"></div>
+          </div>
         </div>
 
         <div class="panel">
           <div class="section-title">
             <div>
               <div class="kicker">Details</div>
-              <h3>结算明细</h3>
+              <h3>结算统计明细</h3>
             </div>
-            <span class="tag">只对“报价已确认且资产数 > 0”的行计入金额</span>
+            <span id="settlementScopeHint" class="tag">实时统计</span>
           </div>
+          <div id="settlementDetailFilters" class="form-grid"></div>
           <div id="settlementDetails" class="table-wrap"></div>
         </div>
       </section>
@@ -1059,18 +1149,8 @@
         <div class="panel">
           <div class="section-title">
             <div>
-              <h3>管理驾驶舱</h3>
-              <p>汇总需求、任务、报价、结算和员工完成情况，支持按基金、业务和员工维度筛选。</p>
-            </div>
-            <div class="inline-assign">
-              <label>
-                基金筛选
-                <select id="analyticsCustomerSelect" onchange="setDashboardPrimaryCustomer(this.value)"></select>
-              </label>
-              <label>
-                季度筛选
-                <select id="analyticsQuarterSelect" onchange="refreshAnalytics()"></select>
-              </label>
+              <h3>需求面板</h3>
+              <p>围绕需求全链路展示任务状态、报价确认、资产交付和维度统计，支持按基金、平台、分类和员工筛选。</p>
             </div>
           </div>
         </div>
@@ -1078,16 +1158,6 @@
           <div id="analyticsDimensionFilters" class="form-grid"></div>
         </div>
         <div id="metrics" class="grid cols-4"></div>
-        <div class="panel">
-          <div class="section-title">
-            <div>
-              <div class="kicker">Full Grain Matrix</div>
-              <h3>全维度统计矩阵</h3>
-            </div>
-            <span id="analyticsScopeHint" class="tag">当前筛选</span>
-          </div>
-          <div id="dimensionMatrixBox" class="table-wrap dimension-matrix"></div>
-        </div>
         <div class="dashboard-board-grid">
           <div id="taskStatusOverview" class="panel dashboard-focus-card"></div>
           <div id="taskPriorityOverview" class="panel dashboard-focus-card"></div>
@@ -1098,7 +1168,7 @@
               <div class="kicker">Dimension Summary</div>
               <h3>维度汇总</h3>
             </div>
-            <span class="tag">基金 / 对接人 / 平台 / 分类 / 员工</span>
+            <span class="tag">自动联动</span>
           </div>
           <div id="dimensionSummaryBoard" class="dimension-summary-grid"></div>
         </div>
@@ -1119,7 +1189,7 @@
                 <div class="kicker">Progress Funnel</div>
                 <h3>任务进展看板</h3>
               </div>
-              <span class="tag">待开始 / 进行中 / 已完成</span>
+              <span class="tag">漏斗图</span>
             </div>
             <div id="taskFunnelBoard"></div>
           </div>
@@ -1130,19 +1200,9 @@
               <div class="kicker">Key Tasks</div>
               <h3>关键任务</h3>
             </div>
-            <span class="tag">优先展示延期、高优先级和待报价任务</span>
+            <span class="tag">优先展示延期、P0/P1 和待报价任务</span>
           </div>
           <div id="keyTaskBoard" class="table-wrap"></div>
-        </div>
-        <div class="panel">
-          <div class="section-title">
-            <div>
-              <div class="kicker">Settlement Top</div>
-              <h3>结算金额 Top</h3>
-            </div>
-            <span class="tag">资产个数 × 已确认报价单价</span>
-          </div>
-          <div id="settlementTopBox" class="table-wrap"></div>
         </div>
         <div class="panel">
           <h3>任务资产明细</h3>
@@ -1160,6 +1220,21 @@
   </div>
 
   <div id="toast" class="toast"></div>
+  <div id="confirmBackdrop" class="dialog-backdrop hidden" onclick="handleConfirmBackdropClick(event)">
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" onclick="event.stopPropagation()">
+      <div class="confirm-dialog-body">
+        <div class="confirm-icon">!</div>
+        <div>
+          <h3 id="confirmTitle">确认操作</h3>
+          <p id="confirmMessage">此操作需要确认。</p>
+        </div>
+      </div>
+      <div class="confirm-actions">
+        <button id="confirmCancelButton" class="btn" onclick="resolveConfirmDialog(false)">取消</button>
+        <button id="confirmOkButton" class="btn danger" onclick="resolveConfirmDialog(true)">确认删除</button>
+      </div>
+    </div>
+  </div>
 
   <script src="/js/app-shell.js"></script>
   <script src="/js/api-client.js"></script>
@@ -1176,6 +1251,7 @@
       projects: [],
       customers: [],
       contactContexts: [],
+      businessCategoryRelations: [],
       requirements: [],
       requirementItems: [],
       tasks: [],
@@ -1191,10 +1267,20 @@
       settlementCustomerId: "all",
       settlementQuarter: null,
       settlementStatement: null,
+      settlementDetailFilters: {
+        customerId: "all",
+        startDate: "",
+        endDate: "",
+      },
       settlementRequestSeq: 0,
       requirementFilter: "all",
       requirementKeyword: "",
       requirementKeywordTimer: null,
+      requirementVisibleLimit: 80,
+      requirementFilterUiKey: "",
+      quoteEditingItemId: null,
+      assignmentEditingTaskId: null,
+      lookupMaps: null,
       dimensionFilters: {
         customerId: "all",
         contactContextId: "all",
@@ -1243,6 +1329,68 @@
       qs("toast").classList.add("show");
       setTimeout(() => qs("toast").classList.remove("show"), 2300);
     }
+    let pendingConfirmResolve = null;
+    let lastPointerPosition = null;
+    document.addEventListener("pointerdown", event => {
+      if (!event.target?.closest?.("#confirmBackdrop")) {
+        lastPointerPosition = { x: event.clientX, y: event.clientY };
+      }
+    }, true);
+    function confirmDialog({
+      title = "确认操作",
+      message = "此操作需要确认。",
+      okText = "确认",
+      cancelText = "取消",
+    } = {}) {
+      const backdrop = qs("confirmBackdrop");
+      qs("confirmTitle").textContent = title;
+      qs("confirmMessage").textContent = message;
+      qs("confirmOkButton").textContent = okText;
+      qs("confirmCancelButton").textContent = cancelText;
+      backdrop.classList.remove("hidden");
+      positionConfirmDialog();
+      qs("confirmCancelButton").focus();
+      return new Promise(resolve => {
+        pendingConfirmResolve = resolve;
+      });
+    }
+    function positionConfirmDialog() {
+      const backdrop = qs("confirmBackdrop");
+      const dialog = backdrop?.querySelector(".confirm-dialog");
+      if (!dialog) return;
+      const margin = 14;
+      const rect = dialog.getBoundingClientRect();
+      const point = lastPointerPosition || {
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      };
+      const left = Math.min(
+        Math.max(point.x - rect.width - 20, margin),
+        Math.max(margin, window.innerWidth - rect.width - margin),
+      );
+      const preferredTop = point.y - rect.height - 20;
+      const fallbackTop = point.y + 20;
+      const top = preferredTop >= margin
+        ? preferredTop
+        : Math.min(fallbackTop, Math.max(margin, window.innerHeight - rect.height - margin));
+      dialog.style.left = `${left}px`;
+      dialog.style.top = `${top}px`;
+    }
+    function resolveConfirmDialog(value) {
+      qs("confirmBackdrop").classList.add("hidden");
+      if (pendingConfirmResolve) {
+        pendingConfirmResolve(Boolean(value));
+        pendingConfirmResolve = null;
+      }
+    }
+    function handleConfirmBackdropClick(event) {
+      if (event.target?.id === "confirmBackdrop") resolveConfirmDialog(false);
+    }
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !qs("confirmBackdrop")?.classList.contains("hidden")) {
+        resolveConfirmDialog(false);
+      }
+    });
     function addLog(title, data) {
       state.logs.unshift({ title, time: new Date().toLocaleTimeString(), data });
       renderLogs();
@@ -1254,7 +1402,7 @@
     async function loadBootstrap() {
       const { users, health } = await api.loadBootstrap();
       state.users = users;
-      qs("healthPill").textContent = `后端 ${appData.health.status} / 数据库 ${appData.health.database}`;
+      qs("healthPill").textContent = `后端 ${health.status} / 数据库 ${health.database}`;
       renderLoginUsers();
       qs("loginHint").textContent = "请选择用户登录。";
     }
@@ -1263,13 +1411,15 @@
       state.projects = appData.projects;
       state.customers = appData.customers;
       state.contactContexts = appData.contactContexts;
+      state.businessCategoryRelations = appData.businessCategoryRelations || [];
       state.users = appData.users;
       state.requirements = appData.requirements;
       state.requirementItems = appData.requirementItems;
       state.tasks = appData.tasks;
       state.quotations = appData.quotations;
       state.quoteMappings = appData.quoteMappings;
-      qs("healthPill").textContent = `后端 ${health.status} / 数据库 ${health.database}`;
+      invalidateLookupMaps();
+      qs("healthPill").textContent = `后端 ${appData.health.status} / 数据库 ${appData.health.database}`;
       renderBootstrap();
     }
     function unwrap(value) {
@@ -1284,7 +1434,6 @@
       qs("mappingCustomerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
       qs("mappingQuarterSelect").innerHTML = quarterOptions().map(item => `<option value="${item.value}">${item.label}</option>`).join("");
       qs("settlementCustomerSelect").innerHTML = [`<option value="all">全部基金客户</option>`, ...customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`)].join("");
-      qs("settlementQuarterSelect").innerHTML = quarterOptions().map(item => `<option value="${item.value}">${item.label}</option>`).join("");
       state.mappingCustomerId ||= customers[0]?.id || null;
       state.mappingQuarter ||= currentQuarter();
       state.settlementQuarter ||= currentQuarter();
@@ -1292,25 +1441,24 @@
       if (state.mappingCustomerId) qs("mappingCustomerSelect").value = state.mappingCustomerId;
       qs("mappingQuarterSelect").value = state.mappingQuarter;
       qs("settlementCustomerSelect").value = state.settlementCustomerId;
-      qs("settlementQuarterSelect").value = state.settlementQuarter;
       renderAnalyticsFilters(customers);
-      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", false);
+      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", true, true);
       renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
       renderContactContextOptions();
-      qs("projectTypeSelect").innerHTML = projectTypes.map(t => `<option value="${t.value}">${t.label}</option>`).join("");
+      qs("projectTypeSelect").innerHTML = businessCategoryOptions(qs("projectTypeSelect")?.value || projectTypes[0]?.value || "", null);
       qs("businessPlatformInput").innerHTML = businessPlatformOptions("");
       syncProjectSelection(false);
       syncQuoteProjectSelection(false);
       const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
       qs("requirementTitle").value ||= `MVP全链路测试需求-${stamp}`;
-      qs("requirementContent").value ||= "客户希望在效能引擎中录入需求后，项目经理可以自动生成任务并指派给员工。员工收到飞书消息后进入在线资产表，只填写资产地址，管理者可以查看统计分析。";
+      qs("requirementContent").value ||= "客户希望在向量引擎中录入需求后，项目经理可以自动生成任务并指派给员工。员工收到飞书消息后进入在线资产表，只填写资产地址，管理者可以查看需求面板。";
       qs("aiRequirementTitle").value ||= `AI需求文件-${stamp}`;
       renderRequirementBoard();
       renderQuotationsBoard();
       renderQuotationMetrics([]);
     }
     function renderLoginUsers() {
-      qs("loginUser").innerHTML = state.users.map(u => `<option value="${escapeAttr(u.username)}">${escapeHtml(u.display_name || u.username)} · ${escapeHtml(u.username)}</option>`).join("");
+      qs("loginUser").innerHTML = state.users.map(u => `<option value="${escapeAttr(u.username)}">${escapeHtml(userLoginLabel(u))}</option>`).join("");
     }
     function renderAnalyticsFilters(customers) {
       const select = qs("analyticsCustomerSelect");
@@ -1320,32 +1468,23 @@
         ...customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "基金")} · ${escapeHtml(c.customer_name)}</option>`),
       ].join("");
       select.value = state.analyticsCustomerId;
-      const quarterSelect = qs("analyticsQuarterSelect");
-      if (quarterSelect) {
-        quarterSelect.innerHTML = quarterOptions().map(item => `<option value="${item.value}">${item.label}</option>`).join("");
-        quarterSelect.value = state.analyticsQuarter || currentQuarter();
-      }
     }
     function renderContactContextOptions() {
       const select = qs("contactContextSelect");
       if (!select) return;
       const activeContexts = state.contactContexts.filter(item => item.status !== "inactive");
       select.innerHTML = [
-        `<option value="">手动选择客户和分类</option>`,
+        `<option value="">手动选择客户和平台</option>`,
         ...activeContexts.map(item => `<option value="${item.id}">${escapeHtml(contactContextLabel(item))}</option>`),
       ].join("");
       syncContactContextPreview(null);
     }
     function contactContextLabel(context) {
       const customer = state.customers.find(item => item.id === context.customer_id);
-      const typeLabel = projectTypeLabel(context.business_category);
       return [
         context.contact_name,
         customer?.customer_name,
         context.business_platform,
-        typeLabel,
-        context.secondary_category,
-        context.tertiary_category,
       ].filter(Boolean).join(" · ");
     }
     function selectedContactContext() {
@@ -1360,14 +1499,11 @@
         return;
       }
       if (context.customer_id && qs("customerSelect")) qs("customerSelect").value = context.customer_id;
-      if (context.business_category && qs("projectTypeSelect")) qs("projectTypeSelect").value = context.business_category;
       syncContactContextPreview(context);
       await syncProjectSelection(false);
     }
     function syncContactContextPreview(context) {
       if (qs("businessPlatformInput")) qs("businessPlatformInput").value = context?.business_platform || "";
-      if (qs("secondaryCategoryInput")) qs("secondaryCategoryInput").value = context?.secondary_category || "";
-      if (qs("tertiaryCategoryInput")) qs("tertiaryCategoryInput").value = context?.tertiary_category || "";
     }
     async function login() {
       const username = qs("loginUsername").value.trim() || qs("loginUser").value;
@@ -1391,7 +1527,7 @@
       qs("loginView").classList.add("hidden");
       qs("appView").classList.remove("hidden");
       qs("currentUser").textContent = state.user.display_name || state.user.username;
-      qs("currentUserMeta").textContent = `${state.user.username} · ${state.user.source}`;
+      qs("currentUserMeta").textContent = userMetaLabel(state.user);
     }
     async function initializeAppAfterLogin() {
       await loadAppData();
@@ -1434,10 +1570,10 @@
       ["requirements", "quotations", "mappings", "settlement", "dashboard", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
       const titles = {
         requirements: ["需求与指派", "录入客户需求后自动生成任务，并在同一页完成员工指派。"],
-        quotations: ["报价单", "上传报价单并拆成最细粒度子项，为后续需求任务挂靠做准备。"],
+        quotations: ["合同报价录入", "上传合同报价并拆成最细粒度子项，为后续需求任务挂靠做准备。"],
         mappings: ["报价子项选择", "在历史需求任务中为需求选择对应基金的报价子项。"],
-        settlement: ["结算单", "按基金和季度汇总已确认报价需求，根据任务资产个数生成结算预览。"],
-        dashboard: ["统计分析", "查看任务看板、完成情况和业务统计。"],
+        settlement: ["结算统计", "按基金、平台、业务分类和员工维度统计结算金额与资产数量。"],
+        dashboard: ["需求面板", "按不同维度查看需求、任务、报价和资产交付情况，并通过图表观察进展。"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
       };
       qs("pageTitle").textContent = titles[view][0];
@@ -1455,7 +1591,7 @@
       return projectTypes.find(t => t.value === qs("projectTypeSelect").value) || projectTypes[0];
     }
     function projectTypeLabel(type) {
-      return projectTypes.find(t => t.value === type)?.label || type || "未分类";
+      return businessCategoryDefinitions().find(t => t.value === type)?.label || projectTypes.find(t => t.value === type)?.label || type || "未分类";
     }
     function currentQuarter(date = new Date()) {
       return `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`;
@@ -1492,35 +1628,87 @@
         in_progress: "进行中",
         blocked: "受阻",
         pending_review: "待验收",
-        completed: "已完成",
+        completed: "已验收",
         cancelled: "已取消",
         returned: "已退回",
       };
       return labels[status] || status || "未生成";
     }
+    function invalidateLookupMaps() {
+      state.lookupMaps = null;
+    }
+    function getLookupMaps() {
+      if (state.lookupMaps) return state.lookupMaps;
+      const requirementById = new Map(state.requirements.map(item => [item.id, item]));
+      const requirementItemById = new Map(state.requirementItems.map(item => [item.id, item]));
+      const itemByRequirementId = new Map();
+      const requirementByItemId = new Map();
+      for (const item of state.requirementItems) {
+        if (!itemByRequirementId.has(item.requirement_id)) {
+          itemByRequirementId.set(item.requirement_id, item);
+        }
+        requirementByItemId.set(item.id, requirementById.get(item.requirement_id) || null);
+      }
+      const taskByRequirementItemId = new Map();
+      for (const task of state.tasks) {
+        if (task.requirement_item_id && !taskByRequirementItemId.has(task.requirement_item_id)) {
+          taskByRequirementItemId.set(task.requirement_item_id, task);
+        }
+      }
+      const mappingByRequirementItemId = new Map();
+      for (const mapping of state.quoteMappings) {
+        const current = mappingByRequirementItemId.get(mapping.requirement_item_id);
+        const mappingTime = new Date(mapping.updated_at || mapping.created_at || 0).getTime();
+        const currentTime = current ? new Date(current.updated_at || current.created_at || 0).getTime() : -1;
+        if (!current || mappingTime >= currentTime) {
+          mappingByRequirementItemId.set(mapping.requirement_item_id, mapping);
+        }
+      }
+      const quotationItemById = new Map();
+      for (const items of Object.values(state.quotationItemsById)) {
+        for (const item of items || []) {
+          quotationItemById.set(item.id, item);
+        }
+      }
+      state.lookupMaps = {
+        itemByRequirementId,
+        requirementItemById,
+        requirementByItemId,
+        taskByRequirementItemId,
+        mappingByRequirementItemId,
+        quotationItemById,
+        quotationById: new Map(state.quotations.map(item => [item.id, item])),
+        requirementById,
+        customerById: new Map(state.customers.map(item => [item.id, item])),
+        userById: new Map(state.users.map(item => [item.id, item])),
+        projectById: new Map(state.projects.map(item => [item.id, item])),
+        contactContextById: new Map(state.contactContexts.map(item => [item.id, item])),
+      };
+      return state.lookupMaps;
+    }
     function customerName(id) {
-      return state.customers.find(c => c.id === id)?.customer_name || "-";
+      return getLookupMaps().customerById.get(id)?.customer_name || "-";
     }
     function contactContextName(id) {
-      const context = state.contactContexts.find(item => item.id === id);
+      const context = getLookupMaps().contactContextById.get(id);
       return context ? contactContextLabel(context) : "";
     }
     function projectName(id) {
-      return state.projects.find(p => p.id === id)?.project_name || "-";
+      return getLookupMaps().projectById.get(id)?.project_name || "-";
     }
     function businessCategoryNameForProject(id) {
-      const project = state.projects.find(p => p.id === id);
+      const project = getLookupMaps().projectById.get(id);
       return projectTypeLabel(project?.project_type) || "-";
     }
     function projectForTask(task) {
-      return state.projects.find(p => p.id === task?.project_id) || null;
+      return getLookupMaps().projectById.get(task?.project_id) || null;
     }
     function customerNameForTask(task) {
       const project = projectForTask(task);
       return project ? customerName(project.customer_id) : "-";
     }
     function assigneeName(id) {
-      const user = state.users.find(u => u.id === id);
+      const user = getLookupMaps().userById.get(id);
       return user ? userDisplayName(user) : "-";
     }
     function resetDimensionFilters() {
@@ -1539,14 +1727,15 @@
       if (qs("settlementCustomerSelect")) qs("settlementCustomerSelect").value = "all";
     }
     function contactContextForRequirement(requirement) {
-      return state.contactContexts.find(item => item.id === requirement?.source_ref_id) || null;
+      return getLookupMaps().contactContextById.get(requirement?.source_ref_id) || null;
     }
     function projectForRequirement(requirement) {
-      return state.projects.find(project => project.id === requirement?.project_id) || null;
+      return getLookupMaps().projectById.get(requirement?.project_id) || null;
     }
     function requirementForTask(task) {
-      const item = state.requirementItems.find(entry => entry.id === task?.requirement_item_id);
-      return requirementForItem(item);
+      const maps = getLookupMaps();
+      const item = task?.requirement_item_id ? maps.requirementItemById.get(task.requirement_item_id) : null;
+      return item ? maps.requirementByItemId.get(item.id) || null : null;
     }
     function requirementDimensionSnapshot(requirement, task = null) {
       const context = contactContextForRequirement(requirement);
@@ -1555,9 +1744,9 @@
         customerId: requirement?.customer_id || project?.customer_id || "",
         contactContextId: requirement?.source_ref_id || "",
         businessPlatform: requirement?.business_platform || context?.business_platform || "",
-        businessCategory: requirement?.business_category || context?.business_category || project?.project_type || "",
-        secondaryCategory: requirement?.secondary_category || context?.secondary_category || "",
-        tertiaryCategory: requirement?.tertiary_category || context?.tertiary_category || "",
+        businessCategory: requirement?.business_category || project?.project_type || "",
+        secondaryCategory: requirement?.secondary_category || "",
+        tertiaryCategory: requirement?.tertiary_category || "",
         assigneeUserId: task?.assignee_user_id || "",
       };
     }
@@ -1579,9 +1768,6 @@
       for (const context of state.contactContexts) {
         if (key === "contactContextId") add(context.id, contactContextLabel(context));
         if (key === "businessPlatform") add(context.business_platform);
-        if (key === "businessCategory") add(context.business_category, projectTypeLabel(context.business_category));
-        if (key === "secondaryCategory") add(context.secondary_category);
-        if (key === "tertiaryCategory") add(context.tertiary_category);
       }
       for (const requirement of state.requirements) {
         const snapshot = requirementDimensionSnapshot(requirement, taskForRequirement(requirement.id));
@@ -1603,15 +1789,51 @@
         .map(user => ({ value: user.id, label: userDisplayName(user) }))
         .sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN"));
     }
-    function dimensionOptions(key) {
+    function dashboardDimensionOrder() {
+      return ["customerId", "businessPlatform", "businessCategory", "secondaryCategory", "assigneeUserId"];
+    }
+    function dimensionOptions(key, linked = false) {
+      if (linked) return linkedDashboardDimensionOptions(key);
       if (key === "customerId") return dimensionCustomerOptions();
       if (key === "assigneeUserId") return dimensionEmployeeOptions();
       if (key === "businessPlatform") return businessPlatforms.map(value => ({ value, label: value }));
       return uniqueDimensionValues(key);
     }
-    function dimensionSelect(label, key, allLabel, onChangeHandler) {
+    function linkedDashboardDimensionOptions(key) {
+      if (key === "customerId") return dimensionCustomerOptions();
+      const values = new Map();
+      const add = (value, label = value) => {
+        if (!value) return;
+        values.set(value, label || value);
+      };
+      for (const requirement of state.requirements) {
+        const task = taskForRequirement(requirement.id);
+        const snapshot = requirementDimensionSnapshot(requirement, task);
+        if (!matchesDashboardDimensionPrefix(snapshot, key)) continue;
+        if (key === "businessCategory") add(snapshot.businessCategory, projectTypeLabel(snapshot.businessCategory));
+        else if (key === "assigneeUserId") add(snapshot.assigneeUserId, assigneeName(snapshot.assigneeUserId));
+        else add(snapshot[key]);
+      }
+      if (key === "businessPlatform" && values.size === 0) {
+        businessPlatforms.forEach(value => add(value));
+      }
+      return [...values.entries()]
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1]), "zh-Hans-CN"))
+        .map(([value, label]) => ({ value, label }));
+    }
+    function matchesDashboardDimensionPrefix(snapshot, key) {
+      const order = dashboardDimensionOrder();
+      const currentIndex = order.indexOf(key);
+      if (currentIndex <= 0) return true;
+      for (const priorKey of order.slice(0, currentIndex)) {
+        const selected = state.dimensionFilters[priorKey] || "all";
+        if (selected !== "all" && snapshot[priorKey] !== selected) return false;
+      }
+      return true;
+    }
+    function dimensionSelect(label, key, allLabel, onChangeHandler, linked = false) {
       const selected = state.dimensionFilters[key] || "all";
-      const options = dimensionOptions(key);
+      const options = dimensionOptions(key, linked);
       return `
         <label>${label}
           <select class="filter-select" onchange="${onChangeHandler}('${key}', this.value)">
@@ -1621,19 +1843,17 @@
         </label>
       `;
     }
-    function renderDimensionFilters(containerId, onChangeHandler, includeCustomer = true) {
+    function renderDimensionFilters(containerId, onChangeHandler, includeCustomer = true, linked = false) {
       const box = qs(containerId);
       if (!box) return;
       const specs = [
         ...(includeCustomer ? [["基金", "customerId", "全部基金"]] : []),
-        ["对接人", "contactContextId", "全部对接人"],
         ["业务平台", "businessPlatform", "全部平台"],
         ["业务大类", "businessCategory", "全部业务大类"],
         ["二级分类", "secondaryCategory", "全部二级分类"],
-        ["三级分类", "tertiaryCategory", "全部三级分类"],
         ["员工", "assigneeUserId", "全部员工"],
       ];
-      box.innerHTML = specs.map(([label, key, allLabel]) => dimensionSelect(label, key, allLabel, onChangeHandler)).join("");
+      box.innerHTML = specs.map(([label, key, allLabel]) => dimensionSelect(label, key, allLabel, onChangeHandler, linked)).join("");
     }
     function syncPrimaryCustomerSelects(customerId) {
       state.dimensionFilters.customerId = customerId || "all";
@@ -1644,13 +1864,21 @@
     }
     function setRequirementDimensionFilter(key, value) {
       state.dimensionFilters[key] = value || "all";
+      state.requirementVisibleLimit = 80;
       if (key === "customerId") syncPrimaryCustomerSelects(value || "all");
       renderRequirementBoard();
-      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", false);
+      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", true, true);
       renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
     }
     function setDashboardDimensionFilter(key, value) {
       state.dimensionFilters[key] = value || "all";
+      const order = dashboardDimensionOrder();
+      const index = order.indexOf(key);
+      if (index >= 0) {
+        for (const childKey of order.slice(index + 1)) {
+          state.dimensionFilters[childKey] = "all";
+        }
+      }
       refreshAnalytics();
     }
     function setSettlementDimensionFilter(key, value) {
@@ -1659,11 +1887,13 @@
     }
     function setDashboardPrimaryCustomer(customerId) {
       syncPrimaryCustomerSelects(customerId || "all");
+      state.requirementVisibleLimit = 80;
       renderRequirementBoard();
       refreshAnalytics();
     }
     function setSettlementPrimaryCustomer(customerId) {
       syncPrimaryCustomerSelects(customerId || "all");
+      state.requirementVisibleLimit = 80;
       renderRequirementBoard();
       loadSettlementStatement();
     }
@@ -1678,8 +1908,16 @@
         .filter(Boolean)
         .filter(value => !isTechnicalFeishuId(value));
       if (candidates.length > 0) return candidates[0];
-      if (user.feishu_open_id) return `飞书用户 ${user.feishu_open_id.slice(-6)}`;
+      if (user.feishu_open_id) return "未同步昵称";
       return user.username || "未命名用户";
+    }
+    function userLoginLabel(user) {
+      const name = userDisplayName(user);
+      return isTechnicalFeishuId(user.username) ? name : `${name} · ${user.username}`;
+    }
+    function userMetaLabel(user) {
+      if (!user) return "-";
+      return isTechnicalFeishuId(user.username) ? user.source : `${user.username} · ${user.source}`;
     }
     function assetCountText(task) {
       const count = Number(task?.asset_count ?? task?.assetCount ?? 0);
@@ -1702,7 +1940,7 @@
     function feishuUserOptions(selectedId) {
       const users = state.users.filter(u => u.feishu_open_id);
       if (users.length === 0) return `<option value="">暂无飞书用户</option>`;
-      return [`<option value="">选择员工</option>`, ...users.map(u => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""}>${userDisplayName(u)}</option>`)].join("");
+      return [`<option value="">选择员工</option>`, ...users.map(u => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""} title="${escapeAttr(u.feishu_open_id || "")}">${userDisplayName(u)}</option>`)].join("");
     }
     function defaultWorkspaceUrl(task) {
       const key = (task?.task_no || `task-${Date.now()}`).toLowerCase().replace(/[^a-z0-9-]/g, "-");
@@ -1729,6 +1967,10 @@
         qs("requirementTitle").value = "";
         qs("requirementContent").value = "";
         if (qs("businessNameInput")) qs("businessNameInput").value = "";
+        if (qs("plannedStartAtInput")) qs("plannedStartAtInput").value = "";
+        if (qs("plannedEndAtInput")) qs("plannedEndAtInput").value = "";
+        if (qs("requirementPriorityInput")) qs("requirementPriorityInput").value = "";
+        if (qs("requirementUrgencyInput")) qs("requirementUrgencyInput").value = "";
         if (qs("contactContextSelect")) qs("contactContextSelect").value = "";
         syncContactContextPreview(null);
       }
@@ -1855,32 +2097,86 @@
       return window.XlyqAppShell.escapeAttr(value);
     }
     function priorityLabel(value) {
-      return { high: "高", medium: "中", low: "低" }[value] || value || "-";
+      const normalized = String(value || "").toLowerCase();
+      const legacy = { high: "P0", medium: "P1", low: "P2" };
+      if (legacy[normalized]) return legacy[normalized];
+      const match = /^p(\d+)$/.exec(normalized);
+      if (match) return `P${Math.min(4, Number(match[1]))}`;
+      return value || "-";
+    }
+    function priorityIndexFromValue(value) {
+      const normalized = String(value || "").toLowerCase();
+      if (normalized === "high") return 0;
+      if (normalized === "medium") return 1;
+      if (normalized === "low") return 2;
+      const match = /^p(\d+)$/.exec(normalized);
+      return match ? Math.min(4, Number(match[1])) : null;
+    }
+    function startOfLocalDay(value = new Date()) {
+      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const [year, month, day] = value.split("-").map(Number);
+        return new Date(year, month - 1, day);
+      }
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+    function priorityValueFromDeadline(deadlineValue) {
+      const due = startOfLocalDay(deadlineValue);
+      const today = startOfLocalDay();
+      if (!due || !today) return "";
+      const diffDays = Math.min(4, Math.max(0, Math.ceil((due.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))));
+      return `p${diffDays}`;
+    }
+    function updateRequirementPriorityFromDeadline() {
+      const input = qs("requirementPriorityInput");
+      if (!input) return;
+      const priority = priorityValueFromDeadline(qs("plannedEndAtInput")?.value);
+      input.value = priority ? priorityLabel(priority) : "";
+      input.dataset.priority = priority;
+    }
+    function prioritySelectOptions(selectedValue, max = 4) {
+      const normalized = String(selectedValue || "").toLowerCase();
+      const selectedIndex = priorityIndexFromValue(normalized);
+      const values = Array.from({ length: max + 1 }, (_, index) => `p${index}`);
+      if (normalized && selectedIndex === null) values.push(normalized);
+      return values.map(value => `<option value="${escapeAttr(value)}" ${normalized === value || priorityLabel(normalized) === priorityLabel(value) ? "selected" : ""}>${escapeHtml(priorityLabel(value))}</option>`).join("");
+    }
+    function urgencyLabel(value) {
+      return {
+        important_urgent: "重要且紧急",
+        important_not_urgent: "重要不紧急",
+        urgent_not_important: "紧急不重要",
+        normal: "不紧急不重要",
+      }[value] || "-";
+    }
+    function urgencySelectOptions(selectedValue = "") {
+      const options = [
+        ["important_urgent", "重要且紧急"],
+        ["important_not_urgent", "重要不紧急"],
+        ["urgent_not_important", "紧急不重要"],
+        ["normal", "不紧急不重要"],
+      ];
+      return options.map(([value, label]) => `<option value="${value}" ${selectedValue === value ? "selected" : ""}>${label}</option>`).join("");
     }
     function itemForRequirement(requirementId) {
-      return state.requirementItems.find(item => item.requirement_id === requirementId);
+      return getLookupMaps().itemByRequirementId.get(requirementId) || null;
     }
     function requirementForItem(requirementItem) {
-      return state.requirements.find(requirement => requirement.id === requirementItem?.requirement_id) || null;
+      return getLookupMaps().requirementByItemId.get(requirementItem?.id) || null;
     }
     function mappingForRequirementItem(requirementItemId) {
-      return state.quoteMappings
-        .filter(mapping => mapping.requirement_item_id === requirementItemId)
-        .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))[0] || null;
+      return getLookupMaps().mappingByRequirementItemId.get(requirementItemId) || null;
     }
     function quotationItemById(quotationItemId) {
-      for (const items of Object.values(state.quotationItemsById)) {
-        const found = (items || []).find(item => item.id === quotationItemId);
-        if (found) return found;
-      }
-      return null;
+      return getLookupMaps().quotationItemById.get(quotationItemId) || null;
     }
     function quotationById(quotationId) {
-      return state.quotations.find(item => item.id === quotationId) || null;
+      return getLookupMaps().quotationById.get(quotationId) || null;
     }
     function taskForRequirement(requirementId) {
       const item = itemForRequirement(requirementId);
-      return item ? state.tasks.find(task => task.requirement_item_id === item.id) : null;
+      return item ? getLookupMaps().taskByRequirementItemId.get(item.id) || null : null;
     }
     function displayTaskStatus(task) {
       if (!task) return "未生成";
@@ -1929,39 +2225,49 @@
     }
     function setRequirementFilter(filter) {
       state.requirementFilter = filter;
+      state.requirementVisibleLimit = 80;
       renderRequirementBoard();
     }
     function setRequirementKeyword(value, immediate = false) {
       state.requirementKeyword = value || "";
       if (state.requirementKeywordTimer) clearTimeout(state.requirementKeywordTimer);
       if (immediate) {
+        state.requirementVisibleLimit = 80;
         renderRequirementBoard();
         return;
       }
       state.requirementKeywordTimer = setTimeout(() => {
         state.requirementKeywordTimer = null;
+        state.requirementVisibleLimit = 80;
         renderRequirementBoard();
       }, 10000);
     }
-    async function refreshRequirementBoard() {
-      if (state.editingRequirementId || state.busyActionId) return;
-      const [requirements, requirementItems, tasks, projects, users, contactContexts, quoteMappings] = await Promise.all([
-        request("/requirements"),
-        request("/requirement-items"),
-        request("/tasks"),
-        request("/projects"),
-        request("/users"),
-        request("/contact-contexts?status=active").catch(() => []),
-        request("/quote-mappings").catch(() => []),
-      ]);
-      state.requirements = unwrap(requirements);
-      state.requirementItems = unwrap(requirementItems);
-      state.tasks = unwrap(tasks);
-      state.projects = unwrap(projects);
-      state.users = unwrap(users);
-      state.contactContexts = unwrap(contactContexts);
-      state.quoteMappings = unwrap(quoteMappings);
+    async function refreshRequirementBoard(options = {}) {
+      const force = Boolean(options.force);
+      const preserveScroll = Boolean(options.preserveScroll);
+      if (state.editingRequirementId || (state.busyActionId && !force)) return;
+      const scrollY = preserveScroll ? window.scrollY : null;
+      let historyBoard = null;
+      try {
+        historyBoard = await request("/requirements/history-board");
+      } catch (error) {
+        const [requirements, requirementItems, tasks, quoteMappings] = await Promise.all([
+          request("/requirements"),
+          request("/requirement-items"),
+          request("/tasks"),
+          request("/quote-mappings").catch(() => []),
+        ]);
+        historyBoard = { requirements, requirementItems, tasks, quoteMappings };
+      }
+      state.requirements = unwrap(historyBoard?.requirements);
+      state.requirementItems = unwrap(historyBoard?.requirementItems);
+      state.tasks = unwrap(historyBoard?.tasks);
+      state.quoteMappings = unwrap(historyBoard?.quoteMappings);
+      invalidateLookupMaps();
       renderRequirementBoard();
+      if (scrollY !== null) {
+        requestAnimationFrame(() => window.scrollTo(0, scrollY));
+      }
     }
     function renderRequirementBoard() {
       const rows = activeDimensionRows();
@@ -1988,13 +2294,21 @@
       const filters = [
         ["all", "全部"],
         ["pending", "待指派"],
-        ["quote_pending", "待报价"],
         ["assigned", "处理中"],
         ["pending_review", "待验收"],
-        ["completed", "已完成"],
+        ["completed", "已验收"],
+        ["quote_pending", "待报价"],
       ];
       const filtersEl = qs("requirementFilters");
-      if (filtersEl) {
+      const filterUiKey = JSON.stringify({
+        filter: state.requirementFilter,
+        keyword: state.requirementKeyword,
+        dimensions: state.dimensionFilters,
+        users: state.users.length,
+        contacts: state.contactContexts.length,
+      });
+      if (filtersEl && state.requirementFilterUiKey !== filterUiKey) {
+        state.requirementFilterUiKey = filterUiKey;
         filtersEl.innerHTML = `
           <div class="quick-filter-row">
             ${filters.map(([key, label]) => `<button class="${state.requirementFilter === key ? "active" : ""}" onclick="setRequirementFilter('${key}')">${label}</button>`).join("")}
@@ -2013,7 +2327,6 @@
                   ["业务平台", "businessPlatform", "全部平台"],
                   ["业务大类", "businessCategory", "全部业务大类"],
                   ["二级分类", "secondaryCategory", "全部二级分类"],
-                  ["三级分类", "tertiaryCategory", "全部三级分类"],
                   ["员工", "assigneeUserId", "全部员工"],
                 ].map(([label, key, allLabel]) => dimensionSelect(label, key, allLabel, "setRequirementDimensionFilter")).join("")}
               </div>
@@ -2037,7 +2350,7 @@
         if (state.requirementFilter === "quote_pending") return isPendingQuoteRow(row);
         if (state.requirementFilter === "assigned") return row.taskStatus === "已指派" || row.taskStatus === "进行中";
         if (state.requirementFilter === "pending_review") return row.taskStatus === "待验收";
-        if (state.requirementFilter === "completed") return row.taskStatus === "已完成";
+        if (state.requirementFilter === "completed") return row.taskStatus === "已验收";
         return true;
       });
       const boardEl = qs("requirementsBoard");
@@ -2051,9 +2364,11 @@
         `;
         return;
       }
+      const visibleRows = filteredRows.slice(0, state.requirementVisibleLimit);
+      const hasMoreRows = visibleRows.length < filteredRows.length;
       boardEl.innerHTML = `
         <div class="requirement-list">
-          ${filteredRows.map(row => `
+          ${visibleRows.map(row => `
             <article class="requirement-card">
               <div class="requirement-card-main">
                 <div class="requirement-title-block">
@@ -2079,6 +2394,7 @@
                 <div class="requirement-meta-line">${[
                   row.requirement.business_name ? `业务命名：${safeText(row.requirement.business_name)}` : "",
                   row.contactContext ? `对接人：${safeText(row.contactContext)}` : "",
+                  taskPlanDateRangeText(row.task) ? `计划：${taskPlanDateRangeText(row.task)}` : "",
                   `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
                   `负责人：${safeText(assigneeName(row.task?.assignee_user_id))}`,
                 ].filter(Boolean).join(" · ")}</div>
@@ -2089,18 +2405,27 @@
             </article>
           `).join("")}
         </div>
+        <div class="history-load-row">
+          <span>已显示 ${visibleRows.length} / ${filteredRows.length} 条</span>
+          ${hasMoreRows ? `<button class="btn" onclick="showMoreRequirements()">加载更多</button>` : ""}
+        </div>
       `;
+    }
+    function showMoreRequirements() {
+      state.requirementVisibleLimit += 80;
+      renderRequirementBoard();
     }
     function clearRequirementFilters() {
       state.requirementFilter = "all";
       state.requirementKeyword = "";
+      state.requirementVisibleLimit = 80;
       if (state.requirementKeywordTimer) {
         clearTimeout(state.requirementKeywordTimer);
         state.requirementKeywordTimer = null;
       }
       resetDimensionFilters();
       renderRequirementBoard();
-      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", false);
+      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", true, true);
       renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
     }
     function renderRequirementEditAction(row) {
@@ -2116,6 +2441,17 @@
       if (!row.item) return `<span class="muted">需求项生成中</span>`;
       const selectedItem = row.quotationItem || quotationItemById(row.mapping?.quotation_item_id);
       const isBusy = state.busyActionId === `quote-${row.item.id}`;
+      const isConfirmed = row.item.quote_scope_status === "matched" || row.mapping?.mapping_status === "matched";
+      const isEditingQuote = state.quoteEditingItemId === row.item.id;
+      if (isConfirmed && !isEditingQuote) {
+        return `
+          <div class="quote-action quote-action-compact" onclick="event.stopPropagation()">
+            <span class="quote-status-pill">报价：${safeText(row.quoteStatus)}</span>
+            <button class="btn" ${isBusy ? "disabled" : ""} onclick="loadRequirementQuoteOptions('${row.requirement.id}')">${isBusy ? "加载中..." : "重新选择"}</button>
+            <span class="row-sub">${safeText(selectedItem ? `${selectedItem.item_code} · ${selectedItem.item_name}` : "已确认报价子项")}</span>
+          </div>
+        `;
+      }
       const hasLoadedItems = quotationsForCustomer(row.requirement.customer_id).some(quotation => (state.quotationItemsById[quotation.id] || []).length);
       return `
         <div class="quote-action ${hasLoadedItems || selectedItem ? "with-select" : "quote-action-compact"}" onclick="event.stopPropagation()">
@@ -2125,7 +2461,7 @@
               </select>
               <button class="btn ${selectedItem ? "" : "primary"}" ${isBusy ? "disabled" : ""} onclick="saveRequirementQuoteMapping('${row.requirement.id}')">${isBusy ? "保存中..." : "确认"}</button>`
             : `<span class="quote-status-pill">报价：${safeText(row.quoteStatus)}</span>
-              <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="loadRequirementQuoteOptions('${row.requirement.id}')">选择</button>`}
+              <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="loadRequirementQuoteOptions('${row.requirement.id}')">${isBusy ? "加载中..." : "选择"}</button>`}
         </div>
       `;
     }
@@ -2143,7 +2479,7 @@
         options.push(`</optgroup>`);
       }
       if (options.length === 1) {
-        options.push(`<option value="" disabled>该基金暂无可选报价子项，请先上传报价单</option>`);
+        options.push(`<option value="" disabled>该基金暂无可选报价子项，请先上传合同报价</option>`);
       }
       return options.join("");
     }
@@ -2155,10 +2491,15 @@
     async function loadRequirementQuoteOptions(requirementId) {
       const row = requirementRows().find(item => item.requirement.id === requirementId);
       if (!row?.item) return toast("需求项还未生成，暂不能适配报价");
+      if (state.busyActionId) return;
+      state.quoteEditingItemId = row.item.id;
+      state.busyActionId = `quote-${row.item.id}`;
+      renderRequirementBoard();
       try {
         const quotations = quotationsForCustomer(row.requirement.customer_id);
         if (!quotations.length) {
-          toast("该基金暂无报价单，请先上传报价单");
+          state.quoteEditingItemId = null;
+          toast("该基金暂无合同报价，请先上传合同报价");
           return;
         }
         await Promise.all(quotations.map(async quotation => {
@@ -2166,9 +2507,15 @@
             state.quotationItemsById[quotation.id] = await request(`/quotations/${quotation.id}/items`);
           }
         }));
+        invalidateLookupMaps();
         renderRequirementBoard();
       } catch (error) {
         toast(error.message);
+      } finally {
+        if (state.busyActionId === `quote-${row.item.id}`) {
+          state.busyActionId = null;
+        }
+        renderRequirementBoard();
       }
     }
     async function saveRequirementQuoteMapping(requirementId) {
@@ -2190,20 +2537,32 @@
       };
       state.busyActionId = `quote-${row.item.id}`;
       renderRequirementBoard();
+      let refreshed = false;
+      const wasQuotePendingFilter = state.requirementFilter === "quote_pending";
       try {
         const saved = row.mapping?.id
           ? await request(`/quote-mappings/${row.mapping.id}`, { method: "PATCH", body })
           : await request("/quote-mappings", { method: "POST", body });
         state.quoteMappings = [saved, ...state.quoteMappings.filter(item => item.id !== saved.id)];
-        await refreshRequirementBoard();
+        state.requirementItems = state.requirementItems.map(item =>
+          item.id === row.item.id ? { ...item, quote_scope_status: "matched" } : item
+        );
+        state.quoteEditingItemId = null;
+        invalidateLookupMaps();
+        renderRequirementBoard();
+        state.busyActionId = null;
+        await refreshRequirementBoard({ force: true, preserveScroll: true });
+        refreshed = true;
         if (isViewActive("settlement")) await loadSettlementStatement(false);
-        refreshAnalytics();
-        toast("已适配报价子项");
+        await refreshAnalytics();
+        toast(wasQuotePendingFilter ? "报价已确认，已从待报价列表移出" : "报价已确认");
       } catch (error) {
         toast(error.message);
       } finally {
-        state.busyActionId = null;
-        renderRequirementBoard();
+        if (state.busyActionId === `quote-${row.item.id}`) {
+          state.busyActionId = null;
+        }
+        if (!refreshed) renderRequirementBoard();
       }
     }
     function renderRequirementEditRow(row) {
@@ -2248,7 +2607,13 @@
               <label>
                 优先级
                 <select id="edit-priority-${requirement.id}">
-                  ${["high", "medium", "low"].map(priority => `<option value="${priority}" ${requirement.priority === priority ? "selected" : ""}>${priorityLabel(priority)}</option>`).join("")}
+                  ${prioritySelectOptions(requirement.priority)}
+                </select>
+              </label>
+              <label>
+                紧急程度
+                <select id="edit-urgency-${requirement.id}">
+                  ${urgencySelectOptions(requirement.urgency_level || "important_urgent")}
                 </select>
               </label>
               <label class="wide">
@@ -2288,14 +2653,30 @@
     function renderAssignAction(row) {
       if (!row.task) return `<span class="muted">任务生成中</span>`;
       if (row.taskStatus === "待验收") return renderReviewAction(row);
-      if (row.taskStatus === "已完成") return `<span class="done-text">已完成</span>`;
+      if (row.taskStatus === "已验收") return `<span class="done-text">已验收</span>`;
       const isBusy = state.busyActionId === row.task.id;
+      const hasAssignee = Boolean(row.task.assignee_user_id);
+      const isEditingAssignment = !hasAssignee || state.assignmentEditingTaskId === row.task.id;
+      if (!isEditingAssignment) {
+        return `
+          <div class="assign-action compact" onclick="event.stopPropagation()">
+            <span class="quote-status-pill">负责人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
+            <button class="btn" ${isBusy ? "disabled" : ""} onclick="startReassignTask('${row.task.id}')">${isBusy ? "处理中" : "改派"}</button>
+          </div>
+        `;
+      }
       return `
         <div class="assign-action" onclick="event.stopPropagation()">
           <select id="assignee-${row.task.id}" ${isBusy ? "disabled" : ""}>${feishuUserOptions(row.task.assignee_user_id)}</select>
-          <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="assignTaskFromBoard('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : (row.task.assignee_user_id ? "改派" : "指派")}</button>
+          <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="assignTaskFromBoard('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : (hasAssignee ? "确认" : "指派")}</button>
         </div>
       `;
+    }
+    function startReassignTask(taskId) {
+      if (state.busyActionId) return;
+      state.assignmentEditingTaskId = taskId;
+      renderRequirementBoard();
+      setTimeout(() => qs(`assignee-${taskId}`)?.focus(), 0);
     }
     function renderReviewAction(row) {
       const isBusy = state.busyActionId === row.task.id;
@@ -2320,6 +2701,7 @@
       const title = qs(`edit-title-${requirementId}`)?.value.trim();
       const rawContent = qs(`edit-content-${requirementId}`)?.value.trim();
       const priority = qs(`edit-priority-${requirementId}`)?.value;
+      const urgencyLevel = qs(`edit-urgency-${requirementId}`)?.value;
       const businessName = qs(`edit-business-name-${requirementId}`)?.value.trim();
       const businessPlatform = qs(`edit-business-platform-${requirementId}`)?.value;
       const tertiaryCategory = qs(`edit-tertiary-category-${requirementId}`)?.value.trim();
@@ -2337,7 +2719,7 @@
 
         const result = await request(`/requirements/${requirementId}`, {
           method: "PATCH",
-          body: { title, rawContent, priority, customerId, projectId: project.id, businessName, businessPlatform: businessPlatform || undefined, tertiaryCategory },
+          body: { title, rawContent, priority, urgencyLevel, customerId, projectId: project.id, businessName, businessPlatform: businessPlatform || undefined, tertiaryCategory },
         });
         if (result.requirement) {
           state.requirements = state.requirements.map(item => item.id === requirementId ? result.requirement : item);
@@ -2368,7 +2750,7 @@
       const customer = state.customers.find(item => item.id === customerId);
       const type = projectTypes.find(item => item.value === projectType)
         || (projectType === "quotation_contract"
-          ? { value: "quotation_contract", label: "合同报价", budgetAmount: "0", description: "报价单合同后台挂靠，不作为业务筛选维度。" }
+          ? { value: "quotation_contract", label: "合同报价", budgetAmount: "0", description: "合同报价后台挂靠，不作为业务筛选维度。" }
           : null);
       if (!customer || !type) return null;
       let project = state.projects.find(item => item.customer_id === customerId && item.project_type === projectType);
@@ -2395,7 +2777,11 @@
     async function deleteRequirementBundle(requirementId) {
       if (state.busyActionId) return;
       const requirement = state.requirements.find(item => item.id === requirementId);
-      const confirmed = window.confirm(`确认删除「${requirement?.title || "这条需求"}」吗？相关任务、资产表记录也会从系统列表中删除。`);
+      const confirmed = await confirmDialog({
+        title: "删除需求任务",
+        message: `确认删除「${requirement?.title || "这条需求"}」吗？相关任务和资产表记录也会从系统列表中移除。`,
+        okText: "删除",
+      });
       if (!confirmed) return;
       state.busyActionId = requirementId;
       renderRequirementBoard();
@@ -2424,6 +2810,11 @@
       const customer = selectedCustomer();
       const type = selectedProjectType();
       if (!customer || !type) return null;
+      const secondarySelect = qs("secondaryCategoryInput");
+      renderSecondaryCategorySelect(
+        type.value,
+        secondarySelect?.dataset.category === type.value ? secondarySelect.value || "" : "",
+      );
 
       let project = state.projects.find(p => p.customer_id === customer.id && p.project_type === type.value);
       if (!project && createIfMissing) {
@@ -2464,7 +2855,7 @@
       return state.customers.find(c => c.id === qs("quoteCustomerSelect")?.value);
     }
     function selectedQuoteProjectType() {
-      return { value: "quotation_contract", label: "合同报价", budgetAmount: "0", description: "报价单合同后台挂靠，不作为业务筛选维度。" };
+      return { value: "quotation_contract", label: "合同报价", budgetAmount: "0", description: "合同报价后台挂靠，不作为业务筛选维度。" };
     }
     async function syncQuoteProjectSelection(createIfMissing) {
       const customer = selectedQuoteCustomer();
@@ -2479,7 +2870,7 @@
     function renderQuoteProjectPreview(customer = selectedQuoteCustomer(), type = selectedQuoteProjectType(), project = null) {
       qs("quoteProjectPreview").innerHTML = `
         <strong>${escapeHtml(customer?.customer_name || "未选择客户")}</strong>
-        <span>报价单合同可覆盖多个业务大类；生成后请在“报价子项维度规则”里为各子项配置适用维度。</span>
+        <span>合同报价可覆盖多个业务大类；生成后请在“报价子项维度规则”里为各子项配置适用维度。</span>
       `;
     }
     async function loadQuotationFile() {
@@ -2490,20 +2881,20 @@
         const content = await file.text();
         qs("quotationContent").value = content;
         await previewQuotationItems();
-        toast("报价单文件已加载");
+        toast("合同报价文件已加载");
       } catch (error) {
-        toast(`报价单读取失败：${error.message}`);
+        toast(`合同报价读取失败：${error.message}`);
       }
     }
     async function previewQuotationItems() {
       const rawContent = qs("quotationContent").value.trim();
-      if (!rawContent) return toast("请先上传或粘贴报价单内容");
+      if (!rawContent) return toast("请先上传或粘贴合同报价内容");
       try {
         const result = await request("/quotations/parse-text", {
           method: "POST",
           body: {
             rawContent,
-            fileName: state.loadedQuotationFileName || "手工粘贴报价单",
+            fileName: state.loadedQuotationFileName || "手工粘贴合同报价",
           },
         });
         const items = result.items || [];
@@ -2592,12 +2983,14 @@
       const box = qs("quotationPreview");
       if (!items.length) {
         box.className = "split-preview muted";
-        box.innerHTML = "上传或粘贴报价单后，可先预览将生成的细粒度子项。";
+        box.innerHTML = "上传或粘贴合同报价后，可先预览将生成的细粒度子项。";
         return;
       }
       box.className = "split-preview";
       const modeLabel = meta?.mode === "openai_compatible"
         ? "模型识别"
+        : meta?.mode === "csv_structured"
+          ? "CSV字段映射"
         : meta?.mode === "openai_failed_rule_fallback"
           ? "模型失败，已用规则兜底"
           : "规则识别";
@@ -2622,7 +3015,7 @@
     async function importQuotation() {
       if (state.busyActionId) return;
       const rawContent = qs("quotationContent").value.trim();
-      if (!rawContent) return toast("请先上传或粘贴报价单内容");
+      if (!rawContent) return toast("请先上传或粘贴合同报价内容");
       const project = await syncQuoteProjectSelection(true);
       if (!project) return toast("请先选择基金客户");
       const button = qs("importQuotationButton");
@@ -2638,15 +3031,15 @@
             projectId: project.id,
             customerId: qs("quoteCustomerSelect").value,
             rawContent,
-            fileName: state.loadedQuotationFileName || "手工粘贴报价单",
+            fileName: state.loadedQuotationFileName || "手工粘贴合同报价",
           },
         });
         state.quotations = [result.quotation, ...state.quotations.filter(item => item.id !== result.quotation.id)];
         state.quotationItemsById[result.quotation.id] = result.items || [];
         state.selectedQuotationId = result.quotation.id;
-        addLog("报价单已解析生成", result);
-        const modeText = result.mode === "openai_compatible" ? "模型识别" : result.mode === "openai_failed_rule_fallback" ? "规则兜底" : "规则识别";
-        toast(`已生成报价单，${modeText}子项 ${result.parsedCount || result.items?.length || 0} 条`);
+        addLog("合同报价已解析生成", result);
+        const modeText = result.mode === "csv_structured" ? "CSV字段映射" : result.mode === "openai_compatible" ? "模型识别" : result.mode === "openai_failed_rule_fallback" ? "规则兜底" : "规则识别";
+        toast(`已生成合同报价，${modeText}子项 ${result.parsedCount || result.items?.length || 0} 条`);
         renderQuotationMetrics(result.items || [], result.summary);
         renderQuotationPreview((result.items || []).map(item => ({
           itemName: item.item_name,
@@ -2667,7 +3060,7 @@
         state.busyActionId = null;
         if (button) {
           button.disabled = false;
-          button.textContent = "生成报价单和子项";
+          button.textContent = "生成合同报价和子项";
         }
       }
     }
@@ -2677,7 +3070,7 @@
       state.loadedQuotationFileName = null;
       renderQuotationPreview([]);
       renderQuotationMetrics([]);
-      toast("报价单表单已清空");
+      toast("合同报价表单已清空");
     }
     async function refreshQuotations() {
       const quotations = await request("/quotations");
@@ -2705,20 +3098,19 @@
       const box = qs("quotationsBoard");
       if (!box) return;
       if (!state.quotations.length) {
-        box.innerHTML = `<div class="empty-list">还没有报价单。上传报价单后会出现在这里。</div>`;
+        box.innerHTML = `<div class="empty-list">还没有合同报价。上传合同报价后会出现在这里。</div>`;
         renderQuotationItems(state.selectedQuotationId);
         return;
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>报价单</th><th>基金客户</th><th>状态</th><th>金额</th><th>创建时间</th><th>操作</th></tr></thead>
+          <thead><tr><th>合同报价</th><th>基金客户</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
           <tbody>
             ${state.quotations.map(item => `
               <tr class="${state.selectedQuotationId === item.id ? "requirement-row active" : "requirement-row"}">
                 <td><div class="row-title">${safeText(item.quotation_no)}</div><div class="row-sub">${safeText(item.remark || item.pricing_basis)}</div></td>
                 <td>${safeText(customerName(item.customer_id))}</td>
                 <td><span class="tag">${quotationStatusLabel(item.status)}</span></td>
-                <td>${formatMoney(item.total_amount)}</td>
                 <td>${new Date(item.created_at).toLocaleString()}</td>
                 <td>
                   <div class="inline-assign edit-actions" onclick="event.stopPropagation()">
@@ -2749,7 +3141,11 @@
     async function deleteQuotation(quotationId) {
       if (state.busyActionId) return;
       const quotation = state.quotations.find(item => item.id === quotationId);
-      const confirmed = window.confirm(`确认删除报价单「${quotation?.quotation_no || "这张报价单"}」吗？报价子项也会一起删除。`);
+      const confirmed = await confirmDialog({
+        title: "删除合同报价",
+        message: `确认删除合同报价「${quotation?.quotation_no || "这张合同报价"}」吗？报价子项也会一起删除。`,
+        okText: "删除",
+      });
       if (!confirmed) return;
       state.busyActionId = quotationId;
       try {
@@ -2758,8 +3154,8 @@
         delete state.quotationItemsById[quotationId];
         if (state.selectedQuotationId === quotationId) state.selectedQuotationId = null;
         if (state.mappingQuotationId === quotationId) state.mappingQuotationId = null;
-        addLog("报价单已删除", result);
-        toast("已删除报价单");
+        addLog("合同报价已删除", result);
+        toast("已删除合同报价");
         renderQuotationsBoard();
         loadQuarterMappingWorkbench(false);
         if (isViewActive("settlement")) loadSettlementStatement(false);
@@ -2773,11 +3169,11 @@
       const box = qs("quotationItemsBoard");
       if (!box) return;
       const quotation = state.quotations.find(item => item.id === quotationId);
-      qs("selectedQuotationHint").textContent = quotation ? quotation.quotation_no : "请选择报价单";
+      qs("selectedQuotationHint").textContent = quotation ? quotation.quotation_no : "请选择合同报价";
       if (!quotationId || !quotation) {
         state.addingQuotationItem = false;
         state.editingQuotationItemId = null;
-        box.innerHTML = `<div class="empty-list">请选择一张报价单查看子项。</div>`;
+        box.innerHTML = `<div class="empty-list">请选择一张合同报价查看子项。</div>`;
         return;
       }
       const items = state.quotationItemsById[quotationId] || [];
@@ -2829,8 +3225,8 @@
               <label>挂靠状态
                 <select id="${prefix}-match-status">${quotationItemStatusOptions(item?.match_status || (isAdd ? "manual_added" : "unmatched"))}</select>
               </label>
-              <label>内容描述
-                <input id="${prefix}-remark" value="${escapeAttr(item?.remark || "")}" placeholder="可填写子项描述" />
+              <label>子项详情 / 备注说明
+                <input id="${prefix}-remark" value="${escapeAttr(item?.remark || "")}" placeholder="可填写子项详情和备注说明" />
               </label>
               <div class="btns">
                 <button class="btn primary" onclick="${isAdd ? "saveNewQuotationItem()" : `saveQuotationItemEdit('${item.id}')`}">保存</button>
@@ -2852,7 +3248,7 @@
     }
     function startAddQuotationItem() {
       if (!state.selectedQuotationId || !state.quotations.some(item => item.id === state.selectedQuotationId)) {
-        return toast("请先选择报价单");
+        return toast("请先选择合同报价");
       }
       state.addingQuotationItem = true;
       state.editingQuotationItemId = null;
@@ -2940,7 +3336,12 @@
       const quotationId = state.selectedQuotationId;
       if (!quotationId || state.busyActionId) return;
       const item = (state.quotationItemsById[quotationId] || []).find(row => row.id === itemId);
-      if (!window.confirm(`确认删除报价子项「${item?.item_name || "这个子项"}」吗？`)) return;
+      const confirmed = await confirmDialog({
+        title: "删除报价子项",
+        message: `确认删除报价子项「${item?.item_name || "这个子项"}」吗？已适配到该子项的需求也会被清理关联。`,
+        okText: "删除",
+      });
+      if (!confirmed) return;
       state.busyActionId = `quotation-item-delete-${itemId}`;
       try {
         const result = await request(`/quotations/items/${itemId}`, { method: "DELETE" });
@@ -3004,8 +3405,8 @@
       if (!select) return;
       const quotations = workbench?.quotations || [];
       select.innerHTML = quotations.length
-        ? quotations.map(item => `<option value="${item.id}">${item.quotation_no} · ${formatMoney(item.total_amount)} · ${new Date(item.created_at).toLocaleDateString()}</option>`).join("")
-        : `<option value="">该基金本季度暂无报价单</option>`;
+        ? quotations.map(item => `<option value="${item.id}">${item.quotation_no} · ${new Date(item.created_at).toLocaleDateString()}</option>`).join("")
+        : `<option value="">该基金本季度暂无合同报价</option>`;
       select.value = workbench?.selectedQuotation?.id || "";
       qs("quarterSuggestButton").disabled = !workbench?.selectedQuotation;
     }
@@ -3022,7 +3423,7 @@
       const box = qs("mappingWorkbench");
       if (!box) return;
       if (!workbench?.selectedQuotation) {
-        box.innerHTML = `<div class="empty-list">该基金在 ${safeText(workbench?.quarter || state.mappingQuarter || currentQuarter())} 暂无报价单。请先到“报价单”页面上传本季度报价单。</div>`;
+        box.innerHTML = `<div class="empty-list">该基金在 ${safeText(workbench?.quarter || state.mappingQuarter || currentQuarter())} 暂无合同报价。请先到“合同报价录入”页面上传本季度合同报价。</div>`;
         return;
       }
       if (!workbench.rows?.length) {
@@ -3041,28 +3442,32 @@
             </tr>
           </thead>
           <tbody>
-            ${workbench.rows.map(row => `
-              <tr>
-                <td>
-                  <div class="row-title">${safeText(row.requirementItem.item_title)}</div>
-                  <div class="row-sub">${safeText(row.requirement?.requirement_code || row.requirementItem.item_no)}<br>${safeText(row.requirementItem.item_description || "")}</div>
-                </td>
-                <td>
-                  <select id="mapping-quote-item-${row.requirementItem.id}">
-                    ${mappingQuotationItemOptions(row.mapping?.quotation_item_id)}
-                  </select>
-                  <div class="row-sub">${safeText(row.mapping?.remark || "可直接选择一个报价子项后保存")}</div>
-                </td>
-                <td>${row.mapping?.matched_ratio ? `${Number(row.mapping.matched_ratio).toFixed(0)}%` : "-"}</td>
-                <td><span class="tag">${mappingStatusLabel(row.mapping?.mapping_status)}</span></td>
-                <td>
-                  <div class="inline-assign edit-actions" onclick="event.stopPropagation()">
-                    <button class="btn" onclick="saveQuarterMapping('${row.requirementItem.id}')">保存</button>
-                    <button class="btn primary" onclick="confirmQuarterMapping('${row.requirementItem.id}')">确认</button>
-                  </div>
-                </td>
-              </tr>
-            `).join("")}
+            ${workbench.rows.map(row => {
+              const busyKey = `quarter-map-${row.requirementItem.id}`;
+              const isBusy = state.busyActionId === busyKey;
+              return `
+                <tr>
+                  <td>
+                    <div class="row-title">${safeText(row.requirementItem.item_title)}</div>
+                    <div class="row-sub">${safeText(row.requirement?.requirement_code || row.requirementItem.item_no)}<br>${safeText(row.requirementItem.item_description || "")}</div>
+                  </td>
+                  <td>
+                    <select id="mapping-quote-item-${row.requirementItem.id}" ${isBusy ? "disabled" : ""}>
+                      ${mappingQuotationItemOptions(row.mapping?.quotation_item_id)}
+                    </select>
+                    <div class="row-sub">${safeText(row.mapping?.remark || "可直接选择一个报价子项后保存")}</div>
+                  </td>
+                  <td>${row.mapping?.matched_ratio ? `${Number(row.mapping.matched_ratio).toFixed(0)}%` : "-"}</td>
+                  <td><span class="tag">${mappingStatusLabel(row.mapping?.mapping_status)}</span></td>
+                  <td>
+                    <div class="inline-assign edit-actions" onclick="event.stopPropagation()">
+                      <button class="btn" ${isBusy ? "disabled" : ""} onclick="saveQuarterMapping('${row.requirementItem.id}')">${isBusy ? "保存中..." : "保存"}</button>
+                      <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="confirmQuarterMapping('${row.requirementItem.id}')">${isBusy ? "确认中..." : "确认"}</button>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join("")}
           </tbody>
         </table>
       `;
@@ -3074,10 +3479,39 @@
         ...items.map(item => `<option value="${item.id}" ${item.id === selectedId ? "selected" : ""}>${item.item_code} · ${item.item_name} · ${formatMoney(item.line_amount)}</option>`),
       ].join("");
     }
-    function businessCategoryOptions(selectedValue = "") {
+    function businessCategoryDefinitions() {
+      const rows = [...(state.businessCategoryRelations || [])]
+        .filter(row => row.status !== "inactive")
+        .sort((a, b) =>
+          Number(a.category_sort_order || 100) - Number(b.category_sort_order || 100) ||
+          Number(a.secondary_sort_order || 100) - Number(b.secondary_sort_order || 100) ||
+          String(a.business_category_name || "").localeCompare(String(b.business_category_name || "")) ||
+          String(a.secondary_category_name || "").localeCompare(String(b.secondary_category_name || ""))
+        );
+      if (!rows.length) return businessCategoryDefs;
+      const grouped = new Map();
+      rows.forEach(row => {
+        const value = row.business_category_code;
+        if (!value) return;
+        if (!grouped.has(value)) {
+          grouped.set(value, {
+            value,
+            label: row.business_category_name || value,
+            secondaries: [],
+          });
+        }
+        const secondary = row.secondary_category_name;
+        if (secondary && !grouped.get(value).secondaries.includes(secondary)) {
+          grouped.get(value).secondaries.push(secondary);
+        }
+      });
+      return Array.from(grouped.values());
+    }
+    function businessCategoryOptions(selectedValue = "", allLabel = "全部业务大类") {
+      const definitions = businessCategoryDefinitions();
       return [
-        `<option value="">全部业务大类</option>`,
-        ...businessCategoryDefs.map(item => `<option value="${item.value}" ${item.value === selectedValue ? "selected" : ""}>${item.label}</option>`),
+        ...(allLabel === null ? [] : [`<option value="">${escapeHtml(allLabel)}</option>`]),
+        ...definitions.map(item => `<option value="${escapeAttr(item.value)}" ${item.value === selectedValue ? "selected" : ""}>${escapeHtml(item.label)}</option>`),
       ].join("");
     }
     function businessPlatformOptions(selectedValue = "") {
@@ -3089,13 +3523,20 @@
       ].join("");
     }
     function secondaryCategoryOptions(categoryValue = "", selectedValue = "") {
-      const def = businessCategoryDefs.find(item => item.value === categoryValue);
+      const def = businessCategoryDefinitions().find(item => item.value === categoryValue);
       const values = [...(def?.secondaries || [])];
       if (selectedValue && !values.includes(selectedValue)) values.unshift(selectedValue);
       return [
         `<option value="">全部二级分类</option>`,
         ...values.map(value => `<option value="${escapeAttr(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHtml(value)}</option>`),
       ].join("");
+    }
+    function renderSecondaryCategorySelect(categoryValue = "", selectedValue = "") {
+      const select = qs("secondaryCategoryInput");
+      if (!select) return;
+      select.innerHTML = secondaryCategoryOptions(categoryValue, selectedValue);
+      select.dataset.category = categoryValue;
+      if (selectedValue) select.value = selectedValue;
     }
     function rulesForQuotationItem(quotationItemId) {
       return (state.mappingWorkbench?.dimensionRules || []).filter(rule => rule.quotation_item_id === quotationItemId && rule.status !== "inactive");
@@ -3108,11 +3549,11 @@
       if (!box) return;
       const items = workbench?.quotationItems || [];
       if (!workbench?.selectedQuotation) {
-        box.innerHTML = `<div class="empty-list">请选择季度报价单后维护报价子项维度规则。</div>`;
+        box.innerHTML = `<div class="empty-list">请选择季度合同报价后维护报价子项维度规则。</div>`;
         return;
       }
       if (!items.length) {
-        box.innerHTML = `<div class="empty-list">当前报价单暂无报价子项。</div>`;
+        box.innerHTML = `<div class="empty-list">当前合同报价暂无报价子项。</div>`;
         return;
       }
       box.innerHTML = `
@@ -3205,6 +3646,12 @@
     }
     async function deleteQuotationDimensionRule(ruleId) {
       if (!ruleId) return;
+      const confirmed = await confirmDialog({
+        title: "删除维度规则",
+        message: "确认删除这条报价子项维度规则吗？删除后自动适配将不再使用它。",
+        okText: "删除",
+      });
+      if (!confirmed) return;
       try {
         await request(`/quote-mappings/dimension-rules/${ruleId}`, { method: "DELETE" });
         await loadQuarterMappingWorkbench(false);
@@ -3221,7 +3668,7 @@
       const customerId = qs("mappingCustomerSelect")?.value;
       const quarter = qs("mappingQuarterSelect")?.value;
       const quotationId = qs("mappingQuotationSelect")?.value;
-      if (!customerId || !quarter || !quotationId) return toast("请先选择基金、季度和报价单");
+      if (!customerId || !quarter || !quotationId) return toast("请先选择基金、季度和合同报价");
       const button = qs("quarterSuggestButton");
       state.busyActionId = "quarter-suggest";
       if (button) {
@@ -3254,6 +3701,7 @@
       }
     }
     async function saveQuarterMapping(requirementItemId, confirm = false) {
+      if (state.busyActionId) return;
       const workbench = state.mappingWorkbench;
       const row = workbench?.rows?.find(item => item.requirementItem.id === requirementItemId);
       const quotationItemId = qs(`mapping-quote-item-${requirementItemId}`)?.value;
@@ -3269,18 +3717,30 @@
         matchedRatio: confirm ? "100.00" : row.mapping?.matched_ratio || "80.00",
         remark: confirm ? "人工确认季度报价适配" : "人工选择季度报价子项",
       };
+      const busyKey = `quarter-map-${requirementItemId}`;
+      state.busyActionId = busyKey;
+      renderMappingWorkbench(workbench);
+      let refreshed = false;
       try {
         if (row.mapping?.id) {
           await request(`/quote-mappings/${row.mapping.id}`, { method: "PATCH", body });
         } else {
           await request("/quote-mappings", { method: "POST", body });
         }
+        state.busyActionId = null;
         await loadQuarterMappingWorkbench(false);
+        await refreshRequirementBoard({ force: true, preserveScroll: true });
+        refreshed = true;
         await refreshAnalytics();
         if (isViewActive("settlement")) await loadSettlementStatement(false);
-        toast(confirm ? "已确认适配" : "已保存适配");
+        toast(confirm ? "报价已确认" : "报价选择已保存，待确认");
       } catch (error) {
         toast(error.message);
+      } finally {
+        if (state.busyActionId === busyKey) {
+          state.busyActionId = null;
+        }
+        if (!refreshed) renderMappingWorkbench(state.mappingWorkbench);
       }
     }
     async function confirmQuarterMapping(requirementItemId) {
@@ -3288,8 +3748,9 @@
     }
     async function loadSettlementStatement(showToast = true) {
       const requestSeq = ++state.settlementRequestSeq;
+      state.dimensionFilters.contactContextId = "all";
       const customerId = qs("settlementCustomerSelect")?.value || state.settlementCustomerId || "all";
-      const quarter = qs("settlementQuarterSelect")?.value || state.settlementQuarter || currentQuarter();
+      const quarter = state.settlementQuarter || currentQuarter();
       state.settlementCustomerId = customerId;
       state.settlementQuarter = quarter;
       syncPrimaryCustomerSelects(customerId);
@@ -3317,11 +3778,10 @@
           customerId,
           quarter,
           rows,
-          fundSummary: buildSettlementFundSummary(rows),
           summary: buildSettlementSummary(rows),
         };
         renderSettlementStatement();
-        if (showToast) toast("结算单预览已生成");
+        if (showToast) toast("结算统计已刷新");
       } catch (error) {
         toast(error.message);
       }
@@ -3353,6 +3813,10 @@
           taskName: task?.task_name || "-",
           assetCount,
           quotationItemName: row.quotationItem?.item_name || "-",
+          businessPlatform: row.requirement?.business_platform || "-",
+          businessCategory: projectTypeLabel(row.requirement?.business_category) || "-",
+          secondaryCategory: row.requirement?.secondary_category || "-",
+          employeeName: assigneeName(task?.assignee_user_id),
           unitPrice,
           amount,
           status: settlementRowStatus(row, assetCount),
@@ -3376,80 +3840,166 @@
         pendingCount: rows.filter(row => row.status !== "可结算").length,
       };
     }
-    function buildSettlementFundSummary(rows) {
-      const groups = new Map();
-      for (const row of rows) {
-        const current = groups.get(row.customerId) || {
-          customerId: row.customerId,
-          customerName: row.customerName,
-          requirementCount: 0,
-          billableCount: 0,
-          assetCount: 0,
-          amount: 0,
-          pendingCount: 0,
-        };
-        current.requirementCount += 1;
-        if (row.status === "可结算") {
-          current.billableCount += 1;
-          current.assetCount += row.assetCount;
-          current.amount += row.amount;
-        } else {
-          current.pendingCount += 1;
-        }
-        groups.set(row.customerId, current);
-      }
-      return [...groups.values()].sort((a, b) => b.amount - a.amount);
-    }
     function renderSettlementStatement() {
-      const statement = state.settlementStatement || { rows: [], fundSummary: [], summary: {} };
+      const statement = state.settlementStatement || { rows: [], summary: {} };
       const summary = statement.summary || {};
-      qs("settlementScopeHint").textContent = `${statement.quarter || currentQuarter()} · ${statement.customerId === "all" ? "全部基金" : customerName(statement.customerId)}`;
+      qs("settlementScopeHint").textContent = `${statement.customerId === "all" ? "全部基金" : customerName(statement.customerId)}`;
       qs("settlementMetrics").innerHTML = [
         ["预计结算金额", formatMoney(summary.amount || 0)],
         ["可结算资产", summary.assetCount || 0],
         ["可结算需求", summary.billableCount || 0],
         ["待处理需求", summary.pendingCount || 0],
       ].map(([label, value]) => `<div class="mini-metric"><span>${label}</span><strong>${value}</strong></div>`).join("");
-      renderSettlementFundSummary(statement.fundSummary || []);
-      renderSettlementDetails(statement.rows || []);
+      renderSettlementCharts(statement.rows || []);
+      renderSettlementDetailFilters(statement.rows || []);
+      renderSettlementDetails(filteredSettlementDetailRows(statement.rows || []));
     }
-    function renderSettlementFundSummary(rows) {
-      const box = qs("settlementFundSummary");
-      if (!rows.length) {
-        box.innerHTML = `<div class="empty-list">当前基金/季度暂无可统计的需求报价适配数据。</div>`;
-        return;
+    function buildSettlementDimensionTotals(rows, labelFn) {
+      const groups = new Map();
+      for (const row of rows) {
+        if (row.status !== "可结算") continue;
+        const label = labelFn(row) || "-";
+        const current = groups.get(label) || { label, amount: 0, assetCount: 0 };
+        current.amount += Number(row.amount || 0);
+        current.assetCount += Number(row.assetCount || 0);
+        groups.set(label, current);
       }
+      return [...groups.values()];
+    }
+    function settlementChartGroupingSpec() {
+      const selectedCustomer = state.settlementCustomerId || state.dimensionFilters.customerId || "all";
+      const selectedPlatform = state.dimensionFilters.businessPlatform || "all";
+      const selectedCategory = state.dimensionFilters.businessCategory || "all";
+      const selectedSecondary = state.dimensionFilters.secondaryCategory || "all";
+      const selectedEmployee = state.dimensionFilters.assigneeUserId || "all";
+      const normalize = (value, fallback) => {
+        const text = String(value || "").trim();
+        return !text || text === "-" ? fallback : text;
+      };
+      if (!selectedCustomer || selectedCustomer === "all") {
+        return { name: "基金", labelFor: row => normalize(row.customerName, "未关联基金") };
+      }
+      if (!selectedPlatform || selectedPlatform === "all") {
+        return { name: "业务平台", labelFor: row => normalize(row.businessPlatform, "未设置平台") };
+      }
+      if (!selectedCategory || selectedCategory === "all") {
+        return { name: "业务大类", labelFor: row => normalize(row.businessCategory, "未设置大类") };
+      }
+      if (!selectedSecondary || selectedSecondary === "all") {
+        return { name: "二级分类", labelFor: row => normalize(row.secondaryCategory, "未设置二级分类") };
+      }
+      if (!selectedEmployee || selectedEmployee === "all") {
+        return { name: "员工", labelFor: row => normalize(row.employeeName, "未指派员工") };
+      }
+      return { name: "报价子项", labelFor: row => normalize(row.quotationItemName, "未关联报价子项") };
+    }
+    function renderSettlementCharts(rows) {
+      const amountBox = qs("settlementAmountChart");
+      const assetBox = qs("settlementAssetChart");
+      if (!amountBox || !assetBox) return;
+      const grouping = settlementChartGroupingSpec();
+      const amountTag = qs("settlementAmountChartTag");
+      const assetTag = qs("settlementAssetChartTag");
+      if (amountTag) amountTag.textContent = `按${grouping.name}汇总`;
+      if (assetTag) assetTag.textContent = `按${grouping.name}汇总`;
+      const dimensions = buildSettlementDimensionTotals(rows, grouping.labelFor)
+        .filter(row => row.label && row.label !== "-");
+      const amountRows = dimensions
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 8)
+        .map(row => ({ label: row.label, total: row.amount, value: formatMoney(row.amount) }));
+      const assetRows = [...dimensions]
+        .sort((a, b) => b.assetCount - a.assetCount)
+        .slice(0, 8)
+        .map(row => ({ label: row.label, total: row.assetCount, value: `${row.assetCount} 个` }));
+      renderValueBarList(amountBox, amountRows, "暂无可结算金额数据");
+      renderValueBarList(assetBox, assetRows, "暂无可结算资产数据");
+    }
+    function settlementRowDateValue(row) {
+      return row.task?.actual_end_at || row.task?.actualEndAt || row.task?.planned_end_at || row.task?.plannedEndAt || row.requirement?.created_at || "";
+    }
+    function settlementRowDateKey(row) {
+      const raw = settlementRowDateValue(row);
+      if (!raw) return "";
+      const date = new Date(raw);
+      if (Number.isNaN(date.getTime())) return "";
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+    function settlementDetailCustomerOptions(rows) {
+      const groups = new Map();
+      for (const row of rows) {
+        if (!row.customerId) continue;
+        groups.set(row.customerId, row.customerName || customerName(row.customerId));
+      }
+      const options = [...groups.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), "zh-CN"));
+      return [
+        `<option value="all" ${state.settlementDetailFilters.customerId === "all" ? "selected" : ""}>全部基金</option>`,
+        ...options.map(([id, label]) => `<option value="${escapeAttr(id)}" ${state.settlementDetailFilters.customerId === id ? "selected" : ""}>${escapeHtml(label)}</option>`),
+      ].join("");
+    }
+    function renderSettlementDetailFilters(rows) {
+      const box = qs("settlementDetailFilters");
+      if (!box) return;
+      const filters = state.settlementDetailFilters;
       box.innerHTML = `
-        <table>
-          <thead><tr><th>基金客户</th><th>需求数</th><th>可结算需求</th><th>资产个数</th><th>预计结算金额</th><th>待处理</th></tr></thead>
-          <tbody>
-            ${rows.map(row => `
-              <tr>
-                <td>${safeText(row.customerName)}</td>
-                <td>${row.requirementCount}</td>
-                <td>${row.billableCount}</td>
-                <td>${row.assetCount}</td>
-                <td>${formatMoney(row.amount)}</td>
-                <td>${row.pendingCount}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
+        <label>明细基金
+          <select onchange="setSettlementDetailFilter('customerId', this.value)">
+            ${settlementDetailCustomerOptions(rows)}
+          </select>
+        </label>
+        <label>开始时间
+          <input type="date" value="${escapeAttr(filters.startDate || "")}" onchange="setSettlementDetailFilter('startDate', this.value)" />
+        </label>
+        <label>结束时间
+          <input type="date" value="${escapeAttr(filters.endDate || "")}" onchange="setSettlementDetailFilter('endDate', this.value)" />
+        </label>
+        <label>操作
+          <button class="btn" onclick="clearSettlementDetailFilters()">清空明细筛选</button>
+        </label>
       `;
+    }
+    function filteredSettlementDetailRows(rows) {
+      const filters = state.settlementDetailFilters;
+      return rows.filter(row => {
+        if (filters.customerId && filters.customerId !== "all" && row.customerId !== filters.customerId) return false;
+        const dateKey = settlementRowDateKey(row);
+        if (filters.startDate && (!dateKey || dateKey < filters.startDate)) return false;
+        if (filters.endDate && (!dateKey || dateKey > filters.endDate)) return false;
+        return true;
+      });
+    }
+    function setSettlementDetailFilter(key, value) {
+      if (!state.settlementDetailFilters) {
+        state.settlementDetailFilters = { customerId: "all", startDate: "", endDate: "" };
+      }
+      state.settlementDetailFilters[key] = value || (key === "customerId" ? "all" : "");
+      const rows = state.settlementStatement?.rows || [];
+      renderSettlementDetailFilters(rows);
+      renderSettlementDetails(filteredSettlementDetailRows(rows));
+    }
+    function clearSettlementDetailFilters() {
+      state.settlementDetailFilters = { customerId: "all", startDate: "", endDate: "" };
+      const rows = state.settlementStatement?.rows || [];
+      renderSettlementDetailFilters(rows);
+      renderSettlementDetails(rows);
     }
     function renderSettlementDetails(rows) {
       const box = qs("settlementDetails");
       if (!rows.length) {
-        box.innerHTML = `<div class="empty-list">暂无结算明细。请先完成需求、报价单和报价子项选择。</div>`;
+        box.innerHTML = `<div class="empty-list">暂无结算明细。请先完成需求、合同报价和报价子项选择。</div>`;
         return;
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>基金 / 季度</th><th>需求任务</th><th>报价子项</th><th>资产个数</th><th>单价</th><th>结算金额</th><th>状态</th></tr></thead>
+          <thead><tr><th>基金 / 季度</th><th>时间</th><th>需求任务</th><th>报价子项</th><th>资产个数</th><th>单价</th><th>结算金额</th><th>状态</th></tr></thead>
           <tbody>
             ${rows.map(row => `
               <tr>
                 <td>${safeText(row.customerName)}<br><span class="row-sub">${safeText(row.quarter)} · ${safeText(row.quotationNo)}</span></td>
+                <td>${safeText(settlementRowDateKey(row) || "-")}</td>
                 <td><div class="row-title">${safeText(row.requirementItemTitle)}</div><div class="row-sub">${safeText(row.requirementCode)}<br>${safeText(row.taskNo)} ${safeText(row.taskName)}</div></td>
                 <td>${safeText(row.quotationItemName)}</td>
                 <td>${row.assetCount > 0 ? row.assetCount : "未开始"}</td>
@@ -3467,9 +4017,19 @@
       if (!project) return toast("请先选择客户和业务大类");
       const businessName = qs("businessNameInput").value.trim();
       const businessPlatform = qs("businessPlatformInput").value;
+      const secondaryCategory = qs("secondaryCategoryInput").value;
       const tertiaryCategory = qs("tertiaryCategoryInput").value.trim();
+      const plannedStartAt = qs("plannedStartAtInput").value;
+      const plannedEndAt = qs("plannedEndAtInput").value;
+      const priority = priorityValueFromDeadline(plannedEndAt);
+      const urgencyLevel = qs("requirementUrgencyInput").value;
       const title = qs("requirementTitle").value.trim();
       const content = qs("requirementContent").value.trim();
+      if (plannedStartAt && plannedEndAt && plannedStartAt > plannedEndAt) {
+        return toast("开始时间不能晚于截止时间");
+      }
+      if (!plannedEndAt || !priority) return toast("请填写截止时间以计算任务优先级");
+      if (!urgencyLevel) return toast("请选择任务紧急程度");
       if (!businessName) return toast("请填写业务命名");
       if (!title) return toast("请填写需求标题");
       if (!content) return toast("请填写需求内容");
@@ -3491,11 +4051,16 @@
             customerId: qs("customerSelect").value,
             title,
             rawContent: content,
-            priority: "high",
+            priority,
+            urgencyLevel,
             estimatedHours: "6",
+            plannedStartAt: plannedStartAt || undefined,
+            plannedEndAt: plannedEndAt || undefined,
             contactContextId: contactContext?.id || undefined,
             businessName,
             businessPlatform: businessPlatform || undefined,
+            businessCategory: qs("projectTypeSelect").value || undefined,
+            secondaryCategory: secondaryCategory || undefined,
             tertiaryCategory,
           },
         });
@@ -3505,11 +4070,20 @@
         state.requirements.unshift(state.requirement);
         state.requirementItems = [state.item, ...state.requirementItems.filter(existing => existing.id !== state.item.id)];
         state.tasks = [state.task, ...state.tasks.filter(existing => existing.id !== state.task.id)];
+        invalidateLookupMaps();
         addLog("需求录入并生成任务成功", result);
         linkMappingContext(state.requirement.customer_id, quarterForDate(state.requirement.created_at));
-        loadQuarterMappingWorkbench(false);
-        if (isViewActive("settlement")) loadSettlementStatement(false);
+        await Promise.all([
+          refreshRequirementBoard({ force: true, preserveScroll: true }),
+          loadQuarterMappingWorkbench(false),
+          isViewActive("settlement") ? loadSettlementStatement(false) : Promise.resolve(),
+        ]);
         qs("businessNameInput").value = "";
+        qs("plannedStartAtInput").value = "";
+        qs("plannedEndAtInput").value = "";
+        qs("requirementPriorityInput").value = "";
+        qs("requirementPriorityInput").dataset.priority = "";
+        qs("requirementUrgencyInput").value = "";
         qs("requirementTitle").value = "";
         qs("requirementContent").value = "";
         toast("需求已进入历史需求任务列表，状态为待指派");
@@ -3559,13 +4133,17 @@
         state.requirements = [...items.map(item => item.requirement), ...state.requirements];
         state.requirementItems = [...items.map(item => item.item), ...state.requirementItems];
         state.tasks = [...items.map(item => item.task), ...state.tasks];
+        invalidateLookupMaps();
         if (items[0]) {
           state.requirement = items[0].requirement;
           state.item = items[0].item;
           state.task = items[0].task;
           linkMappingContext(state.requirement.customer_id, quarterForDate(state.requirement.created_at));
-          loadQuarterMappingWorkbench(false);
-          if (isViewActive("settlement")) loadSettlementStatement(false);
+          await Promise.all([
+            refreshRequirementBoard({ force: true, preserveScroll: true }),
+            loadQuarterMappingWorkbench(false),
+            isViewActive("settlement") ? loadSettlementStatement(false) : Promise.resolve(),
+          ]);
         }
         addLog("AI已拆分文件并生成任务", result);
         renderAiSplitPreview(items.map(item => ({
@@ -3594,6 +4172,7 @@
       if (!task) return toast("任务不存在，请刷新列表");
       state.busyActionId = taskId;
       renderRequirementBoard();
+      let refreshed = false;
       try {
         const result = await request(`/tasks/${taskId}/assign`, {
           method: "POST",
@@ -3608,14 +4187,21 @@
         state.tasks = state.tasks.map(item => item.id === taskId ? state.task : item);
         state.requirement = state.requirements.find(item => item.id === requirementId) || null;
         state.item = state.requirement ? itemForRequirement(state.requirement.id) : null;
+        state.assignmentEditingTaskId = null;
+        invalidateLookupMaps();
+        state.busyActionId = null;
+        await refreshRequirementBoard({ force: true, preserveScroll: true });
+        refreshed = true;
         addLog("任务已从列表指派，飞书消息已发送", result);
         toast("已指派并发送飞书消息");
         refreshMessages();
       } catch (error) {
         toast(error.message);
       } finally {
-        state.busyActionId = null;
-        renderRequirementBoard();
+        if (state.busyActionId === taskId) {
+          state.busyActionId = null;
+        }
+        if (!refreshed) renderRequirementBoard();
       }
     }
     async function approveTaskReview(requirementId, taskId) {
@@ -3629,7 +4215,7 @@
         });
         state.tasks = state.tasks.map(item => item.id === taskId ? result.task : item);
         addLog("任务验收通过", result);
-        toast("已通过验收，任务完成");
+        toast("已通过验收，状态已更新为已验收");
         refreshMessages();
         refreshAnalytics();
       } catch (error) {
@@ -3666,23 +4252,20 @@
     }
     async function refreshAnalytics() {
       const requestSeq = ++state.analyticsRequestSeq;
-      const customerId = qs("analyticsCustomerSelect")?.value || "all";
-      const quarter = qs("analyticsQuarterSelect")?.value || state.analyticsQuarter || currentQuarter();
+      state.dimensionFilters.contactContextId = "all";
+      const customerId = state.dimensionFilters.customerId || "all";
+      const quarter = state.analyticsQuarter || currentQuarter();
       state.analyticsCustomerId = customerId;
       state.analyticsQuarter = quarter;
       syncPrimaryCustomerSelects(customerId);
-      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", false);
+      renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", true, true);
       const query = new URLSearchParams({ liveAssetCount: "true" });
       if (customerId !== "all") query.set("customerId", customerId);
       qs("metrics").innerHTML = `<div class="panel metric"><span>正在刷新</span><strong>...</strong><span>同步资产表和报价子项选择</span></div>`;
       try {
         const analyticsCustomers = selectedAnalyticsCustomers(customerId);
-        const [board, workbenchBundle] = await Promise.all([
-          request(`/tasks/board?${query.toString()}`),
-          loadQuarterWorkbenches(analyticsCustomers, quarter),
-        ]);
+        const board = await request(`/tasks/board?${query.toString()}`);
         if (requestSeq !== state.analyticsRequestSeq) return;
-        const workbenches = workbenchBundle.workbenches || [];
         const customerIds = new Set(analyticsCustomers.map(customer => customer.id));
         const rows = Object.entries(board)
           .flatMap(([status, tasks]) => (tasks || []).map(t => ({ status, ...t })))
@@ -3691,45 +4274,38 @@
             const requirement = requirementForTask(task);
             return (!taskCustomerId || customerIds.has(taskCustomerId)) && dimensionMatchesRequirement(requirement, task);
           });
-        const quarterTasks = rows.filter(task => quarterForDate(task.created_at) === quarter);
+        const quarterTasks = rows;
         const totalAssets = quarterTasks.reduce((sum, task) => sum + Number(task.asset_count || task.assetCount || 0), 0);
         const completedTasks = quarterTasks.filter(task => task.status === "completed").length;
         const scopedRequirements = state.requirements.filter(requirement => {
           if (!customerIds.has(requirement.customer_id)) return false;
           if (!dimensionMatchesRequirement(requirement, taskForRequirement(requirement.id))) return false;
-          return quarterForDate(requirement.created_at) === quarter;
+          return true;
         });
         const scopedRequirementIds = new Set(scopedRequirements.map(requirement => requirement.id));
         const scopedRequirementItems = state.requirementItems.filter(item => scopedRequirementIds.has(item.requirement_id));
         const quoteMatchedCount = scopedRequirementItems.filter(item => item.quote_scope_status === "matched").length;
         const quotePendingCount = scopedRequirementItems.filter(item => isPendingQuoteScopeStatus(item.quote_scope_status)).length;
-        const scopeText = `${customerId === "all" ? "全部基金" : customerName(customerId)} · ${quarter}`;
-        const settlementRows = buildDashboardSettlementRows(scopedRequirementItems, rows, workbenches);
-        const settlementAmount = settlementRows.reduce((sum, row) => sum + row.amount, 0);
-        const factRows = buildAnalyticsFactRows(scopedRequirementItems, rows, settlementRows);
-        const dimensionRows = buildDimensionMatrixRows(factRows);
+        const scopeText = `${customerId === "all" ? "全部基金" : customerName(customerId)}`;
+        const factRows = buildAnalyticsFactRows(scopedRequirementItems, rows);
         qs("metrics").innerHTML = [
           ["需求总数", scopedRequirements.length, scopeText],
           ["资产链接数", totalAssets, "自动读取资产表 URL 并去重"],
           ["验收完成需求", completedTasks, "管理者已通过验收的任务"],
           ["报价已确认", quoteMatchedCount, `待确认 ${quotePendingCount} 项`],
-          ["预计结算金额", formatMoney(settlementAmount), `覆盖 ${analyticsCustomers.length} 家基金客户`],
         ].map(([label, value, hint]) => `<div class="panel metric"><span>${label}</span><strong>${value}</strong><span>${hint}</span></div>`).join("");
         const analyticsContext = {
           quarter,
           quarterTasks,
           scopedRequirements,
           scopedRequirementItems,
-          settlementRows,
         };
         renderTaskStatusOverview(analyticsContext);
         renderTaskPriorityOverview(analyticsContext);
-        renderDimensionMatrix(dimensionRows, scopeText);
         renderDimensionSummaryBoard(factRows);
         renderUrgencyBoard(analyticsContext);
         renderTaskFunnelBoard(analyticsContext);
         renderKeyTaskBoard(analyticsContext);
-        renderSettlementTop(settlementRows);
         renderDashboardTaskDetails(factRows);
       } catch (error) {
         toast(error.message);
@@ -3740,40 +4316,13 @@
       if (customerId !== "all") return state.customers.filter(customer => customer.id === customerId);
       return fundCustomers.length ? fundCustomers : state.customers;
     }
-    function buildDashboardSettlementRows(requirementItems, tasks, workbenches = []) {
+    function buildAnalyticsFactRows(requirementItems, tasks) {
       const taskByRequirementItemId = new Map(tasks.filter(task => task.requirement_item_id).map(task => [task.requirement_item_id, task]));
-      const mappingRows = workbenches.flatMap(workbench => workbench?.rows || []);
-      const mappingByRequirementItemId = new Map(mappingRows.map(row => [row.requirementItem.id, row]));
-      return requirementItems.map(item => {
-        const requirement = requirementForItem(item);
-        const task = taskByRequirementItemId.get(item.id);
-        const mappingRow = mappingByRequirementItemId.get(item.id);
-        const assetCount = Number(task?.asset_count ?? task?.assetCount ?? 0);
-        const unitPrice = Number(mappingRow?.quotationItem?.unit_price || 0);
-        const billable = mappingRow?.mapping?.mapping_status === "matched" && assetCount > 0 && unitPrice > 0;
-        return {
-          customerId: requirement?.customer_id,
-          customerName: customerName(requirement?.customer_id),
-          requirementTitle: item.item_title,
-          assigneeUserId: task?.assignee_user_id,
-          employeeName: assigneeName(task?.assignee_user_id),
-          requirementItemId: item.id,
-          assetCount,
-          unitPrice,
-          amount: billable ? assetCount * unitPrice : 0,
-          status: billable ? "可结算" : mappingStatusLabel(mappingRow?.mapping?.mapping_status) || quoteScopeStatusLabel(item.quote_scope_status),
-        };
-      });
-    }
-    function buildAnalyticsFactRows(requirementItems, tasks, settlementRows) {
-      const taskByRequirementItemId = new Map(tasks.filter(task => task.requirement_item_id).map(task => [task.requirement_item_id, task]));
-      const settlementByRequirementItemId = new Map(settlementRows.map(row => [row.requirementItemId, row]));
       return requirementItems.map(item => {
         const requirement = requirementForItem(item);
         const task = taskByRequirementItemId.get(item.id) || taskForRequirement(requirement?.id);
         const dimensions = requirementDimensionSnapshot(requirement, task);
         const contactContext = contactContextForRequirement(requirement);
-        const settlement = settlementByRequirementItemId.get(item.id) || {};
         const assetCount = taskAssetCount(task);
         return {
           requirement,
@@ -3789,135 +4338,12 @@
           tertiaryCategory: dimensions.tertiaryCategory || "-",
           employeeName: task?.assignee_user_id ? assigneeName(task.assignee_user_id) : "未指派",
           assetCount,
-          amount: Number(settlement.amount || 0),
-          unitPrice: Number(settlement.unitPrice || 0),
           quoteMatched: item.quote_scope_status === "matched",
           quotePending: isPendingQuoteScopeStatus(item.quote_scope_status),
           completed: task ? isTaskCompleted(task) : false,
           overdue: task ? isTaskOverdue(task) : false,
         };
       });
-    }
-    function createDimensionAccumulator(row) {
-      return {
-        customerName: row.customerName || "-",
-        contactContextName: row.contactContextName || "-",
-        businessPlatform: row.businessPlatform || "-",
-        businessCategory: row.businessCategory || "-",
-        secondaryCategory: row.secondaryCategory || "-",
-        tertiaryCategory: row.tertiaryCategory || "-",
-        employeeName: row.employeeName || "未指派",
-        requirementIds: new Set(),
-        itemCount: 0,
-        taskCount: 0,
-        completedCount: 0,
-        overdueCount: 0,
-        quoteMatchedCount: 0,
-        quotePendingCount: 0,
-        assetCount: 0,
-        amount: 0,
-      };
-    }
-    function addFactToAccumulator(acc, row) {
-      if (row.requirement?.id) acc.requirementIds.add(row.requirement.id);
-      acc.itemCount += 1;
-      if (row.task?.id) acc.taskCount += 1;
-      if (row.completed) acc.completedCount += 1;
-      if (row.overdue) acc.overdueCount += 1;
-      if (row.quoteMatched) acc.quoteMatchedCount += 1;
-      if (row.quotePending) acc.quotePendingCount += 1;
-      acc.assetCount += row.assetCount;
-      acc.amount += row.amount;
-      return acc;
-    }
-    function finalizeDimensionAccumulator(acc) {
-      return {
-        ...acc,
-        requirementCount: acc.requirementIds.size,
-        requirementIds: undefined,
-      };
-    }
-    function dimensionMatrixKey(row) {
-      return [
-        row.customerId || "",
-        row.contactContextName,
-        row.businessPlatform,
-        row.businessCategory,
-        row.secondaryCategory,
-        row.tertiaryCategory,
-        row.employeeName,
-      ].join("||");
-    }
-    function buildDimensionMatrixRows(factRows) {
-      const groups = new Map();
-      for (const row of factRows) {
-        const key = dimensionMatrixKey(row);
-        const current = groups.get(key) || createDimensionAccumulator(row);
-        addFactToAccumulator(current, row);
-        groups.set(key, current);
-      }
-      return [...groups.values()]
-        .map(finalizeDimensionAccumulator)
-        .sort((a, b) =>
-          b.requirementCount - a.requirementCount ||
-          b.taskCount - a.taskCount ||
-          b.assetCount - a.assetCount ||
-          b.amount - a.amount
-        );
-    }
-    function renderDimensionMatrix(rows, scopeText) {
-      const box = qs("dimensionMatrixBox");
-      if (!box) return;
-      const hint = qs("analyticsScopeHint");
-      if (hint) hint.textContent = `${scopeText} · ${rows.length} 个统计单元`;
-      if (!rows.length) {
-        box.innerHTML = `<div class="empty-list">当前筛选下暂无可统计数据。</div>`;
-        return;
-      }
-      box.innerHTML = `
-        <table>
-          <thead>
-            <tr>
-              <th>基金客户</th>
-              <th>对接人</th>
-              <th>业务平台</th>
-              <th>业务大类</th>
-              <th>二级分类</th>
-              <th>三级分类</th>
-              <th>员工</th>
-              <th>需求</th>
-              <th>任务</th>
-              <th>完成</th>
-              <th>延期</th>
-              <th>待报价</th>
-              <th>报价确认</th>
-              <th>资产</th>
-              <th>预计结算</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.map(row => `
-              <tr>
-                <td><div class="dimension-cell-main">${safeText(row.customerName)}</div></td>
-                <td><div class="dimension-cell-main">${safeText(row.contactContextName)}</div></td>
-                <td>${safeText(row.businessPlatform)}</td>
-                <td>${safeText(row.businessCategory)}</td>
-                <td>${safeText(row.secondaryCategory)}</td>
-                <td>${safeText(row.tertiaryCategory)}</td>
-                <td><div class="dimension-cell-main">${safeText(row.employeeName)}</div></td>
-                <td>${row.requirementCount}</td>
-                <td>${row.taskCount}</td>
-                <td>${row.completedCount}</td>
-                <td>${row.overdueCount}</td>
-                <td>${row.quotePendingCount}</td>
-                <td>${row.quoteMatchedCount}</td>
-                <td>${row.assetCount}</td>
-                <td>${formatMoney(row.amount)}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      `;
     }
     function summarizeFactsBy(factRows, title, getter) {
       const groups = new Map();
@@ -3930,42 +4356,56 @@
           completedCount: 0,
           overdueCount: 0,
           assetCount: 0,
-          amount: 0,
         };
         if (row.requirement?.id) current.requirementIds.add(row.requirement.id);
         if (row.task?.id) current.taskCount += 1;
         if (row.completed) current.completedCount += 1;
         if (row.overdue) current.overdueCount += 1;
         current.assetCount += row.assetCount;
-        current.amount += row.amount;
         groups.set(label, current);
       }
       return {
         title,
         rows: [...groups.values()]
           .map(row => ({ ...row, requirementCount: row.requirementIds.size, requirementIds: undefined }))
-          .sort((a, b) => b.requirementCount - a.requirementCount || b.taskCount - a.taskCount || b.amount - a.amount)
+          .sort((a, b) => b.requirementCount - a.requirementCount || b.taskCount - a.taskCount || b.assetCount - a.assetCount)
           .slice(0, 8),
       };
+    }
+    function dashboardSummaryGroupingSpec() {
+      const selectedCustomer = state.dimensionFilters.customerId || "all";
+      const selectedPlatform = state.dimensionFilters.businessPlatform || "all";
+      const selectedCategory = state.dimensionFilters.businessCategory || "all";
+      const selectedSecondary = state.dimensionFilters.secondaryCategory || "all";
+      const selectedEmployee = state.dimensionFilters.assigneeUserId || "all";
+      if (!selectedCustomer || selectedCustomer === "all") {
+        return { title: "基金客户", getter: row => row.customerName };
+      }
+      if (!selectedPlatform || selectedPlatform === "all") {
+        return { title: "业务平台", getter: row => row.businessPlatform };
+      }
+      if (!selectedCategory || selectedCategory === "all") {
+        return { title: "业务大类", getter: row => row.businessCategory };
+      }
+      if (!selectedSecondary || selectedSecondary === "all") {
+        return { title: "二级分类", getter: row => row.secondaryCategory };
+      }
+      if (!selectedEmployee || selectedEmployee === "all") {
+        return { title: "员工", getter: row => row.employeeName };
+      }
+      return { title: "报价状态", getter: row => quoteScopeStatusLabel(row.item?.quote_scope_status) };
     }
     function renderDimensionSummaryBoard(factRows) {
       const box = qs("dimensionSummaryBoard");
       if (!box) return;
-      const summaries = [
-        summarizeFactsBy(factRows, "基金客户", row => row.customerName),
-        summarizeFactsBy(factRows, "对接人", row => row.contactContextName),
-        summarizeFactsBy(factRows, "业务平台", row => row.businessPlatform),
-        summarizeFactsBy(factRows, "业务大类", row => row.businessCategory),
-        summarizeFactsBy(factRows, "二级分类", row => row.secondaryCategory),
-        summarizeFactsBy(factRows, "三级分类", row => row.tertiaryCategory),
-        summarizeFactsBy(factRows, "员工", row => row.employeeName),
-      ];
-      box.innerHTML = summaries.map(summary => `
+      const grouping = dashboardSummaryGroupingSpec();
+      const summary = summarizeFactsBy(factRows, grouping.title, grouping.getter);
+      box.innerHTML = `
         <div class="dimension-summary-card">
-          <h4>${escapeHtml(summary.title)}</h4>
+          <h4>按${escapeHtml(summary.title)}汇总</h4>
           ${summary.rows.length ? `
             <table>
-              <thead><tr><th>名称</th><th>需求</th><th>任务</th><th>资产</th><th>结算</th></tr></thead>
+              <thead><tr><th>名称</th><th>需求</th><th>任务</th><th>资产</th></tr></thead>
               <tbody>
                 ${summary.rows.map(row => `
                   <tr>
@@ -3973,14 +4413,13 @@
                     <td>${row.requirementCount}</td>
                     <td>${row.taskCount}</td>
                     <td>${row.assetCount}</td>
-                    <td>${formatMoney(row.amount)}</td>
                   </tr>
                 `).join("")}
               </tbody>
             </table>
           ` : `<div class="empty-list">暂无数据</div>`}
         </div>
-      `).join("");
+      `;
     }
     function renderDashboardTaskDetails(factRows) {
       const box = qs("boardBox");
@@ -3988,20 +4427,18 @@
       const rows = factRows.filter(row => row.task).sort((a, b) => taskRiskScore(b.task) - taskRiskScore(a.task));
       box.innerHTML = `
         <table>
-          <thead><tr><th>基金客户</th><th>对接人</th><th>业务维度</th><th>任务</th><th>负责人</th><th>状态</th><th>报价</th><th>资产</th><th>预计结算</th></tr></thead>
+          <thead><tr><th>基金客户</th><th>业务维度</th><th>任务</th><th>负责人</th><th>状态</th><th>报价</th><th>资产</th></tr></thead>
           <tbody>${rows.map(row => `
             <tr>
               <td>${safeText(row.customerName)}</td>
-              <td>${safeText(row.contactContextName)}</td>
               <td>${safeText(row.businessCategory)}<br><span class="row-sub">${safeText(row.businessPlatform)} · ${safeText(row.secondaryCategory)} · ${safeText(row.tertiaryCategory)}</span></td>
               <td>${safeText(row.task.task_no)}<br><span class="row-sub">${safeText(row.task.task_name)}</span></td>
               <td>${safeText(row.employeeName)}</td>
               <td><span class="tag">${safeText(row.overdue ? "已延期" : taskStatusLabel(row.task.status))}</span></td>
               <td>${safeText(quoteScopeStatusLabel(row.item.quote_scope_status))}</td>
               <td>${safeText(assetCountText(row.task))}</td>
-              <td>${formatMoney(row.amount)}</td>
             </tr>
-          `).join("") || `<tr><td colspan="9" class="muted">暂无任务数据</td></tr>`}</tbody>
+          `).join("") || `<tr><td colspan="7" class="muted">暂无任务数据</td></tr>`}</tbody>
         </table>
       `;
     }
@@ -4015,6 +4452,17 @@
       const raw = task?.planned_end_at || task?.plannedEndAt;
       const date = raw ? new Date(raw) : null;
       return date && !Number.isNaN(date.getTime()) ? date : null;
+    }
+    function taskStartDate(task) {
+      const raw = task?.planned_start_at || task?.plannedStartAt;
+      const date = raw ? new Date(raw) : null;
+      return date && !Number.isNaN(date.getTime()) ? date : null;
+    }
+    function taskPlanDateRangeText(task) {
+      const start = taskStartDate(task);
+      const due = taskDueDate(task);
+      if (!start && !due) return "";
+      return `${start ? shortDate(start) : "-"} - ${due ? shortDate(due) : "-"}`;
     }
     function shortDate(value) {
       const date = value ? new Date(value) : null;
@@ -4040,15 +4488,15 @@
       if (["todo", "pending", "assigned"].includes(task?.status) && taskAssetCount(task) === 0) return "notStarted";
       return "inProgress";
     }
-    function priorityBucket(task) {
-      if (task?.priority === "high") return "high";
-      if (task?.priority === "medium") return "medium";
-      if (task?.priority === "low") return "low";
-      return "unset";
-    }
     function urgencyBucket(task) {
-      const important = ["high", "medium"].includes(priorityBucket(task));
-      const urgent = isTaskOverdue(task) || isTaskDueSoon(task) || priorityBucket(task) === "high";
+      const manual = task?.urgency_level || task?.urgencyLevel;
+      if (manual === "important_urgent") return "importantUrgent";
+      if (manual === "important_not_urgent") return "important";
+      if (manual === "urgent_not_important") return "urgent";
+      if (manual === "normal") return "normal";
+      const priorityIndex = priorityIndexFromValue(task?.priority);
+      const important = priorityIndex !== null && priorityIndex <= 3;
+      const urgent = isTaskOverdue(task) || (priorityIndex !== null && priorityIndex <= 1);
       if (important && urgent) return "importantUrgent";
       if (!important && urgent) return "urgent";
       if (important && !urgent) return "important";
@@ -4076,7 +4524,7 @@
         <div class="dashboard-stat-row">
           <div class="dashboard-stat-card"><span>任务数</span><strong>${total}</strong></div>
           <div class="dashboard-stat-card warn"><span>延期任务</span><strong>${overdue}</strong></div>
-          <div class="dashboard-stat-card ok"><span>已完成任务</span><strong>${completed}</strong></div>
+          <div class="dashboard-stat-card ok"><span>已验收任务</span><strong>${completed}</strong></div>
           <div class="dashboard-stat-card neutral"><span>未开始任务</span><strong>${notStarted}</strong></div>
         </div>
       `;
@@ -4084,21 +4532,31 @@
     function renderTaskPriorityOverview({ quarterTasks }) {
       const box = qs("taskPriorityOverview");
       if (!box) return;
-      const counts = { high: 0, medium: 0, low: 0, unset: 0 };
-      quarterTasks.forEach(task => counts[priorityBucket(task)] += 1);
-      const cards = [
-        ["P0", "高优先级", counts.high, "warn"],
-        ["P1", "中优先级", counts.medium, "mid"],
-        ["P2", "低优先级", counts.low, "ok"],
-        ["P3", "未标记", counts.unset, "neutral"],
-      ];
+      const counts = new Map();
+      let unsetCount = 0;
+      quarterTasks.forEach(task => {
+        const index = priorityIndexFromValue(task?.priority);
+        if (index === null) {
+          unsetCount += 1;
+          return;
+        }
+        counts.set(index, (counts.get(index) || 0) + 1);
+      });
+      const indexes = [...counts.keys()].sort((a, b) => a - b).slice(0, 7);
+      const cards = indexes.map(index => [
+        `P${index}`,
+        index === 0 ? "今天完成" : index === 4 ? "3天后" : `${index}天后完成`,
+        counts.get(index) || 0,
+        index <= 1 ? "warn" : index <= 3 ? "mid" : "ok",
+      ]);
+      if (unsetCount) cards.push(["未设置", "缺少截止时间", unsetCount, "neutral"]);
       box.innerHTML = `
         <div class="section-title">
           <div>
             <div class="kicker">Priority</div>
             <h3>任务优先级</h3>
           </div>
-          <span class="tag">P0-P3</span>
+          <span class="tag">P0-PN</span>
         </div>
         <div class="priority-strip">
           ${cards.map(([level, label, count, tone]) => `
@@ -4144,8 +4602,8 @@
       if (!box) return;
       const labels = {
         importantUrgent: "重要且紧急",
-        urgent: "紧急不重要",
         important: "重要不紧急",
+        urgent: "紧急不重要",
         normal: "不紧急不重要",
       };
       const groups = Object.fromEntries(Object.keys(labels).map(key => [key, { label: labels[key], normal: 0, overdue: 0, total: 0 }]));
@@ -4166,7 +4624,7 @@
       const steps = [
         ["待开始", counts.notStarted, "warn", total],
         ["进行中", counts.inProgress, "ok", counts.notStarted || total],
-        ["已完成", counts.completed, "mid", counts.inProgress || total],
+        ["已验收", counts.completed, "mid", counts.inProgress || total],
       ];
       box.innerHTML = total ? `
         <div class="funnel">
@@ -4197,7 +4655,7 @@
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>编号</th><th>基金客户</th><th>业务维度</th><th>任务</th><th>负责人</th><th>状态</th><th>重要程度</th><th>报价</th><th>资产</th><th>截止时间</th></tr></thead>
+          <thead><tr><th>编号</th><th>基金客户</th><th>业务维度</th><th>任务</th><th>负责人</th><th>状态</th><th>优先级</th><th>报价</th><th>资产</th><th>截止时间</th></tr></thead>
           <tbody>
             ${rows.map(task => {
               const requirement = requirementForTask(task);
@@ -4237,6 +4695,20 @@
         </div>
       `).join("")}</div>`;
     }
+    function renderValueBarList(box, rows, emptyText) {
+      if (!rows.length) {
+        box.innerHTML = `<div class="empty-list">${emptyText}</div>`;
+        return;
+      }
+      const max = Math.max(...rows.map(row => Number(row.total || 0)), 1);
+      box.innerHTML = `<div class="mini-bars">${rows.map((row, index) => `
+        <div class="bar-row">
+          <div class="bar-label" title="${escapeAttr(row.label)}">${escapeHtml(row.label)}</div>
+          <div class="bar-track"><div class="bar-fill ${index % 3 === 1 ? "mid" : index % 3 === 2 ? "warn" : "ok"}" style="width:${Math.max(5, percentage(Number(row.total || 0), max))}%"></div></div>
+          <div class="bar-value">${escapeHtml(row.value ?? row.total)}</div>
+        </div>
+      `).join("")}</div>`;
+    }
     function renderStackedBarList(box, rows, emptyText) {
       const visibleRows = rows.filter(row => row.total > 0);
       if (!visibleRows.length) {
@@ -4270,8 +4742,8 @@
       const item = taskRequirementItem(task);
       let score = 0;
       if (isTaskOverdue(task)) score += 100;
-      if (priorityBucket(task) === "high") score += 45;
-      if (priorityBucket(task) === "medium") score += 20;
+      const priorityIndex = priorityIndexFromValue(task?.priority);
+      if (priorityIndex !== null) score += Math.max(0, 55 - priorityIndex * 8);
       if (isPendingQuoteScopeStatus(item?.quote_scope_status)) score += 18;
       if (taskProgressGroup(task) === "notStarted") score += 10;
       if (isTaskDueSoon(task)) score += 8;
@@ -4300,52 +4772,6 @@
         row.assigned,
         row.assets,
       ], "暂无员工任务数据");
-    }
-    function renderFundTop(requirements, tasks, settlementRows) {
-      const groups = new Map();
-      for (const requirement of requirements) {
-        const current = groups.get(requirement.customer_id) || {
-          customerId: requirement.customer_id,
-          name: customerName(requirement.customer_id),
-          requirements: 0,
-          tasks: 0,
-          assets: 0,
-          amount: 0,
-        };
-        current.requirements += 1;
-        groups.set(requirement.customer_id, current);
-      }
-      for (const task of tasks) {
-        const customerId = projectForTask(task)?.customer_id;
-        if (!customerId) continue;
-        const current = groups.get(customerId) || { customerId, name: customerName(customerId), requirements: 0, tasks: 0, assets: 0, amount: 0 };
-        current.tasks += 1;
-        current.assets += Number(task.asset_count || task.assetCount || 0);
-        groups.set(customerId, current);
-      }
-      for (const row of settlementRows) {
-        if (!row.customerId) continue;
-        const current = groups.get(row.customerId) || { customerId: row.customerId, name: row.customerName, requirements: 0, tasks: 0, assets: 0, amount: 0 };
-        current.amount += row.amount;
-        groups.set(row.customerId, current);
-      }
-      const rows = [...groups.values()].sort((a, b) => b.requirements - a.requirements || b.amount - a.amount).slice(0, 10);
-      renderSimpleTable("fundTopBox", rows, ["基金客户", "需求数", "资产数", "预计结算"], row => [
-        safeText(row.name),
-        row.requirements,
-        row.assets,
-        formatMoney(row.amount),
-      ], "暂无基金统计数据");
-    }
-    function renderSettlementTop(rows) {
-      const sorted = [...rows].filter(row => row.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 10);
-      renderSimpleTable("settlementTopBox", sorted, ["需求", "基金客户", "负责人", "资产 × 单价", "预计结算"], row => [
-        safeText(row.requirementTitle),
-        safeText(row.customerName),
-        safeText(row.employeeName),
-        `${row.assetCount} × ${formatMoney(row.unitPrice)}`,
-        formatMoney(row.amount),
-      ], "暂无可结算数据，请先在历史需求任务中选择报价子项并产生资产。");
     }
     function renderSimpleTable(elementId, rows, headers, toCells, emptyText) {
       const box = qs(elementId);

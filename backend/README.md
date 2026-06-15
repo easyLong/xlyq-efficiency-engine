@@ -1,8 +1,8 @@
-# 效能引擎后端
+# 向量引擎管理工作台后端
 
-更新时间：2026-06-11
+更新时间：2026-06-15
 
-这是效能引擎的 NestJS 后端服务，同时托管当前 MVP 静态页面。
+这是向量引擎管理工作台的 NestJS 后端服务，同时托管当前 MVP 静态页面。
 
 ## 运行入口
 
@@ -26,16 +26,16 @@
 src/
   common/            通用实体
   ai-prompts/        AI 提示词注册表和版本管理
-  contact-contexts/  对接人维度配置
+  contact-contexts/  对接人配置，维护基金客户和业务平台
   customers/         客户管理
-  dimensions/        业务维度字典
-  dashboard/         工作台统计
+  dimensions/        业务维度字典和大类二级分类关系
+  dashboard/         需求面板统计
   health/            健康检查
   integrations/      飞书等外部集成
   notifications/     站内消息和飞书通知编排
   projects/          项目管理
   quote-mappings/    需求任务与报价子项映射
-  quotations/        报价单和报价子项
+  quotations/        合同报价和报价子项
   requirements/      需求管理
   risk-alerts/       风险预警
   tasks/             任务、工作入口、资产记录
@@ -144,10 +144,11 @@ npm run migrate:project-tables -- --help
 
 - 删除报价单/报价子项会清理相关报价映射和报价子项维度规则。
 - 删除需求会清理需求项、任务、资产记录和报价映射。
-- 报价映射创建/更新会校验需求客户、报价单客户和报价子项归属，避免跨基金挂错报价。
+- 报价映射保存会校验需求客户、报价单客户和报价子项归属，避免跨基金挂错报价；同一需求项重复保存会复用当前映射并将旧有效映射标记为 `obsolete`。
 - 报价子项状态只按有效映射回算，`rejected`、`obsolete` 不再占用报价子项。
 - 本地交付登记保存、需求删除、报价单删除使用事务，避免资产、任务、映射残留。
 - 资产个数只统计图片资产和人工登记资产；最终交付链接仅用于追踪，不参与结算数量。
+- 服务启动时会通过 `common/schema-maintenance.ts` 安全补齐高频查询索引，降低历史需求、结算统计、报价映射等页面的查询压力。
 
 ## 数据库与迁移
 
@@ -164,7 +165,7 @@ npm run migrate:project-tables -- --execute
 
 ## 飞书与模型
 
-- OpenAI 兼容模型用于需求文件拆分、客户/业务分类识别、报价单解析。
+- OpenAI 兼容模型用于需求文件拆分、客户/业务分类识别、合同报价解析。
 - 飞书在线表格依赖 `drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create` 权限。
 - 权限不足时，任务指派会降级到本地交付登记页。
 - 移动端员工访问本地交付登记页时，`APP_PUBLIC_BASE_URL` 必须是公网可访问地址。
@@ -178,3 +179,11 @@ npm run migrate:project-tables -- --execute
 - `integrations/feishu/feishu-task-card-action.handler.ts`：飞书卡片按钮回调业务处理。
 - `integrations/feishu/feishu-user-sync.service.ts`：飞书员工同步。
 - `ai-prompts/prompt-registry.ts`：需求识别、需求拆分、报价解析提示词版本管理。
+
+## 2026-06-15 数据架构更新
+
+- `dimensions/entities/business-category-secondary-category.entity.ts`：业务大类与二级分类关系表。
+- `common/schema-maintenance.ts`：启动期安全补齐索引。
+- `quote-mappings/quote-mappings.service.ts`：报价映射幂等保存，旧有效映射置为 `obsolete`。
+- `requirements/requirements.service.ts`：历史看板完整拉取最新需求下的子项、任务、报价映射。
+- `quotations/quotations.service.ts`：CSV 合同报价优先按结构化表格解析最细粒度子项、单位和单价。

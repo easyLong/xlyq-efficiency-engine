@@ -10,6 +10,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { extname, join } from 'node:path';
 import { DataSource, In, Repository } from 'typeorm';
+import { ensureIndex } from '../common/schema-maintenance';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
 import { FeishuService } from '../integrations/feishu/feishu.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -71,6 +72,7 @@ export class TasksService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    await this.ensureTasksSchema();
     await this.ensureTaskStatusHistoryTable();
   }
 
@@ -274,9 +276,13 @@ export class TasksService implements OnModuleInit {
       task_name: dto.taskName,
       description: dto.description ?? null,
       status: TaskStatus.Todo,
-      priority: dto.priority ?? 'medium',
+      priority: this.normalizePriority(dto.priority),
+      urgency_level: dto.urgencyLevel ?? null,
       assignee_user_id: dto.assigneeUserId ?? null,
       estimated_hours: dto.estimatedHours ?? null,
+      planned_start_at: dto.plannedStartAt
+        ? new Date(dto.plannedStartAt)
+        : null,
       planned_end_at: dto.plannedEndAt ? new Date(dto.plannedEndAt) : null,
       reporter_user_id: null,
       blocked_reason: null,
@@ -325,6 +331,7 @@ export class TasksService implements OnModuleInit {
       taskName: item.item_title,
       description: item.item_description ?? undefined,
       priority: item.priority ?? undefined,
+      urgencyLevel: item.urgency_level ?? undefined,
       estimatedHours: item.estimated_hours ?? undefined,
     });
   }
@@ -339,8 +346,15 @@ export class TasksService implements OnModuleInit {
       task_name: dto.taskName ?? task.task_name,
       description: dto.description ?? task.description,
       status: nextStatus,
-      priority: dto.priority ?? task.priority,
+      priority:
+        dto.priority !== undefined
+          ? this.normalizePriority(dto.priority)
+          : task.priority,
+      urgency_level: dto.urgencyLevel ?? task.urgency_level,
       assignee_user_id: dto.assigneeUserId ?? task.assignee_user_id,
+      planned_start_at: dto.plannedStartAt
+        ? new Date(dto.plannedStartAt)
+        : task.planned_start_at,
       planned_end_at: dto.plannedEndAt
         ? new Date(dto.plannedEndAt)
         : task.planned_end_at,
@@ -563,10 +577,12 @@ export class TasksService implements OnModuleInit {
         : Promise.resolve(null),
       this.taskDirectoriesRepository.findOne({ where: { task_id: id } }),
     ]);
+    const fundPlatformLabel = await this.taskFundPlatformLabel(task, project);
 
     return {
       task,
       project,
+      fundPlatformLabel,
       requirementItem,
       assignee: assignee
         ? {
@@ -1213,6 +1229,44 @@ export class TasksService implements OnModuleInit {
     return saved;
   }
 
+  private normalizePriority(value?: string | null) {
+    const normalized = String(value ?? '')
+      .trim()
+      .toLowerCase();
+    if (normalized === 'high') return 'p0';
+    if (normalized === 'medium') return 'p1';
+    if (normalized === 'low') return 'p2';
+    const match = /^p(\d+)$/.exec(normalized);
+    if (match) return `p${Math.min(4, Number(match[1]))}`;
+    return 'p3';
+  }
+
+  private async taskFundPlatformLabel(
+    task: TaskEntity,
+    project?: ProjectEntity | null,
+  ) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT
+          COALESCE(requirement_customer.customer_name, project_customer.customer_name) AS customerName,
+          requirement.business_platform AS businessPlatform
+        FROM tasks task
+        LEFT JOIN requirement_items item ON item.id = task.requirement_item_id
+        LEFT JOIN requirements requirement ON requirement.id = item.requirement_id
+        LEFT JOIN customers requirement_customer ON requirement_customer.id = requirement.customer_id
+        LEFT JOIN projects project ON project.id = task.project_id
+        LEFT JOIN customers project_customer ON project_customer.id = project.customer_id
+        WHERE task.id = ?
+        LIMIT 1
+      `,
+      [task.id],
+    );
+    const customerName =
+      rows?.[0]?.customerName ?? project?.project_name ?? '未关联基金';
+    const businessPlatform = rows?.[0]?.businessPlatform ?? '未关联平台';
+    return `基金${customerName}-平台${businessPlatform}`;
+  }
+
   private async recordTaskStatusHistory(
     task: TaskEntity,
     fromStatus: string,
@@ -1231,6 +1285,76 @@ export class TasksService implements OnModuleInit {
         trigger_source: triggerSource,
         remark: remark ?? null,
       }),
+    );
+  }
+
+  private async ensureTasksSchema() {
+    await this.addColumnIfMissing(
+      'tasks',
+      'planned_start_at',
+      'planned_start_at DATETIME NULL AFTER blocked_reason',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'urgency_level',
+      'urgency_level VARCHAR(32) NULL AFTER priority',
+    );
+    await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_project_created', [
+      'project_id',
+      'created_at',
+    ]);
+    await ensureIndex(
+      this.dataSource,
+      'tasks',
+      'idx_tasks_requirement_item_created',
+      ['requirement_item_id', 'created_at'],
+    );
+    await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_assignee_status', [
+      'assignee_user_id',
+      'status',
+    ]);
+    await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_status_due', [
+      'status',
+      'planned_end_at',
+    ]);
+    await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_project_task_no', [
+      'project_id',
+      'task_no',
+    ]);
+    await ensureIndex(
+      this.dataSource,
+      'task_result_files',
+      'idx_task_result_files_task_source_deleted',
+      ['task_id', 'source', 'deleted_at'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'task_directories',
+      'idx_task_directories_task',
+      ['task_id'],
+    );
+  }
+
+  private async addColumnIfMissing(
+    tableName: string,
+    columnName: string,
+    columnDefinition: string,
+  ) {
+    const rows = await this.dataSource.query(
+      `
+      SELECT COUNT(*) AS count
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = ?
+        AND column_name = ?
+    `,
+      [tableName, columnName],
+    );
+    if (Number(rows?.[0]?.count ?? 0) > 0) {
+      return;
+    }
+    await this.dataSource.query(
+      `ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`,
     );
   }
 

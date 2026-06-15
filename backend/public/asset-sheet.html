@@ -10,31 +10,53 @@
       margin: 0;
       min-height: 100vh;
       color: #172033;
-      background: #f5f7fb;
+      background: #f6f8fb;
       font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
     }
     .page {
-      width: min(1180px, calc(100% - 28px));
-      margin: 18px auto;
+      width: min(1120px, calc(100% - 32px));
+      margin: 16px auto;
       display: grid;
-      grid-template-columns: 330px minmax(0, 1fr);
-      gap: 14px;
+      grid-template-columns: 1fr;
+      gap: 16px;
       align-items: start;
     }
     .panel {
       background: #fff;
       border: 1px solid #e5e9f0;
-      border-radius: 10px;
-      box-shadow: 0 12px 34px rgba(15, 23, 42, .06);
+      border-radius: 12px;
+      box-shadow: 0 10px 26px rgba(16, 24, 40, .05);
       padding: 16px;
     }
-    .task-panel { position: sticky; top: 16px; display: grid; gap: 14px; }
-    .workspace { display: grid; gap: 14px; }
-    .task-title { margin: 0; font-size: 24px; line-height: 1.28; color: #111827; }
-    .task-sub { color: #667085; font-size: 13px; line-height: 1.6; }
-    .tabs { display: flex; border-bottom: 1px solid #e5e9f0; }
-    .tab { padding: 0 0 10px; color: #2563eb; border-bottom: 3px solid #2563eb; font-weight: 900; }
-    .detail-list { display: grid; gap: 12px; }
+    .task-panel {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 18px;
+      align-items: start;
+    }
+    .workspace { min-width: 0; }
+    .task-kicker { color: #667085; font-size: 12px; font-weight: 900; margin-bottom: 7px; }
+    .task-title { margin: 0; font-size: 22px; line-height: 1.32; color: #111827; }
+    .task-sub { margin: 7px 0 0; color: #667085; font-size: 13px; line-height: 1.55; }
+    .tabs { display: none; }
+    .task-overview {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 16px;
+      align-items: end;
+    }
+    .task-meta {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+    .detail-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px 14px;
+    }
     .detail-row { display: grid; gap: 5px; }
     .detail-label { color: #7b8494; font-size: 12px; font-weight: 900; }
     .detail-value { color: #263244; font-size: 14px; font-weight: 800; line-height: 1.45; word-break: break-word; }
@@ -53,37 +75,78 @@
     .tag.warn { background: #fff3df; color: #9a4b13; }
     .tag.ok { background: #e8f8ed; color: #166534; }
     .summary-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-    .summary-box { border: 1px solid #e5e9f0; border-radius: 9px; padding: 10px; background: #fafbfd; }
-    .summary-box span { display: block; color: #667085; font-size: 12px; margin-bottom: 4px; }
-    .summary-box strong { font-size: 20px; }
+    .summary-box { border: 1px solid #edf0f5; border-radius: 10px; padding: 10px; background: #fafbfd; }
+    .summary-box span { display: block; color: #667085; font-size: 12px; margin-bottom: 5px; }
+    .summary-box strong { font-size: 18px; line-height: 1.1; }
     .workflow-box {
-      border: 1px solid #dbeafe;
-      border-radius: 9px;
-      background: #f8fbff;
-      padding: 11px;
+      border: 1px solid #d7e6ff;
+      border-radius: 10px;
+      background: #f7fbff;
+      padding: 12px;
       display: grid;
       gap: 5px;
     }
     .workflow-box span { color: #667085; font-size: 12px; font-weight: 900; }
-    .workflow-box strong { color: #1d4ed8; font-size: 15px; line-height: 1.45; }
-    h2 { margin: 0 0 10px; font-size: 18px; color: #111827; }
-    .section-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
-    .section-head p { margin: 3px 0 0; color: #667085; font-size: 13px; line-height: 1.55; }
+    .workflow-box strong { color: #1d4ed8; font-size: 14px; line-height: 1.45; }
+    h2 { margin: 0; font-size: 19px; color: #111827; }
+    .delivery-panel { padding: 0; overflow: hidden; }
+    .delivery-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid #eef1f6;
+      background: #fff;
+    }
+    .delivery-header p { margin: 5px 0 0; color: #667085; font-size: 13px; line-height: 1.5; }
+    .delivery-kicker { color: #2563eb; font-size: 12px; font-weight: 900; margin-bottom: 5px; }
+    .delivery-body { display: grid; gap: 0; }
+    .delivery-section { padding: 18px; border-bottom: 1px solid #eef1f6; }
+    .delivery-main-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .section-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 12px; }
+    .section-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .step-pill {
+      width: 25px;
+      height: 25px;
+      border-radius: 999px;
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 auto;
+      background: #eef4ff;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .section-head h3 { margin: 0; color: #111827; font-size: 16px; line-height: 1.3; }
+    .section-head p { margin: 3px 0 0; color: #667085; font-size: 12px; line-height: 1.45; }
     .upload-zone {
-      border: 1.5px dashed #aab8cf;
+      border: 1.5px dashed #aebbd0;
       border-radius: 12px;
-      min-height: 148px;
-      background: #f8fbff;
+      min-height: 116px;
+      background: #f8fafc;
       display: grid;
       place-items: center;
-      text-align: center;
-      padding: 18px;
+      text-align: left;
+      padding: 14px 16px;
       transition: border .15s ease, background .15s ease;
     }
-    .upload-zone.dragover { border-color: #2563eb; background: #eef5ff; }
-    .upload-zone strong { display: block; margin-bottom: 5px; font-size: 17px; }
+    .upload-zone > div {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+    }
+    .upload-zone.dragover { border-color: #2563eb; background: #eef6ff; }
+    .upload-zone strong { display: block; margin-bottom: 6px; font-size: 16px; }
     .upload-zone p { margin: 0; color: #667085; font-size: 13px; line-height: 1.6; }
-    .upload-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+    .upload-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 0; }
     input, textarea {
       width: 100%;
       border: 1px solid #d7dee8;
@@ -97,14 +160,14 @@
     }
     textarea { min-height: 92px; resize: vertical; line-height: 1.55; }
     input:focus, textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
-    .link-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
-    .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(154px, 1fr)); gap: 10px; }
+    .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 10px; max-height: 420px; overflow: auto; padding-right: 2px; }
     .asset-card { border: 1px solid #e5e9f0; border-radius: 10px; background: #fff; overflow: hidden; }
-    .asset-preview { aspect-ratio: 1.25; background: #f3f6fa; display: grid; place-items: center; color: #98a2b3; font-size: 12px; overflow: hidden; }
+    .asset-preview { aspect-ratio: 1.18; background: #f3f6fa; display: grid; place-items: center; color: #98a2b3; font-size: 12px; overflow: hidden; }
     .asset-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .asset-meta { padding: 9px; display: grid; gap: 7px; }
     .asset-url { color: #475467; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .card-actions { display: flex; gap: 6px; }
+    .pending-note { color: #1d4ed8; font-size: 12px; font-weight: 900; }
     button {
       border: 1px solid #2563eb;
       background: #2563eb;
@@ -120,104 +183,210 @@
     button.ghost { background: #f8fafc; color: #475467; border-color: #e5e9f0; min-height: 30px; padding: 5px 8px; font-size: 12px; }
     button.danger { background: #fff7f5; color: #b42318; border-color: #ffd1c8; min-height: 30px; padding: 5px 8px; font-size: 12px; }
     button:disabled { opacity: .55; cursor: not-allowed; }
-    .save-bar { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .link-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .save-bar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 14px 18px;
+      background: #fbfcfe;
+    }
+    .save-actions { display: flex; gap: 8px; align-items: center; }
     .status { color: #667085; font-size: 13px; font-weight: 800; line-height: 1.55; }
     .status.ok { color: #166534; }
     .status.error { color: #b42318; }
-    .empty { border: 1px dashed #d7dee8; border-radius: 10px; padding: 18px; color: #98a2b3; text-align: center; background: #fafbfd; }
+    .empty { min-height: 132px; border: 1px dashed #d7dee8; border-radius: 12px; padding: 18px; color: #98a2b3; text-align: center; background: #fafbfd; display: grid; place-items: center; }
+    .dialog-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: block;
+      padding: 18px;
+      background: rgba(15, 23, 42, .34);
+      backdrop-filter: blur(3px);
+    }
+    .confirm-dialog {
+      width: min(400px, 100%);
+      position: fixed;
+      border: 1px solid #ffd1c8;
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
+      overflow: hidden;
+    }
+    .confirm-dialog-body {
+      padding: 17px 17px 13px;
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr);
+      gap: 11px;
+      align-items: start;
+    }
+    .confirm-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: #fff7f5;
+      color: #b42318;
+      font-weight: 900;
+      font-size: 17px;
+    }
+    .confirm-dialog h3 { margin: 1px 0 6px; color: #111827; font-size: 17px; }
+    .confirm-dialog p { margin: 0; color: #667085; font-size: 13px; line-height: 1.6; }
+    .confirm-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 11px 13px;
+      background: #fafbfd;
+      border-top: 1px solid #eef1f6;
+    }
+    .confirm-actions button { min-height: 34px; padding: 7px 12px; }
     .hidden { display: none !important; }
+    @media (max-width: 1040px) {
+      .delivery-main-grid { grid-template-columns: 1fr; }
+      .upload-zone { min-height: 116px; }
+      .empty { min-height: 120px; }
+      .asset-grid { max-height: none; }
+    }
     @media (max-width: 900px) {
-      .page { grid-template-columns: 1fr; }
-      .task-panel { position: static; }
-      .summary-row, .link-tools { grid-template-columns: 1fr; }
+      .task-overview, .task-meta { grid-template-columns: 1fr; }
+      .summary-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .detail-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .upload-zone { text-align: center; }
+      .upload-zone > div { display: grid; justify-items: center; }
+      .upload-actions { justify-content: center; }
+      .save-bar { align-items: stretch; flex-direction: column; }
+      .save-actions { justify-content: flex-end; }
+    }
+    @media (max-width: 620px) {
+      .summary-row, .detail-list { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <main class="page">
     <aside class="panel task-panel">
-      <div>
-        <h1 id="taskTitle" class="task-title">任务详情</h1>
-        <p id="taskSub" class="task-sub">读取任务信息中...</p>
+      <div class="task-overview">
+        <div>
+          <div class="task-kicker">任务交付</div>
+          <h1 id="taskTitle" class="task-title">任务详情</h1>
+          <p id="taskSub" class="task-sub">读取任务信息中...</p>
+        </div>
+        <div class="summary-row">
+          <div class="summary-box"><span>图片</span><strong id="imageCount">0</strong></div>
+          <div class="summary-box"><span>链接</span><strong id="linkCount">0</strong></div>
+          <div class="summary-box"><span>状态</span><strong id="briefStatus">-</strong></div>
+        </div>
       </div>
       <div class="tabs"><div class="tab">详情</div></div>
-      <div class="summary-row">
-        <div class="summary-box"><span>图片</span><strong id="imageCount">0</strong></div>
-        <div class="summary-box"><span>链接</span><strong id="linkCount">0</strong></div>
-        <div class="summary-box"><span>状态</span><strong id="briefStatus">-</strong></div>
+      <div class="task-meta">
+        <div class="workflow-box">
+          <span>下一步</span>
+          <strong id="nextAction">读取中...</strong>
+        </div>
+        <div id="taskDetails" class="detail-list"></div>
       </div>
-      <div class="workflow-box">
-        <span>下一步</span>
-        <strong id="nextAction">读取中...</strong>
-      </div>
-      <div id="taskDetails" class="detail-list"></div>
     </aside>
 
     <section class="workspace">
-      <div class="panel">
-        <div class="section-head">
+      <div class="panel delivery-panel">
+        <div class="delivery-header">
           <div>
-            <h2>图片资产</h2>
-            <p>支持点击上传、拖拽图片、粘贴截图，也可以批量粘贴图片链接。</p>
+            <div class="delivery-kicker">项目资产</div>
+            <h2>交付内容登记</h2>
+            <p>上传图片资产，填写最终交付链接后提交。</p>
           </div>
-          <button class="secondary" onclick="document.getElementById('fileInput').click()">选择图片</button>
+          <button class="secondary" onclick="reloadContext()">刷新</button>
         </div>
-        <div id="uploadZone" class="upload-zone">
-          <div>
-            <strong>拖拽图片到这里，或直接 Ctrl+V 粘贴截图</strong>
-            <p>支持 PNG、JPG、WEBP、GIF，单张不超过 8MB；上传后会自动生成图片链接。</p>
-            <div class="upload-actions">
-              <button onclick="document.getElementById('fileInput').click()">上传图片</button>
-              <button class="secondary" onclick="focusLinkInput()">粘贴图片链接</button>
+
+        <div class="delivery-body">
+          <div class="delivery-section">
+            <div class="delivery-main-grid">
+              <div>
+                <div class="section-head">
+                  <div class="section-title">
+                    <span class="step-pill">1</span>
+                    <div>
+                      <h3>上传图片资产</h3>
+                      <p>PNG、JPG、WEBP、GIF，单张不超过 8MB。</p>
+                    </div>
+                  </div>
+                  <button class="secondary" onclick="document.getElementById('fileInput').click()">选择图片</button>
+                </div>
+                <div id="uploadZone" class="upload-zone">
+                  <div>
+                    <div>
+                      <strong>拖拽图片到这里</strong>
+                      <p>也可以直接粘贴截图。</p>
+                    </div>
+                    <div class="upload-actions">
+                      <button onclick="document.getElementById('fileInput').click()">上传图片</button>
+                    </div>
+                  </div>
+                </div>
+                <input id="fileInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onchange="uploadSelectedFiles(this.files)" />
+              </div>
+
             </div>
           </div>
-        </div>
-        <input id="fileInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onchange="uploadSelectedFiles(this.files)" />
-      </div>
 
-      <div class="panel">
-        <div class="section-head">
-          <div>
-            <h2>图片链接补充</h2>
-            <p>如果图片已经在飞书、网盘或其他系统中，可以直接粘贴链接，一行一个或用空格分隔。</p>
+          <div class="delivery-section">
+            <div class="section-head">
+              <div class="section-title">
+                <span class="step-pill">2</span>
+                <div>
+                  <h3>已添加图片</h3>
+                  <p>保存后同步到后台统计口径。</p>
+                </div>
+              </div>
+              <button class="secondary" onclick="clearImages()">清空</button>
+            </div>
+            <div id="assetGrid" class="asset-grid"></div>
           </div>
-        </div>
-        <div class="link-tools">
-          <textarea id="imageUrlInput" placeholder="粘贴图片链接，例如：https://.../image.png"></textarea>
-          <button onclick="addImageUrlsFromText()">加入图片列表</button>
-        </div>
-      </div>
 
-      <div class="panel">
-        <div class="section-head">
-          <div>
-            <h2>已添加图片</h2>
-            <p>保存后，这些图片会同步到后台统计口径。</p>
+          <div class="delivery-section">
+            <div class="section-head">
+              <div class="section-title">
+                <span class="step-pill">3</span>
+                <div>
+                  <h3>最终交付链接</h3>
+                  <p>填写最终飞书文档、文件夹、压缩包或交付页面。</p>
+                </div>
+              </div>
+            </div>
+            <div class="link-section">
+              <input id="linkUrl" placeholder="粘贴最终交付链接" oninput="saveDraft()" />
+            </div>
           </div>
-          <button class="secondary" onclick="clearImages()">清空图片</button>
-        </div>
-        <div id="assetGrid" class="asset-grid"></div>
-      </div>
 
-      <div class="panel">
-        <div class="section-head">
-          <div>
-            <h2>最终交付链接</h2>
-            <p>只保留一个链接，适合填写最终飞书文档、文件夹、压缩包或交付页面。</p>
+          <div class="save-bar">
+            <div id="saveStatus" class="status">添加图片或交付链接后提交交付，提交后进入管理者验收。</div>
+            <div class="save-actions">
+              <button id="saveButton" onclick="saveDelivery()">提交交付</button>
+            </div>
           </div>
-        </div>
-        <input id="linkUrl" placeholder="粘贴最终交付链接" oninput="saveDraft()" />
-      </div>
-
-      <div class="panel save-bar">
-        <div id="saveStatus" class="status">添加图片或交付链接后提交交付，提交后进入管理者验收。</div>
-        <div>
-          <button class="secondary" onclick="reloadContext()">刷新</button>
-          <button id="saveButton" onclick="saveDelivery()">提交交付</button>
         </div>
       </div>
     </section>
   </main>
+  <div id="confirmBackdrop" class="dialog-backdrop hidden" onclick="handleConfirmBackdropClick(event)">
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" onclick="event.stopPropagation()">
+      <div class="confirm-dialog-body">
+        <div class="confirm-icon">!</div>
+        <div>
+          <h3 id="confirmTitle">确认操作</h3>
+          <p id="confirmMessage">此操作需要确认。</p>
+        </div>
+      </div>
+      <div class="confirm-actions">
+        <button id="confirmCancelButton" class="secondary" onclick="resolveConfirmDialog(false)">取消</button>
+        <button id="confirmOkButton" class="danger" onclick="resolveConfirmDialog(true)">确认删除</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     const params = new URLSearchParams(location.search);
@@ -229,6 +398,74 @@
     const maxImageCount = 80;
     const maxUrlLength = 500;
     let context = null;
+    let pendingImagePreviews = [];
+    let pendingConfirmResolve = null;
+    let lastPointerPosition = null;
+
+    document.addEventListener("pointerdown", event => {
+      if (!event.target?.closest?.("#confirmBackdrop")) {
+        lastPointerPosition = { x: event.clientX, y: event.clientY };
+      }
+    }, true);
+
+    function confirmDialog({
+      title = "确认操作",
+      message = "此操作需要确认。",
+      okText = "确认",
+      cancelText = "取消",
+    } = {}) {
+      document.getElementById("confirmTitle").textContent = title;
+      document.getElementById("confirmMessage").textContent = message;
+      document.getElementById("confirmOkButton").textContent = okText;
+      document.getElementById("confirmCancelButton").textContent = cancelText;
+      document.getElementById("confirmBackdrop").classList.remove("hidden");
+      positionConfirmDialog();
+      document.getElementById("confirmCancelButton").focus();
+      return new Promise(resolve => {
+        pendingConfirmResolve = resolve;
+      });
+    }
+
+    function positionConfirmDialog() {
+      const backdrop = document.getElementById("confirmBackdrop");
+      const dialog = backdrop?.querySelector(".confirm-dialog");
+      if (!dialog) return;
+      const margin = 14;
+      const rect = dialog.getBoundingClientRect();
+      const point = lastPointerPosition || {
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      };
+      const left = Math.min(
+        Math.max(point.x - rect.width - 20, margin),
+        Math.max(margin, window.innerWidth - rect.width - margin),
+      );
+      const preferredTop = point.y - rect.height - 20;
+      const fallbackTop = point.y + 20;
+      const top = preferredTop >= margin
+        ? preferredTop
+        : Math.min(fallbackTop, Math.max(margin, window.innerHeight - rect.height - margin));
+      dialog.style.left = `${left}px`;
+      dialog.style.top = `${top}px`;
+    }
+
+    function resolveConfirmDialog(value) {
+      document.getElementById("confirmBackdrop").classList.add("hidden");
+      if (pendingConfirmResolve) {
+        pendingConfirmResolve(Boolean(value));
+        pendingConfirmResolve = null;
+      }
+    }
+
+    function handleConfirmBackdropClick(event) {
+      if (event.target?.id === "confirmBackdrop") resolveConfirmDialog(false);
+    }
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !document.getElementById("confirmBackdrop")?.classList.contains("hidden")) {
+        resolveConfirmDialog(false);
+      }
+    });
 
     function emptyDraft() {
       return { imageUrls: [], linkUrl: "" };
@@ -247,9 +484,14 @@
     function normalizeDraft(value) {
       const imageUrls = Array.isArray(value?.imageUrls) ? value.imageUrls : [];
       return {
-        imageUrls: unique(imageUrls.map(item => String(item || "").trim()).filter(Boolean)),
+        imageUrls: unique(imageUrls.map(item => String(item || "").trim()).filter(isPersistableImageUrl)),
         linkUrl: String(value?.linkUrl || ""),
       };
+    }
+
+    function isPersistableImageUrl(url) {
+      const value = String(url || "").trim();
+      return Boolean(value) && !value.startsWith("data:");
     }
 
     function saveDraft() {
@@ -271,38 +513,54 @@
     function renderAssets() {
       const draft = loadDraft();
       document.getElementById("linkUrl").value = draft.linkUrl;
-      document.getElementById("imageCount").textContent = draft.imageUrls.length;
+      document.getElementById("imageCount").textContent = draft.imageUrls.length + pendingImagePreviews.length;
       document.getElementById("linkCount").textContent = draft.linkUrl ? "1" : "0";
       const grid = document.getElementById("assetGrid");
-      if (!draft.imageUrls.length) {
-        grid.innerHTML = `<div class="empty">还没有图片资产。可以上传图片、拖拽图片、粘贴截图，或批量粘贴图片链接。</div>`;
+      const imageEntries = [
+        ...draft.imageUrls.map(url => ({ url, pending: false })),
+        ...pendingImagePreviews.map(item => ({ url: item.url, pending: true })),
+      ];
+      if (!imageEntries.length) {
+        grid.innerHTML = `<div class="empty">还没有图片资产。可以上传图片、拖拽图片，或直接粘贴截图。</div>`;
         return;
       }
-      grid.innerHTML = draft.imageUrls.map((url, index) => `
+      grid.innerHTML = imageEntries.map((entry, index) => {
+        const url = entry.url;
+        const previewUrl = imagePreviewUrl(url);
+        return `
         <article class="asset-card">
-          <a class="asset-preview" href="${escapeAttr(url)}" target="_blank" rel="noreferrer">
-            <img src="${escapeAttr(url)}" alt="图片 ${index + 1}" onerror="this.remove(); this.parentElement.textContent='图片链接'" />
+          <a class="asset-preview" href="${escapeAttr(previewUrl)}" target="_blank" rel="noreferrer">
+            <img src="${escapeAttr(previewUrl)}" alt="${escapeAttr(imageDisplayName(index))}" onerror="this.remove(); this.parentElement.textContent='图片预览失败'" />
           </a>
           <div class="asset-meta">
-            <div class="asset-url" title="${escapeAttr(url)}">${escapeHtml(url)}</div>
+            <div class="asset-url" title="${escapeAttr(url)}">${escapeHtml(imageDisplayName(index))}</div>
             <div class="card-actions">
-              <button class="ghost" onclick="copyText('${escapeAttr(url)}')">复制</button>
-              <button class="danger" onclick="removeImage(${index})">删除</button>
+              ${entry.pending
+                ? `<span class="pending-note">上传中...</span>`
+                : `<button class="ghost" onclick="copyText('${escapeAttr(url)}')">复制</button>
+                   <button class="danger" onclick="removeImage(${index})">删除</button>`}
             </div>
           </div>
         </article>
-      `).join("");
+      `;
+      }).join("");
     }
 
-    function focusLinkInput() {
-      document.getElementById("imageUrlInput").focus();
+    function imageDisplayName(index) {
+      return `图片 ${index + 1}`;
+    }
+
+    function imagePreviewUrl(url) {
+      const value = String(url || "").trim();
+      if (!value || value.startsWith("data:")) return value;
+      return encodeURI(value);
     }
 
     function addImageUrls(urls) {
       const draft = loadDraft();
       const cleaned = urls.map(url => url.trim()).filter(Boolean);
-      if (cleaned.some(url => url.length > maxUrlLength)) {
-        setStatus("图片链接不能超过 500 个字符。", "error");
+      if (cleaned.some(url => !url.startsWith("data:") && url.length > maxUrlLength)) {
+        setStatus("图片地址不能超过 500 个字符。", "error");
         return;
       }
       draft.imageUrls = unique([...draft.imageUrls, ...cleaned]).slice(0, maxImageCount);
@@ -312,26 +570,27 @@
       }
     }
 
-    function addImageUrlsFromText() {
-      const input = document.getElementById("imageUrlInput");
-      const urls = splitUrls(input.value);
-      if (!urls.length) {
-        setStatus("请先粘贴图片链接。", "error");
-        return;
-      }
-      addImageUrls(urls);
-      input.value = "";
-      setStatus(`已加入 ${urls.length} 个图片链接。`, "ok");
-    }
-
-    function removeImage(index) {
+    async function removeImage(index) {
+      const confirmed = await confirmDialog({
+        title: "删除图片资产",
+        message: `确认删除「图片 ${index + 1}」吗？提交后后台统计也会同步更新。`,
+        okText: "删除",
+      });
+      if (!confirmed) return;
       const draft = loadDraft();
       draft.imageUrls.splice(index, 1);
       persistDraft(draft);
     }
 
-    function clearImages() {
+    async function clearImages() {
       const draft = loadDraft();
+      if (!draft.imageUrls.length) return;
+      const confirmed = await confirmDialog({
+        title: "清空图片资产",
+        message: `确认清空已添加的 ${draft.imageUrls.length} 张图片吗？`,
+        okText: "清空",
+      });
+      if (!confirmed) return;
       draft.imageUrls = [];
       persistDraft(draft);
       setStatus("已清空图片列表，保存后后台会同步更新。", "ok");
@@ -340,25 +599,56 @@
     async function uploadSelectedFiles(files) {
       const imageFiles = [...(files || [])].filter(file => file.type.startsWith("image/"));
       if (!imageFiles.length) return;
-      const uploadedUrls = [];
-      setStatus(`正在上传 ${imageFiles.length} 张图片...`, "");
-      for (const file of imageFiles) {
+      const currentCount = loadDraft().imageUrls.length + pendingImagePreviews.length;
+      const availableSlots = Math.max(maxImageCount - currentCount, 0);
+      const selectedFiles = imageFiles.slice(0, availableSlots);
+      if (!selectedFiles.length) {
+        setStatus(`最多支持 ${maxImageCount} 张图片。`, "error");
+        return;
+      }
+      if (selectedFiles.length < imageFiles.length) {
+        setStatus(`最多支持 ${maxImageCount} 张图片，已忽略超出的 ${imageFiles.length - selectedFiles.length} 张。`, "error");
+      }
+      setStatus(`正在上传 ${selectedFiles.length} 张图片...`, "");
+      const uploadJobs = [];
+      const uploadBatch = { uploaded: 0, total: selectedFiles.length };
+      for (const file of selectedFiles) {
+        const previewId = `${Date.now()}-${Math.random()}-${file.name}`;
         try {
           if (file.size > 8 * 1024 * 1024) {
             throw new Error(`${file.name} 超过 8MB`);
           }
           const dataUrl = await readFileAsDataUrl(file);
-          const url = await uploadImage(dataUrl, file.name);
-          uploadedUrls.push(url);
+          pendingImagePreviews.push({ id: previewId, url: dataUrl });
+          uploadJobs.push(uploadPendingImage(previewId, dataUrl, file.name, uploadBatch));
         } catch (error) {
+          pendingImagePreviews = pendingImagePreviews.filter(item => item.id !== previewId);
           setStatus(error.message, "error");
         }
       }
-      if (uploadedUrls.length) {
-        addImageUrls(uploadedUrls);
-        setStatus(`已上传 ${uploadedUrls.length} 张图片，记得点击保存同步统计。`, "ok");
+      renderAssets();
+      const results = await Promise.all(uploadJobs);
+      const uploadedCount = results.filter(Boolean).length;
+      if (uploadedCount) {
+        setStatus(`已上传 ${uploadedCount} 张图片，记得点击保存同步统计。`, "ok");
       }
       document.getElementById("fileInput").value = "";
+    }
+
+    async function uploadPendingImage(previewId, dataUrl, fileName, uploadBatch) {
+      try {
+        const url = await uploadImage(dataUrl, fileName);
+        pendingImagePreviews = pendingImagePreviews.filter(item => item.id !== previewId);
+        addImageUrls([url]);
+        uploadBatch.uploaded += 1;
+        setStatus(`已上传 ${uploadBatch.uploaded} / ${uploadBatch.total} 张图片。`, "ok");
+        return true;
+      } catch (error) {
+        pendingImagePreviews = pendingImagePreviews.filter(item => item.id !== previewId);
+        renderAssets();
+        setStatus(error.message, "error");
+        return false;
+      }
     }
 
     async function uploadImage(dataUrl, fileName) {
@@ -395,9 +685,7 @@
         if (!response.ok) throw new Error(result.message || "读取任务失败");
         context = result;
         renderTaskDetails();
-        if (!localStorage.getItem(storageKey)) {
-          localStorage.setItem(storageKey, JSON.stringify(normalizeDraft(result.delivery)));
-        }
+        syncDeliveryDraft(result.delivery);
         renderAssets();
       } catch (error) {
         setStatus(`读取任务详情失败：${error.message}`, "error");
@@ -411,8 +699,12 @@
       document.getElementById("briefStatus").textContent = "未开始";
       document.getElementById("nextAction").textContent = "提交交付";
       document.getElementById("taskDetails").innerHTML = detailRows([
-        ["任务", taskNo],
+        ["任务名称", taskNo],
         ["状态", `<span class="tag">未开始</span>`],
+        ["开始时间", "-"],
+        ["截止时间", "-"],
+        ["优先级", "-"],
+        ["实际完成时间", "-"],
       ]);
     }
 
@@ -420,22 +712,18 @@
       const task = context?.task || {};
       const project = context?.project || {};
       const item = context?.requirementItem || {};
-      const assignee = context?.assignee || {};
       const workflow = context?.workflow || {};
       document.getElementById("taskTitle").textContent = task.task_name || `${taskNo} 任务详情`;
       document.getElementById("taskSub").textContent = `${task.task_no || taskNo} · ${project.project_name || "未关联项目"}`;
       document.getElementById("briefStatus").textContent = workflow.statusLabel || statusLabel(task.status);
       document.getElementById("nextAction").textContent = workflow.nextActionLabel || nextActionLabel(task.status);
       document.getElementById("taskDetails").innerHTML = detailRows([
-        ["任务", escapeHtml(task.task_name || item.item_title || "-")],
-        ["所属项目", escapeHtml(project.project_name || "-")],
+        ["任务名称", escapeHtml(task.task_name || item.item_title || "-")],
         ["状态", `<span class="tag ${statusTone(task.status)}">${escapeHtml(statusLabel(task.status))}</span>`],
         ["开始时间", escapeHtml(formatDate(task.created_at))],
         ["截止时间", escapeHtml(formatDate(task.planned_end_at))],
         ["优先级", `<span class="tag warn">${escapeHtml(priorityLabel(task.priority))}</span>`],
-        ["任务执行人", escapeHtml(assignee.display_name || assignee.username || "-")],
         ["实际完成时间", escapeHtml(formatDate(task.actual_end_at))],
-        ["内容描述", escapeHtml(task.description || item.item_description || "-")],
       ]);
     }
 
@@ -450,6 +738,10 @@
 
     async function saveDelivery() {
       saveDraft();
+      if (pendingImagePreviews.length) {
+        setStatus("图片还在上传中，请等上传完成后再提交交付。", "error");
+        return;
+      }
       const draft = loadDraft();
       const imageUrls = unique(draft.imageUrls.map(url => url.trim()).filter(Boolean));
       const linkUrl = draft.linkUrl.trim();
@@ -457,8 +749,17 @@
         setStatus("请至少上传一张图片或填写一个交付链接后再提交交付。", "error");
         return;
       }
-      if (imageUrls.length > maxImageCount || imageUrls.some(url => url.length > maxUrlLength) || linkUrl.length > maxUrlLength) {
-        setStatus(`最多 ${maxImageCount} 张图片，且每个链接不能超过 ${maxUrlLength} 个字符。`, "error");
+      const tooLongImageUrl = imageUrls.find(url => url.length > maxUrlLength);
+      if (imageUrls.length > maxImageCount) {
+        setStatus(`最多支持 ${maxImageCount} 张图片。`, "error");
+        return;
+      }
+      if (tooLongImageUrl) {
+        setStatus("图片地址异常，请刷新页面后重新上传这张图片。", "error");
+        return;
+      }
+      if (linkUrl.length > maxUrlLength) {
+        setStatus(`最终交付链接不能超过 ${maxUrlLength} 个字符。`, "error");
         return;
       }
       const button = document.getElementById("saveButton");
@@ -482,6 +783,14 @@
         setStatus(`提交失败：${error.message}`, "error");
       } finally {
         button.disabled = false;
+      }
+    }
+
+    function syncDeliveryDraft(delivery) {
+      const serverDraft = normalizeDraft(delivery);
+      const cachedRaw = localStorage.getItem(storageKey);
+      if (!cachedRaw || serverDraft.imageUrls.length || serverDraft.linkUrl) {
+        localStorage.setItem(storageKey, JSON.stringify(serverDraft));
       }
     }
 
@@ -515,13 +824,6 @@
       });
     }
 
-    function splitUrls(text) {
-      return String(text || "")
-        .split(/\s+/)
-        .map(item => item.trim())
-        .filter(Boolean);
-    }
-
     function taskAssetApi(action) {
       return `/api/v1/tasks/${encodeURIComponent(taskId)}/asset-sheet/${action}?token=${encodeURIComponent(taskToken)}`;
     }
@@ -535,7 +837,7 @@
     async function copyText(value) {
       try {
         await navigator.clipboard.writeText(value);
-        setStatus("图片链接已复制。", "ok");
+        setStatus("图片地址已复制。", "ok");
       } catch {
         setStatus("复制失败，请手动复制链接。", "error");
       }

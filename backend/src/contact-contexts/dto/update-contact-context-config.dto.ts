@@ -23,18 +23,6 @@ export class UpdateContactContextConfigDto {
 
   @IsOptional()
   @IsString()
-  businessCategory?: string;
-
-  @IsOptional()
-  @IsString()
-  secondaryCategory?: string;
-
-  @IsOptional()
-  @IsString()
-  tertiaryCategory?: string;
-
-  @IsOptional()
-  @IsString()
   status?: string;
 
   @IsOptional()

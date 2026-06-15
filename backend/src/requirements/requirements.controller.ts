@@ -26,6 +26,11 @@ export class RequirementsController {
     return this.requirementsService.findAll(projectId);
   }
 
+  @Get('history-board')
+  historyBoard() {
+    return this.requirementsService.historyBoard();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.requirementsService.findOne(id);

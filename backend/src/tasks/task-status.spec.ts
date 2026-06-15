@@ -34,6 +34,6 @@ describe('task status state machine', () => {
 
   it('keeps labels centralized', () => {
     expect(taskStatusLabel(TaskStatus.PendingReview)).toBe('待验收');
-    expect(taskStatusLabel(TaskStatus.Completed)).toBe('已完成');
+    expect(taskStatusLabel(TaskStatus.Completed)).toBe('已验收');
   });
 });

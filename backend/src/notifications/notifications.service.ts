@@ -173,12 +173,13 @@ export class NotificationsService {
           })
         : Promise.resolve(null),
     ]);
+    const fundPlatformLabel = await this.taskFundPlatformLabel(task, project);
 
     return this.sendToUsers([workspace.assignee_user_id], {
       title: `新任务已指派：${task.task_name}`,
       content: [
         `**任务**：${task.task_name}`,
-        `**所属项目**：${project?.project_name ?? '-'}`,
+        `**基金平台**：${fundPlatformLabel}`,
         `**状态**：${this.taskStatusLabel(task.status)}`,
         `**截止时间**：${this.formatDate(task.planned_end_at)}`,
         `**优先级**：${this.priorityLabel(task.priority)}`,
@@ -510,7 +511,17 @@ export class NotificationsService {
   }
 
   private priorityLabel(priority: string | null) {
-    return { high: 'P0', medium: 'P1', low: 'P2' }[priority ?? ''] ?? 'P3';
+    const normalized = String(priority ?? '').toLowerCase();
+    const legacy: Record<string, string> = {
+      high: 'P0',
+      medium: 'P1',
+      low: 'P2',
+    };
+    if (legacy[normalized]) {
+      return legacy[normalized];
+    }
+    const match = /^p(\d+)$/.exec(normalized);
+    return match ? `P${Math.min(4, Number(match[1]))}` : '-';
   }
 
   private formatDate(value: Date | null) {
@@ -518,6 +529,32 @@ export class NotificationsService {
       return '-';
     }
     return `${value.getFullYear()}/${String(value.getMonth() + 1).padStart(2, '0')}/${String(value.getDate()).padStart(2, '0')}`;
+  }
+
+  private async taskFundPlatformLabel(
+    task: TaskEntity,
+    project?: ProjectEntity | null,
+  ) {
+    const rows = await this.tasksRepository.manager.query(
+      `
+        SELECT
+          COALESCE(requirement_customer.customer_name, project_customer.customer_name) AS customerName,
+          requirement.business_platform AS businessPlatform
+        FROM tasks task
+        LEFT JOIN requirement_items item ON item.id = task.requirement_item_id
+        LEFT JOIN requirements requirement ON requirement.id = item.requirement_id
+        LEFT JOIN customers requirement_customer ON requirement_customer.id = requirement.customer_id
+        LEFT JOIN projects project ON project.id = task.project_id
+        LEFT JOIN customers project_customer ON project_customer.id = project.customer_id
+        WHERE task.id = ?
+        LIMIT 1
+      `,
+      [task.id],
+    );
+    const customerName =
+      rows?.[0]?.customerName ?? project?.project_name ?? '未关联基金';
+    const businessPlatform = rows?.[0]?.businessPlatform ?? '未关联平台';
+    return `基金${customerName}-平台${businessPlatform}`;
   }
 
   private buildTaskProgressFeedbackUrl(task: TaskEntity) {

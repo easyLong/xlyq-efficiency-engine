@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { UpdateDimensionDictionaryDto } from './dto/update-dimension-dictionary.dto';
 import { UpsertDimensionDictionaryDto } from './dto/upsert-dimension-dictionary.dto';
+import { BusinessCategorySecondaryCategoryEntity } from './entities/business-category-secondary-category.entity';
 import { DimensionDictionaryEntity } from './entities/dimension-dictionary.entity';
 
 type SeedDimension = {
@@ -18,12 +19,16 @@ export class DimensionsService implements OnModuleInit {
   constructor(
     @InjectRepository(DimensionDictionaryEntity)
     private readonly dimensionsRepository: Repository<DimensionDictionaryEntity>,
+    @InjectRepository(BusinessCategorySecondaryCategoryEntity)
+    private readonly businessCategorySecondaryRepository: Repository<BusinessCategorySecondaryCategoryEntity>,
     private readonly dataSource: DataSource,
   ) {}
 
   async onModuleInit() {
     await this.ensureTable();
+    await this.ensureBusinessCategorySecondaryTable();
     await this.seedDefaults();
+    await this.seedBusinessCategorySecondaryRelations();
   }
 
   async findAll(input?: {
@@ -56,6 +61,18 @@ export class DimensionsService implements OnModuleInit {
       },
       {},
     );
+  }
+
+  async findBusinessCategorySecondaryRelations(status = 'active') {
+    return this.businessCategorySecondaryRepository.find({
+      where: status && status !== 'all' ? { status } : {},
+      order: {
+        category_sort_order: 'ASC',
+        secondary_sort_order: 'ASC',
+        business_category_name: 'ASC',
+        secondary_category_name: 'ASC',
+      },
+    });
   }
 
   async upsert(dto: UpsertDimensionDictionaryDto) {
@@ -121,6 +138,28 @@ export class DimensionsService implements OnModuleInit {
     `);
   }
 
+  private async ensureBusinessCategorySecondaryTable() {
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS business_category_secondary_categories (
+        id CHAR(36) NOT NULL,
+        business_category_code VARCHAR(64) NOT NULL,
+        business_category_name VARCHAR(64) NOT NULL,
+        secondary_category_code VARCHAR(64) NOT NULL,
+        secondary_category_name VARCHAR(64) NOT NULL,
+        category_sort_order INT NOT NULL DEFAULT 100,
+        secondary_sort_order INT NOT NULL DEFAULT 100,
+        status VARCHAR(32) NOT NULL,
+        remark VARCHAR(255) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_business_category_secondary (business_category_code, secondary_category_code),
+        KEY idx_business_category_secondary_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务大类与二级分类关系表'
+    `);
+  }
+
   private async seedDefaults() {
     for (const item of this.defaultDimensions()) {
       await this.upsert({
@@ -131,6 +170,37 @@ export class DimensionsService implements OnModuleInit {
         sortOrder: item.sortOrder ?? 100,
         status: 'active',
       });
+    }
+  }
+
+  private async seedBusinessCategorySecondaryRelations() {
+    for (const category of this.businessCategorySecondarySeeds()) {
+      const categoryCode = this.slug(category.name);
+      for (const [index, secondaryName] of category.children.entries()) {
+        const secondaryCode = `${categoryCode}_${this.slug(secondaryName)}`;
+        const existing =
+          await this.businessCategorySecondaryRepository.findOne({
+            where: {
+              business_category_code: categoryCode,
+              secondary_category_code: secondaryCode,
+            },
+            withDeleted: true,
+          });
+        const entity =
+          existing ?? this.businessCategorySecondaryRepository.create();
+        Object.assign(entity, {
+          business_category_code: categoryCode,
+          business_category_name: category.name,
+          secondary_category_code: secondaryCode,
+          secondary_category_name: secondaryName,
+          category_sort_order: category.sortOrder,
+          secondary_sort_order: (index + 1) * 10,
+          status: 'active',
+          remark: null,
+          deleted_at: null,
+        });
+        await this.businessCategorySecondaryRepository.save(entity);
+      }
     }
   }
 
@@ -149,54 +219,16 @@ export class DimensionsService implements OnModuleInit {
   }
 
   private categorySeeds(): SeedDimension[] {
-    const categories: Array<{ name: string; children: string[] }> = [
-      {
-        name: '设计',
-        children: [
-          '配图拓展',
-          'banner新设计',
-          '巨幅新设计',
-          '长图新设计',
-          '长图拓展',
-          '长图套模板',
-          '（其他）',
-        ],
-      },
-      {
-        name: '文案',
-        children: [
-          '数据更新',
-          '已有素材新编辑',
-          '原创文案',
-          '共建文案',
-          '（其他）',
-        ],
-      },
-      {
-        name: '运营',
-        children: [
-          '发布陪伴',
-          '活动配置',
-          '魔秀搭建',
-          '页面推厂',
-          '直播配置',
-          '（其他）',
-        ],
-      },
-      {
-        name: '社区',
-        children: ['粉丝投放', '精华贴', '氛围贴', '（其他）'],
-      },
-    ];
+    const categories = this.businessCategorySecondarySeeds();
 
     const rows: SeedDimension[] = [];
-    categories.forEach((category, categoryIndex) => {
+    categories.forEach((category) => {
       const categoryCode = this.slug(category.name);
       rows.push({
         dimensionType: 'business_category',
         dimensionCode: categoryCode,
         dimensionName: category.name,
-        sortOrder: (categoryIndex + 1) * 10,
+        sortOrder: category.sortOrder,
       });
       category.children.forEach((child, childIndex) => {
         rows.push({
@@ -209,6 +241,56 @@ export class DimensionsService implements OnModuleInit {
       });
     });
     return rows;
+  }
+
+  private businessCategorySecondarySeeds(): Array<{
+    name: string;
+    sortOrder: number;
+    children: string[];
+  }> {
+    return [
+      {
+        name: '设计',
+        sortOrder: 10,
+        children: [
+          '配图拓展',
+          'banner新设计',
+          '巨幅新设计',
+          '长图新设计',
+          '长图拓展',
+          '长图套模板',
+          '（其他）',
+        ],
+      },
+      {
+        name: '文案',
+        sortOrder: 20,
+        children: [
+          '数据更新',
+          '已有素材新编辑',
+          '原创文案',
+          '共建文案',
+          '（其他）',
+        ],
+      },
+      {
+        name: '运营',
+        sortOrder: 30,
+        children: [
+          '发布陪伴',
+          '活动配置',
+          '魔秀搭建',
+          '页面推厂',
+          '直播配置',
+          '（其他）',
+        ],
+      },
+      {
+        name: '社区',
+        sortOrder: 40,
+        children: ['粉丝投放', '精华贴', '氛围贴', '（其他）'],
+      },
+    ];
   }
 
   private slug(value: string) {

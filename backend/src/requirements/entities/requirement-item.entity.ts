@@ -27,6 +27,9 @@ export class RequirementItemEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 32, nullable: true })
   priority!: string | null;
 
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  urgency_level!: string | null;
+
   @Column({ type: 'varchar', length: 32 })
   status!: string;
 

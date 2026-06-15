@@ -22,11 +22,19 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsString()
+  urgencyLevel?: string;
+
+  @IsOptional()
+  @IsString()
   assigneeUserId?: string;
 
   @IsOptional()
   @IsString()
   estimatedHours?: string;
+
+  @IsOptional()
+  @IsString()
+  plannedStartAt?: string;
 
   @IsOptional()
   @IsString()

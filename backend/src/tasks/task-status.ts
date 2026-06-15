@@ -96,7 +96,7 @@ export function taskStatusLabel(status: string | null) {
       [TaskStatus.InProgress]: '进行中',
       [TaskStatus.Blocked]: '已停滞',
       [TaskStatus.PendingReview]: '待验收',
-      [TaskStatus.Completed]: '已完成',
+      [TaskStatus.Completed]: '已验收',
       [TaskStatus.Returned]: '已退回',
     }[status ?? ''] ??
     status ??

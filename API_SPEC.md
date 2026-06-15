@@ -1,12 +1,12 @@
-# 效能引擎后端接口设计 API 清单
+# 向量引擎管理工作台后端接口设计 API 清单
 
-更新时间：2026-06-11
+更新时间：2026-06-15
 
 ## 最新 MVP 重点接口
 
 ### 静态页面
 
-- `GET /`：MVP 登录、需求录入、任务指派、报价单、报价子项选择、结算单、统计分析页面。
+- `GET /`：MVP 登录、需求录入、任务指派、合同报价录入、报价子项选择、结算统计、需求面板页面。
 - `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`：本地交付登记页，员工上传/粘贴图片资产并填写一个最终交付链接。
 
 ### 认证
@@ -35,6 +35,7 @@
 
 - `GET /api/v1/dimensions`：查询维度字典，支持按 `dimensionType`、`parentValue`、`status` 过滤。
 - `GET /api/v1/dimensions/grouped`：按类型分组返回业务平台、业务大类、二级分类等字典。
+- `GET /api/v1/dimensions/business-category-relations`：返回业务大类与二级分类关系，用于需求录入二级分类联动。
 - `POST /api/v1/dimensions`：新增或更新字典项。
 - `PATCH /api/v1/dimensions/{id}`：更新字典项名称、排序、状态等。
 
@@ -48,17 +49,17 @@
 
 ### 报价、适配与结算
 
-- `POST /api/v1/quotations/parse-text`：预览解析报价单文本，返回将生成的细粒度报价子项。
-- `POST /api/v1/quotations/import-text`：导入报价单文本并生成报价单与报价子项。
-- `GET /api/v1/quotations/{id}/items`：查看报价单子项。
+- `POST /api/v1/quotations/parse-text`：预览解析合同报价文本，返回将生成的细粒度报价子项。
+- `POST /api/v1/quotations/import-text`：导入合同报价文本并生成合同报价与报价子项。
+- `GET /api/v1/quotations/{id}/items`：查看合同报价子项。
 - `POST /api/v1/quotations/{id}/items`：人工新增报价子项。
 - `PATCH /api/v1/quotations/items/{itemId}`：编辑报价子项。
 - `DELETE /api/v1/quotations/items/{itemId}`：删除报价子项，并清理关联映射和维度规则。
 - `DELETE /api/v1/quotations/{id}`：软删除报价单及其子项，并清理关联映射和维度规则。
 - `GET /api/v1/quote-mappings/quarter-workbench?customerId=<id>&quarter=YYYY-Qn`：按基金和季度加载需求报价子项映射工作台。
-- `GET /api/v1/quote-mappings/quarter-workbenches?customerIds=<id1,id2>&quarter=YYYY-Qn`：批量加载多基金季度适配工作台，用于统计分析和结算页减少多次请求。
+- `GET /api/v1/quote-mappings/quarter-workbenches?customerIds=<id1,id2>&quarter=YYYY-Qn`：批量加载多基金季度适配工作台，用于需求面板和结算统计减少多次请求。
 - `POST /api/v1/quote-mappings/quarter-suggest`：按基金、季度和报价单生成需求项到报价子项的自动适配建议。
-- `POST /api/v1/quote-mappings`：手工创建需求任务与报价子项映射，后端校验基金客户和报价子项归属。
+- `POST /api/v1/quote-mappings`：手工保存需求任务与报价子项映射，后端校验基金客户和报价子项归属；同一需求项重复保存会复用当前映射并将旧有效映射标记为 `obsolete`。
 - `PATCH /api/v1/quote-mappings/{mappingId}`：保存或确认单条需求报价映射。
 - `DELETE /api/v1/quote-mappings/{mappingId}`：删除单条需求报价映射，并同步需求项和报价子项状态。
 - `GET /api/v1/quote-mappings/dimension-rules`：查看报价子项维度规则。
@@ -68,7 +69,7 @@
 
 ## 1. 文档目标
 
-本文档定义效能引擎 V1 的后端 REST API 清单，供前后端联调、权限设计和服务拆分使用。
+本文档定义向量引擎管理工作台 V1 的后端 REST API 清单，供前后端联调、权限设计和服务拆分使用。
 
 ## 2. 设计约定
 
@@ -463,7 +464,7 @@
 - 返回：季度内需求项、可选报价单、当前报价子项、已有映射、汇总指标
 
 ### `GET /quote-mappings/quarter-workbenches`
-- 说明：批量加载多个基金客户的季度适配工作台，避免统计分析/结算页按基金逐个请求
+- 说明：批量加载多个基金客户的季度适配工作台，避免需求面板/结算统计按基金逐个请求
 - 查询：`customerIds` 逗号分隔、`quarter`
 - 返回：`workbenches[]`、跨基金 `summary`
 - 校验：`customerIds` 不能为空，`quarter` 必须是 `YYYY-Qn`，例如 `2026-Q2`
@@ -478,7 +479,7 @@
 - 查询：`projectId`、`requirementItemId`、`mappingStatus`
 
 ### `POST /quote-mappings`
-- 说明：手工创建映射
+- 说明：手工保存映射；同一需求项重复保存时复用当前映射，旧有效映射标记为 `obsolete`
 - 校验：需求项必须属于项目；报价单客户必须与需求客户一致；报价子项必须属于所选报价单
 
 ### `PATCH /quote-mappings/{mappingId}`
@@ -494,26 +495,25 @@
 ### `POST /quote-mappings/batch-confirm`
 - 说明：批量确认映射
 
-### `GET /quote-mappings/diff`
+### `GET /quote-mappings/diff/by-project/{projectId}`
 - 说明：查看未匹配项 / 差异项
-- 查询：`projectId`
 
-## 13. 报价单管理
+## 13. 合同报价管理
 
 ### `GET /quotations`
-- 说明：报价单列表
+- 说明：合同报价列表
 - 查询：`projectId`、`customerId`、`status`、`quotationNo`
 
 ### `POST /quotations`
-- 说明：手工创建报价单
+- 说明：手工创建合同报价
 
 ### `POST /quotations/parse-text`
-- 说明：预览解析报价单文本，不落库
+- 说明：预览解析合同报价文本，不落库
 - 入参：`rawContent`、`fileName?`
 - 返回：`items`、`totalAmount`、`summary`
 
 ### `POST /quotations/import-text`
-- 说明：导入报价单文本并生成报价单与最细粒度报价子项
+- 说明：导入合同报价文本并生成合同报价与最细粒度报价子项
 - 入参：`projectId`、`customerId`、`rawContent`、`fileName?`
 - 返回：`quotation`、`items`、`summary`
 
@@ -522,13 +522,13 @@
 - 入参：`projectId`、`mappingIds[]`
 
 ### `GET /quotations/{quotationId}`
-- 说明：报价单详情
+- 说明：合同报价详情
 
 ### `PATCH /quotations/{quotationId}`
-- 说明：更新报价单头信息
+- 说明：更新合同报价头信息
 
 ### `DELETE /quotations/{quotationId}`
-- 说明：软删除报价单及报价子项，并清理关联报价映射和报价子项维度规则
+- 说明：软删除合同报价及报价子项，并清理关联报价映射和报价子项维度规则
 
 ### `POST /quotations/{quotationId}/items`
 - 说明：新增报价项

@@ -2,12 +2,14 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { DataSource, In, Repository } from 'typeorm';
 import { getAiPrompt } from '../ai-prompts/prompt-registry';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
+import { ensureIndex } from '../common/schema-maintenance';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
 import { CreateQuotationItemDto } from './dto/create-quotation-item.dto';
@@ -22,7 +24,7 @@ import { QuotationEntity } from './entities/quotation.entity';
 import { RequirementQuotationMappingEntity } from './entities/requirement-quotation-mapping.entity';
 
 @Injectable()
-export class QuotationsService {
+export class QuotationsService implements OnModuleInit {
   private readonly defaultListLimit = 500;
   private readonly maxParsedQuotationItems = 500;
   private readonly maxModelQuotationContentLength = 60000;
@@ -42,6 +44,10 @@ export class QuotationsService {
     private readonly requirementItemsRepository: Repository<RequirementItemEntity>,
     private readonly dataSource: DataSource,
   ) {}
+
+  async onModuleInit() {
+    await this.ensureQuotationsSchema();
+  }
 
   async findAll(projectId?: string, status?: string) {
     const where = {
@@ -397,14 +403,19 @@ export class QuotationsService {
   private resolveQuoteScopeStatus(
     mappings: RequirementQuotationMappingEntity[],
   ) {
-    if (mappings.length === 0) {
+    const activeMappings = mappings.filter((mapping) =>
+      this.isActiveQuoteMapping(mapping),
+    );
+    if (activeMappings.length === 0) {
       return 'not_started';
     }
-    if (mappings.some((mapping) => mapping.mapping_status === 'matched')) {
+    if (
+      activeMappings.some((mapping) => mapping.mapping_status === 'matched')
+    ) {
       return 'matched';
     }
     if (
-      mappings.some(
+      activeMappings.some(
         (mapping) =>
           mapping.mapping_status === 'pending_confirm' &&
           mapping.quotation_item_id,
@@ -412,10 +423,16 @@ export class QuotationsService {
     ) {
       return 'pending_confirm';
     }
-    if (mappings.some((mapping) => mapping.mapping_status === 'partial')) {
+    if (
+      activeMappings.some((mapping) => mapping.mapping_status === 'partial')
+    ) {
       return 'partial';
     }
     return 'changed';
+  }
+
+  private isActiveQuoteMapping(mapping: RequirementQuotationMappingEntity) {
+    return !['rejected', 'obsolete'].includes(mapping.mapping_status);
   }
 
   private async nextItemCode(quotationId: string) {
@@ -466,6 +483,32 @@ export class QuotationsService {
     fileName?: string,
   ) {
     const startedAt = Date.now();
+    const csvParsed = this.parseQuotationCsvText(rawContent, fileName);
+    if (csvParsed) {
+      const result = {
+        ...csvParsed,
+        mode: 'csv_structured',
+        modelName: 'csv-field-mapper-v1',
+        ruleItemCount: csvParsed.items.length,
+        modelItemCount: 0,
+        modelError: null,
+      };
+      const aiLogId = await this.logQuotationParse({
+        input: {
+          fileName: fileName ?? null,
+          rawLength: rawContent.length,
+          ruleItemCount: csvParsed.items.length,
+          parser: 'csv',
+        },
+        output: this.quotationParseLogOutput(result),
+        modelName: result.modelName,
+        status: 'success',
+        executionMs: Date.now() - startedAt,
+        errorMessage: null,
+      });
+      return { ...result, aiLogId };
+    }
+
     const ruleParsed = this.parseQuotationText(rawContent);
     const modelName = process.env.OPENAI_MODEL?.trim();
     const input = {
@@ -885,6 +928,52 @@ export class QuotationsService {
     };
   }
 
+  private async ensureQuotationsSchema() {
+    const rows = await this.dataSource.query(
+      `
+      SELECT CHARACTER_MAXIMUM_LENGTH AS maxLength
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'quotation_items'
+        AND column_name = 'item_name'
+      LIMIT 1
+    `,
+    );
+    const maxLength = Number(rows?.[0]?.maxLength ?? 0);
+    if (maxLength > 0 && maxLength < 500) {
+      await this.dataSource.query(
+        'ALTER TABLE quotation_items MODIFY item_name VARCHAR(500) NOT NULL',
+      );
+    }
+    await ensureIndex(
+      this.dataSource,
+      'quotations',
+      'idx_quotations_customer_created',
+      ['customer_id', 'created_at'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'quotations',
+      'idx_quotations_project_created',
+      ['project_id', 'created_at'],
+    );
+    await ensureIndex(this.dataSource, 'quotations', 'idx_quotations_no', [
+      'quotation_no',
+    ]);
+    await ensureIndex(
+      this.dataSource,
+      'quotation_items',
+      'idx_quotation_items_quotation_sort',
+      ['quotation_id', 'sort_order', 'created_at'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'quotation_items',
+      'idx_quotation_items_match_status',
+      ['match_status', 'created_at'],
+    );
+  }
+
   private async logQuotationParse(input: {
     input: Record<string, unknown>;
     output: Record<string, unknown>;
@@ -990,6 +1079,315 @@ export class QuotationsService {
       ignoredLines,
       summary: this.buildQuotationSummary(slicedItems),
     };
+  }
+
+  private parseQuotationCsvText(rawContent: string, fileName?: string) {
+    const shouldTryCsv =
+      /\.csv$/i.test(String(fileName || '')) ||
+      this.looksLikeCsvContent(rawContent);
+    if (!shouldTryCsv) {
+      return null;
+    }
+
+    const rows = this.parseCsvRows(rawContent);
+    if (rows.length < 2) {
+      return null;
+    }
+    const rawHeaders = rows[0].map((cell) => String(cell || '').trim());
+    const headers = rawHeaders.map((cell) => this.normalizeCsvHeader(cell));
+    const dataRows = rows.slice(1);
+    const priceIndex = this.resolveCsvPriceIndex(headers, dataRows);
+    if (priceIndex < 0) {
+      return null;
+    }
+    const unitIndex = this.resolveCsvUnitIndex(headers, dataRows, priceIndex);
+    const quantityIndex = this.resolveCsvQuantityIndex(headers);
+    const hierarchyIndexes = this.resolveCsvHierarchyIndexes(
+      headers,
+      dataRows,
+      {
+        priceIndex,
+        unitIndex,
+        quantityIndex,
+      },
+    );
+    const remarkIndexes = this.resolveCsvRemarkIndexes(headers, priceIndex);
+
+    const ignoredLines: string[] = [];
+    const items: ParsedQuotationItem[] = [];
+    for (const row of dataRows) {
+      if (row.every((cell) => !String(cell || '').trim())) {
+        continue;
+      }
+      const hierarchyPath = hierarchyIndexes
+        .map((index) => this.compactItemName(String(row[index] ?? '')))
+        .filter(Boolean);
+      const detailText = hierarchyPath[hierarchyPath.length - 1] ?? '';
+      const titlePath =
+        hierarchyPath.length > 1 ? hierarchyPath.slice(0, -1) : hierarchyPath;
+      const itemName = this.compactItemName(titlePath.join(' > '));
+      if (!itemName || this.isCsvSummaryItem(itemName)) {
+        ignoredLines.push(row.join(','));
+        continue;
+      }
+      const quantity = 1;
+      const unitPrice = this.normalizeMoneyNumber(row[priceIndex]);
+      if (
+        unitPrice <= 0 &&
+        !this.isExplicitZeroPriceQuotation(`${itemName} ${row.join(' ')}`)
+      ) {
+        ignoredLines.push(row.join(','));
+        continue;
+      }
+      const remarkText = remarkIndexes
+        .map((index) => this.compactDescription(String(row[index] ?? '')))
+        .filter(Boolean)
+        .join('；');
+
+      items.push({
+        itemName,
+        pricingMode: 'fixed',
+        quantity,
+        unit:
+          unitIndex >= 0
+            ? String(row[unitIndex] || '')
+                .trim()
+                .slice(0, 16) || '项'
+            : this.guessUnit(itemName),
+        unitPrice,
+        lineAmount: Number((quantity * unitPrice).toFixed(2)),
+        remark: this.formatCsvItemRemark(detailText, remarkText, row),
+        category: null,
+        source: 'csv',
+      });
+      if (items.length >= this.maxParsedQuotationItems) {
+        break;
+      }
+    }
+
+    if (items.length === 0) {
+      return null;
+    }
+    return {
+      items,
+      ignoredLines,
+      summary: this.buildQuotationSummary(items),
+    };
+  }
+
+  private looksLikeCsvContent(rawContent: string) {
+    const firstLine =
+      String(rawContent || '')
+        .replace(/^\uFEFF/, '')
+        .split(/\r?\n/)
+        .find((line) => line.trim()) || '';
+    return (
+      firstLine.includes(',') &&
+      /报价|服务|项目|名称|title|item|单位|单价|价格|金额/i.test(firstLine)
+    );
+  }
+
+  private parseCsvRows(rawContent: string) {
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let cell = '';
+    let inQuotes = false;
+    const text = String(rawContent || '').replace(/^\uFEFF/, '');
+
+    for (let index = 0; index < text.length; index += 1) {
+      const char = text[index];
+      const next = text[index + 1];
+      if (inQuotes) {
+        if (char === '"' && next === '"') {
+          cell += '"';
+          index += 1;
+        } else if (char === '"') {
+          inQuotes = false;
+        } else {
+          cell += char;
+        }
+        continue;
+      }
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
+        row.push(cell.trim());
+        cell = '';
+      } else if (char === '\n') {
+        row.push(cell.trim());
+        rows.push(row);
+        row = [];
+        cell = '';
+      } else if (char !== '\r') {
+        cell += char;
+      }
+    }
+    row.push(cell.trim());
+    if (row.some((value) => value.length > 0)) {
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  private normalizeCsvHeader(value: string) {
+    return String(value || '')
+      .trim()
+      .replace(/^\uFEFF/, '')
+      .replace(/\s+/g, '')
+      .replace(/[：:（）()【】\[\]-]/g, '')
+      .toLowerCase();
+  }
+
+  private resolveCsvPriceIndex(headers: string[], rows: string[][]) {
+    const headerMatched = headers
+      .map((header, index) => ({ header, index }))
+      .filter((item) => this.isCsvPriceHeader(item.header))
+      .map((item) => item.index);
+    if (headerMatched.length > 0) {
+      return headerMatched[headerMatched.length - 1];
+    }
+    const sampleRows = rows.slice(0, 30);
+    const candidates = headers
+      .map((_, index) => {
+        const values = sampleRows
+          .map((row) => String(row[index] ?? '').trim())
+          .filter(Boolean);
+        const numericCount = values.filter((value) =>
+          this.isNumberLike(value),
+        ).length;
+        return {
+          index,
+          values: values.length,
+          numericCount,
+          score: values.length ? numericCount / values.length : 0,
+        };
+      })
+      .filter((item) => item.values > 0 && item.score >= 0.6)
+      .sort((a, b) => b.score - a.score || b.index - a.index);
+    return candidates[0]?.index ?? -1;
+  }
+
+  private resolveCsvUnitIndex(
+    headers: string[],
+    rows: string[][],
+    priceIndex: number,
+  ) {
+    const headerMatched = headers.findIndex((header) =>
+      this.isCsvUnitHeader(header),
+    );
+    if (headerMatched >= 0) {
+      return headerMatched;
+    }
+    const sampleRows = rows.slice(0, 30);
+    const beforePrice = headers
+      .map((_, index) => index)
+      .filter((index) => index < priceIndex)
+      .reverse();
+    for (const index of beforePrice) {
+      const values = sampleRows
+        .map((row) => String(row[index] ?? '').trim())
+        .filter(Boolean);
+      if (values.length === 0) {
+        continue;
+      }
+      const unitCount = values.filter((value) =>
+        Boolean(this.unitFromColumn(value)),
+      ).length;
+      if (unitCount / values.length >= 0.5) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  private resolveCsvQuantityIndex(headers: string[]) {
+    return headers.findIndex((header) =>
+      /^(quantity|qty|数量|数目)$/.test(header),
+    );
+  }
+
+  private resolveCsvHierarchyIndexes(
+    headers: string[],
+    rows: string[][],
+    used: {
+      priceIndex: number;
+      unitIndex: number;
+      quantityIndex: number;
+    },
+  ) {
+    const excluded = new Set(
+      [used.priceIndex, used.unitIndex, used.quantityIndex].filter(
+        (index) => index >= 0,
+      ),
+    );
+    const boundary = used.priceIndex >= 0 ? used.priceIndex : headers.length;
+    return headers
+      .map((_, index) => index)
+      .filter((index) => index < boundary)
+      .filter((index) => !excluded.has(index))
+      .filter((index) => !this.isCsvRemarkHeader(headers[index]))
+      .filter((index) =>
+        rows.some((row) => String(row[index] ?? '').trim().length > 0),
+      );
+  }
+
+  private resolveCsvRemarkIndexes(headers: string[], priceIndex: number) {
+    return headers
+      .map((header, index) => ({ header, index }))
+      .filter(
+        (item) =>
+          item.index !== priceIndex &&
+          (this.isCsvRemarkHeader(item.header) || item.index > priceIndex),
+      )
+      .map((item) => item.index);
+  }
+
+  private isCsvPriceHeader(header: string) {
+    return (
+      /(unitprice|unit_price|price|amount|报价|单价|价格|金额|小计|合计|含税)/i.test(
+        header,
+      ) && !/(数量|qty|quantity)/i.test(header)
+    );
+  }
+
+  private isCsvUnitHeader(header: string) {
+    return /^(unit|单位)$/.test(header);
+  }
+
+  private isCsvRemarkHeader(header: string) {
+    return /(remark|remarks|note|notes|comment|备注|补充)/i.test(header);
+  }
+
+  private isCsvSummaryItem(value: string) {
+    const text = this.cleanQuotationHeadingText(value);
+    return /^(合计|总计|小计|subtotal|total)$/i.test(text);
+  }
+
+  private formatCsvItemRemark(
+    description: string,
+    remarkText: string,
+    row: string[],
+  ) {
+    const parts = [
+      description ? `子项详情：${description.slice(0, 240)}` : '',
+      remarkText ? `备注：${remarkText.slice(0, 240)}` : '',
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join('；');
+    }
+    return `CSV行：${row.join(',').slice(0, 240)}`;
+  }
+
+  private summarizeCsvLeafTitle(value: string) {
+    const text = this.compactItemName(value);
+    if (!text) {
+      return '';
+    }
+    const [firstClause = text] = text.split(/[。；;，,]/).filter(Boolean);
+    return firstClause
+      .replace(/^(?:日常运营支持项是指|本报价为|根据业务方需求进行)/, '')
+      .trim()
+      .slice(0, 48);
   }
 
   private parseQuotationLine(line: string, category: string | null) {
@@ -1279,7 +1677,7 @@ export class QuotationsService {
       .replace(/^#{1,6}\s*/, '')
       .replace(/\s+/g, ' ')
       .replace(/^[：:，,;；-]+|[：:，,;；-]+$/g, '')
-      .slice(0, 128);
+      .slice(0, 500);
   }
 
   private cleanQuotationHeadingText(value: string) {

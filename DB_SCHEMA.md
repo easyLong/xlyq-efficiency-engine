@@ -1,25 +1,27 @@
-# 效能引擎数据库表结构设计
+# 向量引擎管理工作台数据库表结构设计
 
 ## 1. 文档目标
 
-本文档用于定义效能引擎 V1 的数据库表结构设计，服务于以下目标：
+本文档用于定义向量引擎管理工作台 V1 的数据库表结构设计，服务于以下目标：
 
 - 支撑 `需求 -> 任务 -> 资产 -> 报价子项映射 -> 结算` 主链路
 - 支撑飞书集成、AI 建议、审计日志等辅助能力
 - 为后续接口设计、ORM 建模、SQL 建表脚本提供依据
 
-## 当前实现备注（2026-06-11）
+## 当前实现备注（2026-06-15）
 
 - 当前运行库名为 `ops_platform`。
 - 当前 MVP 仍保留 `projects` 作为后台挂靠对象，但业务筛选不再使用“项目”作为前台维度。
-- 前台核心维度为：基金、对接人、业务平台、业务大类、二级分类、三级分类、员工。
-- 对接人配置表为 `contact_context_configs`，一个对接人配置可带出基金、平台、业务大类、二级分类、三级分类。
-- 报价单导入只选择基金客户和文件/文本；报价合同可覆盖多个业务大类。
+- 前台核心筛选维度为：基金、业务平台、业务大类、二级分类、员工；对接人保留为需求来源和录入辅助，不再作为全局统计筛选。
+- 对接人配置表为 `contact_context_configs`，当前只明确维护对接人、基金客户、业务平台。
+- 业务大类与二级分类关系表为 `business_category_secondary_categories`，用于大类选择后二级分类下拉联动。
+- 合同报价导入只选择基金客户和文件/文本；报价合同可覆盖多个业务大类。CSV 合同优先按表格结构解析，识别最细粒度子项、单位和单价。
 - 报价子项维度规则表为 `quotation_item_dimension_rules`，用于给报价子项配置适用平台和分类，提高后续映射准确性。
 - 需求任务与报价子项通过 `requirement_quotation_mappings` 关联；后端会校验基金客户和报价子项归属，避免跨基金挂错报价。
 - 删除需求、报价单、报价子项时，服务层会同步清理相关映射并回算状态。
 - 新增 `task_status_histories`，用于任务状态机审计。
 - 新增 `dimension_dictionaries`，用于业务平台、业务大类、二级分类等维度字典。
+- 新增安全索引补齐工具 `schema-maintenance.ts`，服务启动时为高频查询表补齐缺失索引。
 
 ## 2. 技术假设
 
@@ -95,7 +97,8 @@ projects 1---n ai_execution_logs
 users n---n roles (via user_roles)
 projects n---n users (via project_members)
 tasks 1---n task_status_histories
-dimension_dictionaries self parent_value/value hierarchy
+dimension_dictionaries self parent_code/dimension_code hierarchy
+business_category_secondary_categories stores category-secondary relation
 ```
 
 ## 6.1 新增流程表
@@ -121,14 +124,39 @@ dimension_dictionaries self parent_value/value hierarchy
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | id | char(36) | 主键 |
-| dimension_type | varchar(64) | 字典类型 |
-| value | varchar(128) | 字典值 |
-| label | varchar(128) | 展示名 |
-| parent_value | varchar(128) | 父级值 |
+| dimension_type | varchar(32) | 字典类型 |
+| dimension_code | varchar(64) | 字典编码 |
+| dimension_name | varchar(128) | 展示名 |
+| parent_code | varchar(64) | 父级编码 |
 | sort_order | int | 排序 |
 | status | varchar(32) | active/inactive |
 | remark | varchar(500) | 备注 |
 | created_at / updated_at / deleted_at | datetime | 时间字段 |
+
+唯一约束：
+
+- `(dimension_type, dimension_code)`
+
+### `business_category_secondary_categories`
+
+业务大类与二级分类关系表，用于需求录入时联动下拉和后续维度统计。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | char(36) | 主键 |
+| business_category_code | varchar(64) | 业务大类编码 |
+| business_category_name | varchar(64) | 业务大类名称 |
+| secondary_category_code | varchar(64) | 二级分类编码 |
+| secondary_category_name | varchar(64) | 二级分类名称 |
+| category_sort_order | int | 大类排序 |
+| secondary_sort_order | int | 二级分类排序 |
+| status | varchar(32) | active/inactive |
+| remark | varchar(255) | 备注 |
+| created_at / updated_at / deleted_at | datetime | 时间字段 |
+
+唯一约束：
+
+- `(business_category_code, secondary_category_code)`
 
 ## 7. 用户与权限域
 

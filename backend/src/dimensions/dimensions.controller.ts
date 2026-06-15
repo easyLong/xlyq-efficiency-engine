@@ -33,6 +33,11 @@ export class DimensionsController {
     return this.dimensionsService.grouped();
   }
 
+  @Get('business-category-relations')
+  businessCategoryRelations(@Query('status') status = 'active') {
+    return this.dimensionsService.findBusinessCategorySecondaryRelations(status);
+  }
+
   @Post()
   upsert(@Body() dto: UpsertDimensionDictionaryDto) {
     return this.dimensionsService.upsert(dto);

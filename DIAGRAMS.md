@@ -1,8 +1,8 @@
-# 效能引擎 ER 图与模块关系图
+# 向量引擎管理工作台 ER 图与模块关系图
 
 ## 1. 说明
 
-本文档使用 Mermaid 描述效能引擎的核心实体关系和模块协作关系，可直接用于评审、Wiki 或后续补充架构设计。
+本文档使用 Mermaid 描述向量引擎管理工作台的核心实体关系和模块协作关系，可直接用于评审、Wiki 或后续补充架构设计。
 
 ## 2. 核心 ER 图
 
@@ -52,7 +52,7 @@ erDiagram
 
 ```mermaid
 flowchart LR
-    A0[对接人配置<br/>基金/平台/分类]
+    A0[对接人配置<br/>基金/平台]
     A[客户需求<br/>飞书文档/消息/手工录入]
     B[需求管理<br/>Requirement]
     C[需求项拆解<br/>RequirementItem]
@@ -60,10 +60,10 @@ flowchart LR
     E[执行与工时记录<br/>Worklog]
     F[进度跟进与风险预警<br/>RiskAlert/WeeklyReport]
     G[需求报价子项选择<br/>RequirementQuotationMapping]
-    H[报价单与子项<br/>Quotation/QuotationItem]
+    H[合同报价与子项<br/>Quotation/QuotationItem]
     H0[报价子项维度规则<br/>DimensionRule]
     I[映射确认]
-    J[结算与经营分析]
+    J[结算统计与需求面板]
 
     A0 --> B
     A --> B

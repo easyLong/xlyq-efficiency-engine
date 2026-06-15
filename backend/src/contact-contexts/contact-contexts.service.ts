@@ -2,23 +2,30 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { ensureIndex } from '../common/schema-maintenance';
 import { CustomerEntity } from '../customers/entities/customer.entity';
 import { CreateContactContextConfigDto } from './dto/create-contact-context-config.dto';
 import { UpdateContactContextConfigDto } from './dto/update-contact-context-config.dto';
 import { ContactContextConfigEntity } from './entities/contact-context-config.entity';
 
 @Injectable()
-export class ContactContextsService {
+export class ContactContextsService implements OnModuleInit {
   constructor(
     @InjectRepository(ContactContextConfigEntity)
     private readonly configsRepository: Repository<ContactContextConfigEntity>,
     @InjectRepository(CustomerEntity)
     private readonly customersRepository: Repository<CustomerEntity>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  async onModuleInit() {
+    await this.ensureContactContextSchema();
+  }
 
   async findAll(status?: string, customerId?: string, keyword?: string) {
     const qb = this.configsRepository.createQueryBuilder('config');
@@ -35,8 +42,6 @@ export class ContactContextsService {
           'config.contact_mobile LIKE :keyword',
           'config.contact_email LIKE :keyword',
           'config.business_platform LIKE :keyword',
-          'config.secondary_category LIKE :keyword',
-          'config.tertiary_category LIKE :keyword',
         ].join(' OR '),
         { keyword: `%${keyword}%` },
       );
@@ -61,10 +66,6 @@ export class ContactContextsService {
       contact_email: dto.contactEmail ?? null,
       customer_id: dto.customerId,
       business_platform: dto.businessPlatform ?? null,
-      business_category: dto.businessCategory,
-      secondary_category: dto.secondaryCategory ?? null,
-      tertiary_category:
-        dto.tertiaryCategory ?? null,
       status: 'active',
       remark: dto.remark ?? null,
     });
@@ -82,11 +83,6 @@ export class ContactContextsService {
       contact_email: dto.contactEmail ?? config.contact_email,
       customer_id: dto.customerId ?? config.customer_id,
       business_platform: dto.businessPlatform ?? config.business_platform,
-      business_category: dto.businessCategory ?? config.business_category,
-      secondary_category: dto.secondaryCategory ?? config.secondary_category,
-      tertiary_category:
-        dto.tertiaryCategory ??
-        config.tertiary_category,
       status: dto.status ?? config.status,
       remark: dto.remark ?? config.remark,
     });
@@ -100,5 +96,64 @@ export class ContactContextsService {
     if (!customer) {
       throw new BadRequestException('Customer not found');
     }
+  }
+
+  private async ensureContactContextSchema() {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.tables
+        WHERE table_schema = DATABASE()
+          AND table_name = 'contact_context_configs'
+      `,
+    );
+    if (Number(rows?.[0]?.count || 0) === 0) return;
+    await this.dropColumnIfExists(
+      'contact_context_configs',
+      'business_category',
+    );
+    await this.dropColumnIfExists(
+      'contact_context_configs',
+      'secondary_category',
+    );
+    await this.dropColumnIfExists(
+      'contact_context_configs',
+      'tertiary_category',
+    );
+    await ensureIndex(
+      this.dataSource,
+      'contact_context_configs',
+      'idx_contact_context_customer_status',
+      ['customer_id', 'status'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'contact_context_configs',
+      'idx_contact_context_name',
+      ['contact_name'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'contact_context_configs',
+      'idx_contact_context_platform',
+      ['business_platform'],
+    );
+  }
+
+  private async dropColumnIfExists(tableName: string, columnName: string) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND column_name = ?
+      `,
+      [tableName, columnName],
+    );
+    if (Number(rows?.[0]?.count || 0) === 0) return;
+    await this.dataSource.query(
+      `ALTER TABLE \`${tableName}\` DROP COLUMN \`${columnName}\``,
+    );
   }
 }

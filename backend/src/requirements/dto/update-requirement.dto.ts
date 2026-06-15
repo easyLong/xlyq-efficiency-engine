@@ -14,6 +14,10 @@ export class UpdateRequirementDto {
   priority?: string;
 
   @IsOptional()
+  @IsString()
+  urgencyLevel?: string;
+
+  @IsOptional()
   @IsUUID()
   customerId?: string;
 
@@ -36,6 +40,14 @@ export class UpdateRequirementDto {
   @IsOptional()
   @IsString()
   businessPlatform?: string;
+
+  @IsOptional()
+  @IsString()
+  businessCategory?: string;
+
+  @IsOptional()
+  @IsString()
+  secondaryCategory?: string;
 
   @IsOptional()
   @IsString()
