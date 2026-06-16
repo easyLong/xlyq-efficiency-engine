@@ -929,11 +929,6 @@
           </div>
           <div class="grid">
             <input type="hidden" id="projectSelect" />
-            <div class="intake-tabs">
-              <button id="manualTabButton" class="active" onclick="switchIntakeMode('manual')">手动录入</button>
-              <button id="aiTabButton" onclick="switchIntakeMode('ai')">AI文件录入</button>
-            </div>
-
             <div id="manualIntakePanel" class="tab-panel">
               <div class="form-grid">
                 <label>对接人
@@ -2017,11 +2012,12 @@
       return `https://www.feishu.cn/drive/folder/${key}`;
     }
     function switchIntakeMode(mode) {
+      mode = "manual";
       state.intakeMode = mode;
-      qs("manualTabButton").classList.toggle("active", mode === "manual");
-      qs("aiTabButton").classList.toggle("active", mode === "ai");
-      qs("manualIntakePanel").classList.toggle("hidden", mode !== "manual");
-      qs("aiIntakePanel").classList.toggle("hidden", mode !== "ai");
+      qs("manualTabButton")?.classList.toggle("active", true);
+      qs("aiTabButton")?.classList.toggle("active", false);
+      qs("manualIntakePanel")?.classList.toggle("hidden", false);
+      qs("aiIntakePanel")?.classList.toggle("hidden", true);
     }
     function clearRequirementForm() {
       state.selectedAiPreviewCandidateId = null;
@@ -2396,6 +2392,7 @@
                 <div class="ai-preview-title">${safeText(row.demand_title || row.business_name || `候选需求 #${row.candidate_id}`)}</div>
                 <div class="ai-preview-meta">
                   <span>${safeText(row.chat_name || row.customer_name || "-")}</span>
+                  ${row.owner_name ? `<span>对接人 ${safeText(row.owner_name)}</span>` : ""}
                   <span>${safeText(row.business_platform || "-")}</span>
                   <span>置信度 ${safeText(previewConfidenceText(row.confidence))}</span>
                   <span>${safeText(row.status || "pending")}</span>
@@ -2443,6 +2440,59 @@
         );
       }) || null;
     }
+    function splitCandidateContactNames(candidate) {
+      return String(candidate.owner_name || candidate.contact_name || candidate.contact_names || "")
+        .split(/[,，、;；/|]+/)
+        .map(item => item.trim())
+        .filter(Boolean);
+    }
+    function platformMatchScore(left, right) {
+      const a = normalizePreviewText(left);
+      const b = normalizePreviewText(right);
+      if (!a || !b) return 0;
+      if (a === b) return 25;
+      if (a.includes(b) || b.includes(a)) return 12;
+      return 0;
+    }
+    function contactNameMatchScore(contextName, candidateName) {
+      const contextText = normalizePreviewText(contextName);
+      const candidateText = normalizePreviewText(candidateName);
+      if (!contextText || !candidateText) return 0;
+      if (contextText === candidateText) return 100;
+      if (contextText.includes(candidateText) || candidateText.includes(contextText)) return 70;
+      return 0;
+    }
+    function matchContactContextForCandidate(candidate, matchedCustomer = null) {
+      const ownerNames = splitCandidateContactNames(candidate);
+      const activeContexts = state.contactContexts.filter(item => item.status !== "inactive");
+      const scored = [];
+      for (const context of activeContexts) {
+        let bestNameScore = 0;
+        let bestNameIndex = ownerNames.length;
+        ownerNames.forEach((name, index) => {
+          const score = contactNameMatchScore(context.contact_name, name);
+          if (score > bestNameScore) {
+            bestNameScore = score;
+            bestNameIndex = index;
+          }
+        });
+        if (ownerNames.length && bestNameScore <= 0) continue;
+        let score = bestNameScore;
+        if (matchedCustomer?.id && context.customer_id === matchedCustomer.id) score += 35;
+        score += platformMatchScore(context.business_platform, candidate.business_platform);
+        scored.push({ context, score, bestNameIndex });
+      }
+      scored.sort((a, b) => b.score - a.score || a.bestNameIndex - b.bestNameIndex);
+      if (scored[0]?.score > 0) return scored[0].context;
+      if (!ownerNames.length && matchedCustomer?.id) {
+        const fallback = activeContexts.filter(context =>
+          context.customer_id === matchedCustomer.id &&
+          (!candidate.business_platform || platformMatchScore(context.business_platform, candidate.business_platform) > 0)
+        );
+        return fallback.length === 1 ? fallback[0] : null;
+      }
+      return null;
+    }
     function matchBusinessCategoryValue(value) {
       const normalized = normalizePreviewText(value);
       if (!normalized) return "";
@@ -2482,13 +2532,21 @@
       state.selectedAiPreviewCandidateId = candidate.candidate_id;
       switchIntakeMode("manual");
       const customer = matchCustomerForCandidate(candidate);
-      if (customer && qs("customerSelect")) qs("customerSelect").value = customer.id;
+      const contactContext = matchContactContextForCandidate(candidate, customer);
+      if (contactContext && qs("contactContextSelect")) {
+        qs("contactContextSelect").value = contactContext.id;
+        syncContactContextPreview(contactContext);
+      }
+      if ((contactContext?.customer_id || customer?.id) && qs("customerSelect")) {
+        qs("customerSelect").value = contactContext?.customer_id || customer.id;
+      }
       const categoryValue = matchBusinessCategoryValue(candidate.business_category);
       ensureSelectOption(qs("projectTypeSelect"), categoryValue);
       if (categoryValue && qs("projectTypeSelect")) qs("projectTypeSelect").value = categoryValue;
       await syncProjectSelection(false);
-      ensureSelectOption(qs("businessPlatformInput"), candidate.business_platform || "");
-      if (qs("businessPlatformInput")) qs("businessPlatformInput").value = candidate.business_platform || "";
+      const businessPlatform = candidate.business_platform || contactContext?.business_platform || "";
+      ensureSelectOption(qs("businessPlatformInput"), businessPlatform);
+      if (qs("businessPlatformInput")) qs("businessPlatformInput").value = businessPlatform;
       renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", candidate.secondary_category || "");
       if (qs("secondaryCategoryInput")) qs("secondaryCategoryInput").value = candidate.secondary_category || "";
       if (qs("tertiaryCategoryInput")) qs("tertiaryCategoryInput").value = candidate.tertiary_category || "";
@@ -2502,7 +2560,7 @@
       updateCreateRequirementButtonLabel();
       renderAiPreviewBoard();
       qs("manualIntakePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      toast(customer ? "已填充 AI 预览需求，可修改后确认" : "已填充 AI 预览需求，请确认客户后再保存");
+      toast(contactContext ? `已识别对接人：${contactContext.contact_name}` : (customer ? "已填充 AI 预览需求，可修改后确认" : "已填充 AI 预览需求，请确认客户后再保存"));
     }
     function renderRequirementBoard() {
       const rows = activeDimensionRows();

@@ -120,6 +120,7 @@ export class RequirementsService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureRequirementsSchema();
+    await this.ensureDemandIntakeTables();
   }
 
   async findAll(projectId?: string) {
@@ -192,91 +193,101 @@ export class RequirementsService implements OnModuleInit {
 
   async listAiPreviewCandidates(limit = 12) {
     const normalizedLimit = Math.max(1, Math.min(100, Number(limit) || 12));
-    try {
-      const rows = await this.dataSource.query(
-        `
-          SELECT
-            c.chat_name,
-            c.customer_name,
-            c.business_platform,
-            d.id AS candidate_id,
-            d.business_category,
-            d.secondary_category,
-            d.tertiary_category,
-            d.start_time,
-            d.deadline,
-            d.business_name,
-            d.demand_title,
-            d.confidence,
-            d.status,
-            d.match_suggestion
-          FROM crawler_app.demand_intake_candidates d
-          JOIN crawler_app.wechat_chats c ON c.id = d.source_chat_id
-          WHERE COALESCE(d.status, 'pending') NOT IN ('confirmed', 'rejected')
-          ORDER BY d.created_at DESC
-          LIMIT ?
-        `,
-        [normalizedLimit],
-      );
-      const candidateIds = rows
-        .map((row: { candidate_id?: string | number }) => row.candidate_id)
-        .filter(Boolean);
-      if (!candidateIds.length) return rows;
-
-      const placeholders = candidateIds.map(() => '?').join(', ');
-      const evidenceRows = await this.dataSource.query(
-        `
-          SELECT
-            e.candidate_id,
-            e.evidence_order,
-            e.message_time,
-            e.display_time_text,
-            e.sender_name,
-            e.message_text,
-            e.screenshot_path,
-            e.evidence_reason
-          FROM crawler_app.demand_candidate_evidence e
-          WHERE e.candidate_id IN (${placeholders})
-          ORDER BY e.candidate_id ASC, e.evidence_order ASC
-        `,
-        candidateIds,
-      );
-
-      const evidenceByCandidateId = new Map<
-        string,
-        Array<Record<string, unknown>>
-      >();
-      for (const row of evidenceRows) {
-        const key = String(row.candidate_id);
-        const current = evidenceByCandidateId.get(key) ?? [];
-        current.push(row);
-        evidenceByCandidateId.set(key, current);
-      }
-
-      return rows.map((row: Record<string, unknown>) => ({
-        ...row,
-        evidences:
-          evidenceByCandidateId.get(String(row.candidate_id ?? '')) ?? [],
-      }));
-    } catch {
-      return [];
-    }
+    return this.listOpsAiPreviewCandidates(normalizedLimit);
   }
 
   async confirmAiPreviewCandidate(candidateId: string) {
-    const normalizedId = Number(candidateId);
-    if (!Number.isFinite(normalizedId)) {
-      return { updated: 0 };
-    }
     const result = await this.dataSource.query(
       `
-        UPDATE crawler_app.demand_intake_candidates
-        SET status = 'confirmed'
-        WHERE id = ?
+        UPDATE demand_intake_candidates
+        SET status = 'confirmed', confirmed_at = COALESCE(confirmed_at, NOW())
+        WHERE id = ? OR external_candidate_id = ?
       `,
-      [normalizedId],
+      [candidateId, candidateId],
     );
-    return { updated: result?.affectedRows ?? result?.[0]?.affectedRows ?? 0 };
+    return {
+      updated: result?.affectedRows ?? result?.[0]?.affectedRows ?? 0,
+      source: 'ops_platform',
+    };
+  }
+
+  private async listOpsAiPreviewCandidates(limit: number) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT
+          c.source_chat_name AS chat_name,
+          c.raw_customer_name AS customer_name,
+          c.raw_owner_name AS owner_name,
+          c.raw_business_platform AS business_platform,
+          c.id AS candidate_id,
+          c.external_candidate_id,
+          c.external_chat_id,
+          c.business_category,
+          c.secondary_category,
+          c.tertiary_category,
+          c.start_time,
+          c.deadline,
+          c.business_name,
+          c.demand_title,
+          c.confidence,
+          c.status,
+          c.match_suggestion,
+          c.matched_customer_id,
+          c.matched_contact_context_id,
+          c.match_confidence,
+          c.match_reason
+        FROM demand_intake_candidates c
+        WHERE c.deleted_at IS NULL
+          AND COALESCE(c.status, 'pending') NOT IN ('confirmed', 'rejected')
+        ORDER BY c.created_at DESC
+        LIMIT ?
+      `,
+      [limit],
+    );
+    return this.attachAiPreviewEvidences(rows);
+  }
+
+  private async attachAiPreviewEvidences(rows: Array<Record<string, unknown>>) {
+    const candidateIds = rows
+      .map((row) => row.candidate_id)
+      .filter((id): id is string | number => Boolean(id));
+    if (!candidateIds.length) return rows;
+
+    const placeholders = candidateIds.map(() => '?').join(', ');
+    const evidenceRows = await this.dataSource.query(
+      `
+        SELECT
+          e.candidate_id,
+          e.evidence_order,
+          e.message_time,
+          e.display_time_text,
+          e.sender_name,
+          e.message_text,
+          e.screenshot_path,
+          e.evidence_reason
+        FROM demand_candidate_evidence e
+        WHERE e.candidate_id IN (${placeholders})
+        ORDER BY e.candidate_id ASC, e.evidence_order ASC, e.created_at ASC
+      `,
+      candidateIds,
+    );
+
+    const evidenceByCandidateId = new Map<
+      string,
+      Array<Record<string, unknown>>
+    >();
+    for (const row of evidenceRows) {
+      const key = String(row.candidate_id);
+      const current = evidenceByCandidateId.get(key) ?? [];
+      current.push(row);
+      evidenceByCandidateId.set(key, current);
+    }
+
+    return rows.map((row) => ({
+      ...row,
+      evidences:
+        evidenceByCandidateId.get(String(row.candidate_id ?? '')) ?? [],
+    }));
   }
 
   async findOne(id: string) {
@@ -1680,6 +1691,69 @@ export class RequirementsService implements OnModuleInit {
       'idx_requirement_items_item_no',
       ['item_no'],
     );
+  }
+
+  private async ensureDemandIntakeTables() {
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS demand_intake_candidates (
+        id CHAR(36) NOT NULL,
+        source_app VARCHAR(32) NOT NULL DEFAULT 'crawler',
+        external_candidate_id VARCHAR(64) NULL,
+        external_chat_id VARCHAR(64) NULL,
+        source_chat_name VARCHAR(255) NULL,
+        raw_customer_name VARCHAR(128) NULL,
+        raw_owner_name VARCHAR(255) NULL,
+        raw_business_platform VARCHAR(64) NULL,
+        business_category VARCHAR(64) NULL,
+        secondary_category VARCHAR(64) NULL,
+        tertiary_category VARCHAR(64) NULL,
+        start_time DATETIME NULL,
+        deadline DATETIME NULL,
+        business_name VARCHAR(255) NULL,
+        demand_title VARCHAR(255) NULL,
+        confidence DECIMAL(8,4) NULL,
+        status VARCHAR(32) NOT NULL DEFAULT 'pending',
+        match_suggestion TEXT NULL,
+        matched_customer_id CHAR(36) NULL,
+        matched_contact_context_id CHAR(36) NULL,
+        matched_business_platform VARCHAR(64) NULL,
+        match_confidence DECIMAL(8,4) NULL,
+        match_reason VARCHAR(500) NULL,
+        confirmed_requirement_id CHAR(36) NULL,
+        confirmed_task_id CHAR(36) NULL,
+        confirmed_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_demand_intake_external (source_app, external_candidate_id),
+        KEY idx_demand_intake_status_created (status, created_at),
+        KEY idx_demand_intake_external_chat (source_app, external_chat_id),
+        KEY idx_demand_intake_matched_contact (matched_contact_context_id),
+        KEY idx_demand_intake_confirmed_requirement (confirmed_requirement_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='候选需求接入表'
+    `);
+
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS demand_candidate_evidence (
+        id CHAR(36) NOT NULL,
+        candidate_id CHAR(36) NOT NULL,
+        external_evidence_id VARCHAR(64) NULL,
+        evidence_order INT NOT NULL DEFAULT 100,
+        message_time DATETIME NULL,
+        display_time_text VARCHAR(64) NULL,
+        sender_name VARCHAR(128) NULL,
+        message_text TEXT NULL,
+        screenshot_path VARCHAR(500) NULL,
+        evidence_reason TEXT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_demand_evidence_external (candidate_id, external_evidence_id),
+        KEY idx_demand_evidence_candidate_order (candidate_id, evidence_order),
+        KEY idx_demand_evidence_external (external_evidence_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='候选需求证据链表'
+    `);
   }
 
   private async addColumnIfMissing(
