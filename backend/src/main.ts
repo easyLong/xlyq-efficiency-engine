@@ -7,6 +7,8 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const port = Number(process.env.PORT ?? 3000);
+  const host = process.env.HOST ?? '0.0.0.0';
   app.use(json({ limit: '12mb' }));
   app.use(urlencoded({ extended: true, limit: '12mb' }));
   app.setGlobalPrefix('api/v1');
@@ -18,6 +20,6 @@ async function bootstrap() {
       forbidNonWhitelisted: false,
     }),
   );
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(port, host);
 }
 bootstrap();

@@ -1,6 +1,6 @@
 # 向量引擎管理工作台后端接口设计 API 清单
 
-更新时间：2026-06-15
+更新时间：2026-06-16
 
 ## 最新 MVP 重点接口
 
@@ -18,6 +18,8 @@
 ### 需求与任务
 
 - `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务。
+- `GET /api/v1/requirements/ai-preview-candidates?limit=12`：读取 AI 已识别但未确认的候选需求，并返回证据链。
+- `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/confirm`：将候选需求标记为已确认，避免正式录入后重复展示。
 - `POST /api/v1/requirements/ai-match-context`：根据文件内容匹配客户和业务大类。
 - `POST /api/v1/requirements/ai-split-with-tasks`：使用 OpenAI 兼容模型拆分需求，并为每条需求生成任务。
 - `PATCH /api/v1/requirements/{id}`：人工编辑历史需求任务，自动同步需求项和任务标题/描述/优先级。

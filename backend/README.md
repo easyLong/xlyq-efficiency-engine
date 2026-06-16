@@ -1,6 +1,6 @@
 # 向量引擎管理工作台后端
 
-更新时间：2026-06-15
+更新时间：2026-06-16
 
 这是向量引擎管理工作台的 NestJS 后端服务，同时托管当前 MVP 静态页面。
 
@@ -62,6 +62,7 @@ copy .env.example .env
 
 ```env
 PORT=3000
+HOST=0.0.0.0
 APP_PUBLIC_BASE_URL=http://localhost:3000
 TASK_ACCESS_TOKEN_SECRET=replace-with-a-long-random-secret
 
@@ -96,6 +97,14 @@ npm run start:dev
 ```bash
 npm run build
 npm run start:prod
+```
+
+局域网访问时建议配置：
+
+```env
+PORT=9000
+HOST=0.0.0.0
+APP_PUBLIC_BASE_URL=http://<本机局域网IP>:9000
 ```
 
 ## 常用脚本

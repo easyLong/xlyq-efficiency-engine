@@ -156,6 +156,61 @@
       border-bottom: 1px solid #edf1e8;
     }
     .history-panel #requirementsBoard { padding: 10px 16px 16px; }
+    .ai-preview-panel { padding: 14px 16px 16px; }
+    .ai-preview-panel .section-title { margin-bottom: 10px; }
+    .ai-preview-panel .panel-note { margin-bottom: 10px; color: #667163; font-size: 13px; }
+    .ai-preview-list { display: grid; gap: 10px; }
+    .ai-preview-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, .42fr);
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #e2e8da;
+      border-radius: 12px;
+      background: #fbfcf8;
+      cursor: pointer;
+      transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+    .ai-preview-card:hover,
+    .ai-preview-card.active {
+      border-color: #80a984;
+      background: #fff;
+      box-shadow: 0 10px 26px rgba(45, 63, 46, .1);
+    }
+    .ai-preview-main { min-width: 0; display: grid; gap: 8px; }
+    .ai-preview-title { font-size: 15px; font-weight: 700; color: #253125; line-height: 1.35; }
+    .ai-preview-meta,
+    .ai-preview-dims { display: flex; flex-wrap: wrap; gap: 6px; }
+    .ai-preview-meta span,
+    .ai-preview-dims span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eef4eb;
+      color: #51604f;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .ai-preview-side {
+      min-width: 0;
+      max-height: 154px;
+      overflow: auto;
+      padding-left: 12px;
+      border-left: 1px solid #e2e8da;
+    }
+    .ai-preview-side-title { margin-bottom: 6px; color: #667163; font-size: 12px; font-weight: 700; }
+    .ai-preview-evidence { display: grid; gap: 7px; }
+    .ai-preview-evidence-item {
+      padding: 8px;
+      border: 1px solid #e6ecdf;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .ai-preview-evidence-item strong { display: block; margin-bottom: 3px; color: #41503f; font-size: 12px; }
+    .ai-preview-evidence-item p { margin: 0; color: #596657; font-size: 12px; line-height: 1.45; }
+    .ai-preview-empty { color: #7b8577; font-size: 13px; }
     #view-requirements .quick-filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     #view-requirements .advanced-filter { width: auto; margin-top: 0; position: relative; }
     #view-requirements .advanced-filter summary {
@@ -930,7 +985,7 @@
               </label>
               <div class="btns">
                 <button id="createRequirementButton" class="btn primary" onclick="createRequirement()">保存需求并生成任务</button>
-                <button class="btn" onclick="clearRequirementForm()">清空表单</button>
+                <button class="btn" onclick="clearRequirementForm(); updateCreateRequirementButtonLabel(); renderAiPreviewBoard()">清空表单</button>
               </div>
             </div>
 
@@ -953,13 +1008,24 @@
               </div>
               <div class="btns">
                 <button id="aiSplitButton" class="btn warn" onclick="aiSplitRequirementFile()">AI拆分并生成任务</button>
-                <button class="btn" onclick="clearRequirementForm()">清空表单</button>
+                <button class="btn" onclick="clearRequirementForm(); updateCreateRequirementButtonLabel(); renderAiPreviewBoard()">清空表单</button>
               </div>
             </div>
           </div>
         </div>
 
         <div class="requirements-history">
+          <div class="panel ai-preview-panel hidden" id="aiPreviewPanel">
+            <div class="section-title">
+              <div>
+                <div class="kicker">AI Preview</div>
+                <h3>AI预览需求</h3>
+              </div>
+              <span class="tag">等待管理者确认</span>
+            </div>
+            <div class="panel-note" id="aiPreviewNote">自动读取 AI 预览候选，先展示待确认需求，不进入正式需求库。</div>
+            <div id="aiPreviewBoard"></div>
+          </div>
           <div id="requirementMetrics" class="summary-strip requirement-metrics"></div>
 
           <div class="panel board-panel history-panel">
@@ -1255,6 +1321,7 @@
       requirements: [],
       requirementItems: [],
       tasks: [],
+      aiPreviewCandidates: [],
       quotations: [],
       quoteMappings: [],
       quotationItemsById: {},
@@ -1280,6 +1347,7 @@
       requirementFilterUiKey: "",
       quoteEditingItemId: null,
       assignmentEditingTaskId: null,
+      selectedAiPreviewCandidateId: null,
       lookupMaps: null,
       dimensionFilters: {
         customerId: "all",
@@ -1416,6 +1484,7 @@
       state.requirements = appData.requirements;
       state.requirementItems = appData.requirementItems;
       state.tasks = appData.tasks;
+      state.aiPreviewCandidates = appData.aiPreviewCandidates || [];
       state.quotations = appData.quotations;
       state.quoteMappings = appData.quoteMappings;
       invalidateLookupMaps();
@@ -1453,6 +1522,7 @@
       qs("requirementTitle").value ||= `MVP全链路测试需求-${stamp}`;
       qs("requirementContent").value ||= "客户希望在向量引擎中录入需求后，项目经理可以自动生成任务并指派给员工。员工收到飞书消息后进入在线资产表，只填写资产地址，管理者可以查看需求面板。";
       qs("aiRequirementTitle").value ||= `AI需求文件-${stamp}`;
+      renderAiPreviewBoard();
       renderRequirementBoard();
       renderQuotationsBoard();
       renderQuotationMetrics([]);
@@ -1954,6 +2024,7 @@
       qs("aiIntakePanel").classList.toggle("hidden", mode !== "ai");
     }
     function clearRequirementForm() {
+      state.selectedAiPreviewCandidateId = null;
       if (state.intakeMode === "ai") {
         qs("aiRequirementTitle").value = "";
         qs("aiRequirementContent").value = "";
@@ -1976,6 +2047,15 @@
       }
       syncProjectSelection(false);
       toast("表单已清空");
+    }
+    function updateCreateRequirementButtonLabel(isBusy = false) {
+      const button = qs("createRequirementButton");
+      if (!button) return;
+      if (isBusy) {
+        button.textContent = state.selectedAiPreviewCandidateId ? "正在确认..." : "正在保存...";
+        return;
+      }
+      button.textContent = state.selectedAiPreviewCandidateId ? "确认需求" : "保存需求并生成任务";
     }
     async function loadRequirementFile() {
       const file = qs("requirementFile").files?.[0];
@@ -2263,11 +2343,166 @@
       state.requirementItems = unwrap(historyBoard?.requirementItems);
       state.tasks = unwrap(historyBoard?.tasks);
       state.quoteMappings = unwrap(historyBoard?.quoteMappings);
+      await refreshAiPreviewBoard();
       invalidateLookupMaps();
       renderRequirementBoard();
       if (scrollY !== null) {
         requestAnimationFrame(() => window.scrollTo(0, scrollY));
       }
+    }
+    async function refreshAiPreviewBoard() {
+      try {
+        state.aiPreviewCandidates = unwrap(await request("/requirements/ai-preview-candidates?limit=12"));
+      } catch (error) {
+        console.warn("AI preview refresh failed", error);
+        state.aiPreviewCandidates = state.aiPreviewCandidates || [];
+      }
+      renderAiPreviewBoard();
+    }
+    function formatPreviewDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+      return date.toLocaleDateString();
+    }
+    function previewConfidenceText(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      const numeric = Number(value);
+      if (Number.isNaN(numeric)) return String(value);
+      return `${Math.round((numeric > 1 ? numeric / 100 : numeric) * 100)}%`;
+    }
+    function renderAiPreviewBoard() {
+      const panel = qs("aiPreviewPanel");
+      const board = qs("aiPreviewBoard");
+      if (!panel || !board) return;
+      const rows = state.aiPreviewCandidates || [];
+      panel.classList.toggle("hidden", rows.length === 0);
+      if (!rows.length) {
+        board.innerHTML = "";
+        return;
+      }
+      board.innerHTML = `<div class="ai-preview-list">${
+        rows.map(row => {
+          const evidences = row.evidences || [];
+          const dimensions = [
+            projectTypeLabel(row.business_category),
+            row.secondary_category,
+            row.tertiary_category,
+          ].filter(Boolean).join(" / ") || "-";
+          const isActive = String(state.selectedAiPreviewCandidateId || "") === String(row.candidate_id || "");
+          return `
+            <article class="ai-preview-card ${isActive ? "active" : ""}" onclick="applyAiPreviewCandidate('${escapeAttr(row.candidate_id || "")}')">
+              <div class="ai-preview-main">
+                <div class="ai-preview-title">${safeText(row.demand_title || row.business_name || `候选需求 #${row.candidate_id}`)}</div>
+                <div class="ai-preview-meta">
+                  <span>${safeText(row.chat_name || row.customer_name || "-")}</span>
+                  <span>${safeText(row.business_platform || "-")}</span>
+                  <span>置信度 ${safeText(previewConfidenceText(row.confidence))}</span>
+                  <span>${safeText(row.status || "pending")}</span>
+                </div>
+                <div class="ai-preview-dims">
+                  <span>${safeText(dimensions)}</span>
+                  <span>${safeText(formatPreviewDate(row.start_time))} - ${safeText(formatPreviewDate(row.deadline))}</span>
+                  <span>${safeText(row.match_suggestion || "待确认")}</span>
+                </div>
+              </div>
+              <aside class="ai-preview-side">
+                <div class="ai-preview-side-title">证据链 ${evidences.length ? evidences.length : ""}</div>
+                <div class="ai-preview-evidence">
+                  ${evidences.length
+                    ? evidences.map(evidence => `
+                        <div class="ai-preview-evidence-item">
+                          <strong>${safeText(evidence.display_time_text || evidence.message_time || "")} ${safeText(evidence.sender_name || "")}</strong>
+                          <p>${safeText(evidence.message_text || evidence.evidence_reason || "-")}</p>
+                        </div>
+                      `).join("")
+                    : `<div class="ai-preview-empty">暂无证据</div>`}
+                </div>
+              </aside>
+            </article>
+          `;
+        }).join("")
+      }</div>`;
+    }
+    function normalizePreviewText(value) {
+      return String(value || "").replace(/\s+/g, "").toLowerCase();
+    }
+    function matchCustomerForCandidate(candidate) {
+      const names = [candidate.customer_name, candidate.chat_name]
+        .filter(Boolean)
+        .map(normalizePreviewText);
+      return state.customers.find(customer => {
+        const customerName = normalizePreviewText(customer.customer_name);
+        const customerCode = normalizePreviewText(customer.customer_code);
+        return names.some(name =>
+          name && (
+            name.includes(customerName) ||
+            customerName.includes(name) ||
+            (customerCode && name.includes(customerCode))
+          )
+        );
+      }) || null;
+    }
+    function matchBusinessCategoryValue(value) {
+      const normalized = normalizePreviewText(value);
+      if (!normalized) return "";
+      const match = businessCategoryDefinitions().find(item =>
+        normalizePreviewText(item.value) === normalized ||
+        normalizePreviewText(item.label) === normalized
+      );
+      return match?.value || value;
+    }
+    function ensureSelectOption(select, value) {
+      if (!select || !value) return;
+      if ([...select.options].some(option => option.value === value)) return;
+      select.insertAdjacentHTML("afterbegin", `<option value="${escapeAttr(value)}">${escapeHtml(value)}</option>`);
+    }
+    function dateInputValue(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${date.getFullYear()}-${month}-${day}`;
+    }
+    function aiPreviewContent(candidate) {
+      const evidenceText = (candidate.evidences || [])
+        .map(item => `${item.display_time_text || ""} ${item.sender_name || ""}: ${item.message_text || item.evidence_reason || ""}`.trim())
+        .filter(Boolean)
+        .join("\n");
+      return [
+        candidate.demand_title || candidate.business_name,
+        candidate.match_suggestion ? `匹配建议：${candidate.match_suggestion}` : "",
+        evidenceText ? `证据链：\n${evidenceText}` : "",
+      ].filter(Boolean).join("\n\n");
+    }
+    async function applyAiPreviewCandidate(candidateId) {
+      const candidate = (state.aiPreviewCandidates || []).find(item => String(item.candidate_id) === String(candidateId));
+      if (!candidate) return;
+      state.selectedAiPreviewCandidateId = candidate.candidate_id;
+      switchIntakeMode("manual");
+      const customer = matchCustomerForCandidate(candidate);
+      if (customer && qs("customerSelect")) qs("customerSelect").value = customer.id;
+      const categoryValue = matchBusinessCategoryValue(candidate.business_category);
+      ensureSelectOption(qs("projectTypeSelect"), categoryValue);
+      if (categoryValue && qs("projectTypeSelect")) qs("projectTypeSelect").value = categoryValue;
+      await syncProjectSelection(false);
+      ensureSelectOption(qs("businessPlatformInput"), candidate.business_platform || "");
+      if (qs("businessPlatformInput")) qs("businessPlatformInput").value = candidate.business_platform || "";
+      renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", candidate.secondary_category || "");
+      if (qs("secondaryCategoryInput")) qs("secondaryCategoryInput").value = candidate.secondary_category || "";
+      if (qs("tertiaryCategoryInput")) qs("tertiaryCategoryInput").value = candidate.tertiary_category || "";
+      if (qs("plannedStartAtInput")) qs("plannedStartAtInput").value = dateInputValue(candidate.start_time);
+      if (qs("plannedEndAtInput")) qs("plannedEndAtInput").value = dateInputValue(candidate.deadline);
+      updateRequirementPriorityFromDeadline();
+      if (qs("requirementUrgencyInput") && !qs("requirementUrgencyInput").value) qs("requirementUrgencyInput").value = "normal";
+      if (qs("businessNameInput")) qs("businessNameInput").value = candidate.business_name || candidate.demand_title || "";
+      if (qs("requirementTitle")) qs("requirementTitle").value = candidate.demand_title || candidate.business_name || "";
+      if (qs("requirementContent")) qs("requirementContent").value = aiPreviewContent(candidate);
+      updateCreateRequirementButtonLabel();
+      renderAiPreviewBoard();
+      qs("manualIntakePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      toast(customer ? "已填充 AI 预览需求，可修改后确认" : "已填充 AI 预览需求，请确认客户后再保存");
     }
     function renderRequirementBoard() {
       const rows = activeDimensionRows();
@@ -4013,6 +4248,7 @@
       `;
     }
     async function createRequirement() {
+      const selectedCandidateId = state.selectedAiPreviewCandidateId;
       const project = await syncProjectSelection(true);
       if (!project) return toast("请先选择客户和业务大类");
       const businessName = qs("businessNameInput").value.trim();
@@ -4036,12 +4272,14 @@
       const button = qs("createRequirementButton");
       if (button) {
         button.disabled = true;
+        updateCreateRequirementButtonLabel(true);
         button.textContent = "正在保存...";
       }
       state.requirement = null;
       state.item = null;
       state.task = null;
       state.workspace = null;
+      updateCreateRequirementButtonLabel(true);
       try {
         const contactContext = selectedContactContext();
         const result = await request("/requirements/with-task", {
@@ -4067,6 +4305,16 @@
         state.requirement = result.requirement;
         state.item = result.item;
         state.task = result.task;
+        if (selectedCandidateId) {
+          try {
+            await request(`/requirements/ai-preview-candidates/${selectedCandidateId}/confirm`, { method: "POST" });
+            state.aiPreviewCandidates = state.aiPreviewCandidates.filter(item => String(item.candidate_id) !== String(selectedCandidateId));
+            state.selectedAiPreviewCandidateId = null;
+            renderAiPreviewBoard();
+          } catch (error) {
+            console.warn("AI preview confirm failed", error);
+          }
+        }
         state.requirements.unshift(state.requirement);
         state.requirementItems = [state.item, ...state.requirementItems.filter(existing => existing.id !== state.item.id)];
         state.tasks = [state.task, ...state.tasks.filter(existing => existing.id !== state.task.id)];
@@ -4086,6 +4334,9 @@
         qs("requirementUrgencyInput").value = "";
         qs("requirementTitle").value = "";
         qs("requirementContent").value = "";
+        state.selectedAiPreviewCandidateId = null;
+        updateCreateRequirementButtonLabel();
+        renderAiPreviewBoard();
         toast("需求已进入历史需求任务列表，状态为待指派");
         renderSteps();
         qs("requirementsBoard")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4097,6 +4348,7 @@
           button.textContent = "保存需求并生成任务";
         }
       }
+      updateCreateRequirementButtonLabel();
     }
     async function aiSplitRequirementFile() {
       const content = qs("aiRequirementContent").value.trim();

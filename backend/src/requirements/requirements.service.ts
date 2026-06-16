@@ -190,6 +190,95 @@ export class RequirementsService implements OnModuleInit {
     };
   }
 
+  async listAiPreviewCandidates(limit = 12) {
+    const normalizedLimit = Math.max(1, Math.min(100, Number(limit) || 12));
+    try {
+      const rows = await this.dataSource.query(
+        `
+          SELECT
+            c.chat_name,
+            c.customer_name,
+            c.business_platform,
+            d.id AS candidate_id,
+            d.business_category,
+            d.secondary_category,
+            d.tertiary_category,
+            d.start_time,
+            d.deadline,
+            d.business_name,
+            d.demand_title,
+            d.confidence,
+            d.status,
+            d.match_suggestion
+          FROM crawler_app.demand_intake_candidates d
+          JOIN crawler_app.wechat_chats c ON c.id = d.source_chat_id
+          WHERE COALESCE(d.status, 'pending') NOT IN ('confirmed', 'rejected')
+          ORDER BY d.created_at DESC
+          LIMIT ?
+        `,
+        [normalizedLimit],
+      );
+      const candidateIds = rows
+        .map((row: { candidate_id?: string | number }) => row.candidate_id)
+        .filter(Boolean);
+      if (!candidateIds.length) return rows;
+
+      const placeholders = candidateIds.map(() => '?').join(', ');
+      const evidenceRows = await this.dataSource.query(
+        `
+          SELECT
+            e.candidate_id,
+            e.evidence_order,
+            e.message_time,
+            e.display_time_text,
+            e.sender_name,
+            e.message_text,
+            e.screenshot_path,
+            e.evidence_reason
+          FROM crawler_app.demand_candidate_evidence e
+          WHERE e.candidate_id IN (${placeholders})
+          ORDER BY e.candidate_id ASC, e.evidence_order ASC
+        `,
+        candidateIds,
+      );
+
+      const evidenceByCandidateId = new Map<
+        string,
+        Array<Record<string, unknown>>
+      >();
+      for (const row of evidenceRows) {
+        const key = String(row.candidate_id);
+        const current = evidenceByCandidateId.get(key) ?? [];
+        current.push(row);
+        evidenceByCandidateId.set(key, current);
+      }
+
+      return rows.map((row: Record<string, unknown>) => ({
+        ...row,
+        evidences:
+          evidenceByCandidateId.get(String(row.candidate_id ?? '')) ?? [],
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async confirmAiPreviewCandidate(candidateId: string) {
+    const normalizedId = Number(candidateId);
+    if (!Number.isFinite(normalizedId)) {
+      return { updated: 0 };
+    }
+    const result = await this.dataSource.query(
+      `
+        UPDATE crawler_app.demand_intake_candidates
+        SET status = 'confirmed'
+        WHERE id = ?
+      `,
+      [normalizedId],
+    );
+    return { updated: result?.affectedRows ?? result?.[0]?.affectedRows ?? 0 };
+  }
+
   async findOne(id: string) {
     const requirement = await this.requirementsRepository.findOne({
       where: { id },

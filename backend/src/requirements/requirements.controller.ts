@@ -31,6 +31,18 @@ export class RequirementsController {
     return this.requirementsService.historyBoard();
   }
 
+  @Get('ai-preview-candidates')
+  aiPreviewCandidates(@Query('limit') limit?: string) {
+    return this.requirementsService.listAiPreviewCandidates(
+      limit ? Number(limit) : 12,
+    );
+  }
+
+  @Post('ai-preview-candidates/:candidateId/confirm')
+  confirmAiPreviewCandidate(@Param('candidateId') candidateId: string) {
+    return this.requirementsService.confirmAiPreviewCandidate(candidateId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.requirementsService.findOne(id);

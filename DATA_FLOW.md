@@ -1,6 +1,6 @@
 # 数据链路说明
 
-更新时间：2026-06-15
+更新时间：2026-06-16
 
 本文档说明当前 MVP 中“需求、任务、资产、报价、结算”的真实数据链路和一致性规则。
 
@@ -37,6 +37,20 @@ contact_context_configs
 - `tasks`
 
 当前 MVP 约定：一条需求生成一个需求项和一个任务。
+
+AI 预览需求确认链路：
+
+```text
+crawler_app.demand_intake_candidates
+  -> crawler_app.demand_candidate_evidence
+  -> 管理端 AI预览需求卡片
+  -> 点击卡片填充手动录入表单
+  -> 管理员修改并确认
+  -> requirements / requirement_items / tasks
+  -> 回写候选状态 confirmed
+```
+
+AI 候选需求在管理员确认前不进入正式需求库；确认后仍复用手动录入的创建接口，保证需求、需求项、任务的数据口径一致。
 
 ## 3. 业务维度
 

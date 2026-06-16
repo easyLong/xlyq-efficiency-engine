@@ -34,6 +34,7 @@
         contactContexts,
         users,
         historyBoard,
+        aiPreviewCandidates,
         quotations,
         businessCategoryRelations,
         health,
@@ -43,6 +44,7 @@
         request("/contact-contexts?status=active").catch(() => []),
         request("/users"),
         request("/requirements/history-board"),
+        request("/requirements/ai-preview-candidates?limit=12").catch(() => []),
         request("/quotations"),
         request("/dimensions/business-category-relations").catch(() => []),
         request("/health"),
@@ -58,6 +60,7 @@
         tasks: unwrap(historyBoard?.tasks),
         quotations: unwrap(quotations),
         quoteMappings: unwrap(historyBoard?.quoteMappings),
+        aiPreviewCandidates: unwrap(aiPreviewCandidates),
         businessCategoryRelations: unwrap(businessCategoryRelations),
         health,
       };
