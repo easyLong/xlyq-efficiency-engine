@@ -8,13 +8,14 @@
 - 支撑飞书集成、AI 建议、审计日志等辅助能力
 - 为后续接口设计、ORM 建模、SQL 建表脚本提供依据
 
-## 当前实现备注（2026-06-15）
+## 当前实现备注（2026-06-17）
 
 - 当前运行库名为 `ops_platform`。
 - 当前 MVP 仍保留 `projects` 作为后台挂靠对象，但业务筛选不再使用“项目”作为前台维度。
 - 前台核心筛选维度为：基金、业务平台、业务大类、二级分类、员工；对接人保留为需求来源和录入辅助，不再作为全局统计筛选。
 - 对接人配置表为 `contact_context_configs`，当前只明确维护对接人、基金客户、业务平台。
 - 业务大类与二级分类关系表为 `business_category_secondary_categories`，用于大类选择后二级分类下拉联动。
+- 业务大类负责人配置表为 `business_category_owner_configs`，用于将需求录入后的任务负责人写入 `tasks.reporter_user_id`；任务被指派员工写入 `tasks.assignee_user_id`。
 - 合同报价导入只选择基金客户和文件/文本；报价合同可覆盖多个业务大类。CSV 合同优先按表格结构解析，识别最细粒度子项、单位和单价。
 - 报价子项维度规则表为 `quotation_item_dimension_rules`，用于给报价子项配置适用平台和分类，提高后续映射准确性。
 - 需求任务与报价子项通过 `requirement_quotation_mappings` 关联；后端会校验基金客户和报价子项归属，避免跨基金挂错报价。
@@ -99,6 +100,7 @@ projects n---n users (via project_members)
 tasks 1---n task_status_histories
 dimension_dictionaries self parent_code/dimension_code hierarchy
 business_category_secondary_categories stores category-secondary relation
+business_category_owner_configs maps business category to requirement owner
 ```
 
 ## 6.1 新增流程表
@@ -157,6 +159,27 @@ business_category_secondary_categories stores category-secondary relation
 唯一约束：
 
 - `(business_category_code, secondary_category_code)`
+
+### `business_category_owner_configs`
+
+业务大类负责人配置表，用于把“需求录入负责人”和“任务执行人”拆开。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | char(36) | 主键 |
+| business_category_code | varchar(64) | 业务大类编码，如 `design/copywriting/operation/community` |
+| business_category_name | varchar(64) | 业务大类名称 |
+| owner_user_id | char(36) | 该业务大类的需求负责人，关联 `users.id` |
+| status | varchar(32) | active/inactive |
+| remark | varchar(255) | 备注 |
+| created_at / updated_at / deleted_at | datetime | 时间字段 |
+
+唯一约束：
+- `(business_category_code)`
+
+口径：
+- `tasks.reporter_user_id`：需求负责人，按业务大类配置自动写入。
+- `tasks.assignee_user_id`：执行人，由管理端指派或改派。
 
 ## 7. 用户与权限域
 
@@ -410,8 +433,8 @@ business_category_secondary_categories stores category-secondary relation
 | description | text | null | 描述 |
 | status | varchar(32) | not null | `todo/in_progress/blocked/pending_review/completed/closed` |
 | priority | varchar(32) | null | 优先级 |
-| assignee_user_id | uuid | fk, null | 负责人 |
-| reporter_user_id | uuid | fk, null | 创建人 |
+| assignee_user_id | uuid | fk, null | 执行人 |
+| reporter_user_id | uuid | fk, null | 需求负责人，按业务大类负责人配置写入 |
 | planned_start_at | timestamptz | null | 计划开始 |
 | planned_end_at | timestamptz | null | 计划结束 |
 | actual_start_at | timestamptz | null | 实际开始 |

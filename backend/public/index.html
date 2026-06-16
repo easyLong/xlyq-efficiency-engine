@@ -1776,6 +1776,10 @@
       const user = getLookupMaps().userById.get(id);
       return user ? userDisplayName(user) : "-";
     }
+    function taskReporterName(task) {
+      if (!task?.reporter_user_id) return "未配置负责人";
+      return assigneeName(task.reporter_user_id);
+    }
     function resetDimensionFilters() {
       state.dimensionFilters = {
         customerId: "all",
@@ -2679,7 +2683,7 @@
                     <span class="tag">任务：${safeText(row.taskStatus)}</span>
                     <span class="tag">报价：${safeText(row.quoteStatus)}</span>
                   </div>
-                  <div class="row-sub">负责人：${safeText(assigneeName(row.task?.assignee_user_id))}</div>
+                  <div class="row-sub">负责人：${safeText(taskReporterName(row.task))} · 执行人：${safeText(assigneeName(row.task?.assignee_user_id))}</div>
                 </div>
                 ${renderRequirementEditAction(row)}
               </div>
@@ -2689,7 +2693,8 @@
                   row.contactContext ? `对接人：${safeText(row.contactContext)}` : "",
                   taskPlanDateRangeText(row.task) ? `计划：${taskPlanDateRangeText(row.task)}` : "",
                   `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
-                  `负责人：${safeText(assigneeName(row.task?.assignee_user_id))}`,
+                  `负责人：${safeText(taskReporterName(row.task))}`,
+                  `执行人：${safeText(assigneeName(row.task?.assignee_user_id))}`,
                 ].filter(Boolean).join(" · ")}</div>
                 ${renderRequirementQuoteAction(row)}
                 ${renderAssignAction(row)}
@@ -2953,7 +2958,7 @@
       if (!isEditingAssignment) {
         return `
           <div class="assign-action compact" onclick="event.stopPropagation()">
-            <span class="quote-status-pill">负责人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
+            <span class="quote-status-pill">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
             <button class="btn" ${isBusy ? "disabled" : ""} onclick="startReassignTask('${row.task.id}')">${isBusy ? "处理中" : "改派"}</button>
           </div>
         `;
@@ -4737,7 +4742,7 @@
       const rows = factRows.filter(row => row.task).sort((a, b) => taskRiskScore(b.task) - taskRiskScore(a.task));
       box.innerHTML = `
         <table>
-          <thead><tr><th>基金客户</th><th>业务维度</th><th>任务</th><th>负责人</th><th>状态</th><th>报价</th><th>资产</th></tr></thead>
+          <thead><tr><th>基金客户</th><th>业务维度</th><th>任务</th><th>执行人</th><th>状态</th><th>报价</th><th>资产</th></tr></thead>
           <tbody>${rows.map(row => `
             <tr>
               <td>${safeText(row.customerName)}</td>
@@ -4892,7 +4897,7 @@
         groups.set(id, current);
       });
       const rows = [...groups.values()].sort((a, b) => b.total - a.total || b.overdue - a.overdue).slice(0, 8);
-      renderStackedBarList(box, rows, "暂无负责人任务数据");
+      renderStackedBarList(box, rows, "暂无执行人任务数据");
     }
     function renderCategoryTaskBoard({ quarterTasks }) {
       const box = qs("categoryTaskBoard");
@@ -4965,7 +4970,7 @@
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>编号</th><th>基金客户</th><th>业务维度</th><th>任务</th><th>负责人</th><th>状态</th><th>优先级</th><th>报价</th><th>资产</th><th>截止时间</th></tr></thead>
+          <thead><tr><th>编号</th><th>基金客户</th><th>业务维度</th><th>任务</th><th>执行人</th><th>状态</th><th>优先级</th><th>报价</th><th>资产</th><th>截止时间</th></tr></thead>
           <tbody>
             ${rows.map(task => {
               const requirement = requirementForTask(task);
@@ -5076,7 +5081,7 @@
         groups.set(task.assignee_user_id, current);
       }
       const rows = [...groups.values()].sort((a, b) => b.completed - a.completed || b.assets - a.assets).slice(0, 10);
-      renderSimpleTable("employeeTopBox", rows, ["员工", "完成需求", "负责需求", "资产个数"], row => [
+      renderSimpleTable("employeeTopBox", rows, ["员工", "完成需求", "执行需求", "资产个数"], row => [
         safeText(row.name),
         row.completed,
         row.assigned,

@@ -1,6 +1,6 @@
 # 项目实现状态
 
-更新时间：2026-06-16
+更新时间：2026-06-17
 
 ## 总体结论
 
@@ -8,6 +8,7 @@
 
 - 需求录入、AI 候选需求预览和确认入库
 - 对接人维度配置
+- 业务大类负责人配置，需求负责人和任务执行人拆分
 - 一条需求自动生成一个任务
 - 历史需求任务编辑、删除、筛选
 - 任务指派和飞书消息
@@ -25,6 +26,7 @@
 - 管理端由 `backend/public/index.html` 承载，后端通过 `useStaticAssets` 托管。
 - 需求录入支持手动录入，以及从 AI 候选需求预览卡片一键填充后确认入库。
 - 手动录入支持选择对接人，由对接人带出基金客户、业务平台；业务大类和二级分类通过字典关系下拉选择。
+- 需求负责人由 `business_category_owner_configs` 按业务大类配置，写入 `tasks.reporter_user_id`；指派/改派员工写入 `tasks.assignee_user_id`，页面统一展示为“执行人”。
 - 历史需求任务支持快速筛选：全部、待指派、处理中、待验收、已验收、待报价，并支持需求名称关键词搜索。
 - 历史需求任务支持维度筛选：基金、业务平台、业务大类、二级分类、员工。
 - 合同报价录入页面已简化为基金客户 + 文件/文本导入；报价合同可覆盖多个业务大类。
@@ -39,6 +41,7 @@
 ## 核心数据口径
 
 - 需求任务维度：基金客户、业务平台、业务大类、二级分类、员工。
+- 角色口径：对接人用于带出基金和平台；负责人按业务大类配置；执行人按任务指派。
 - 报价映射状态：`not_started`、`pending_confirm`、`partial`、`changed`、`matched`。
 - 待报价筛选包含：未适配、报价待确认、待人工适配、报价有变更。
 - 结算金额：已确认报价子项单价 × 任务图片资产个数。
@@ -98,6 +101,22 @@ npm run test:e2e -- --runInBand
 - 前端内联脚本语法检查：通过。
 - `/api/v1/health`：正常，数据库连接正常。
 - `/api/v1/requirements/ai-preview-candidates?limit=3`：登录后可返回候选需求和证据链。
+
+## 2026-06-17 最新状态
+
+### 已完成优化
+
+- 新增 `business_category_owner_configs`，启动时自动初始化设计、文案、运营、社区四个业务大类配置。
+- `POST /api/v1/requirements/with-task` 创建任务时，按业务大类配置自动写入 `tasks.reporter_user_id`；未配置时保持为空，避免误把项目创建人当负责人。
+- 新增 `GET /api/v1/requirements/business-category-owners` 和 `PATCH /api/v1/requirements/business-category-owners/{categoryCode}`，支持查询/更新业务大类负责人，并在更新后回填历史任务负责人。
+- 历史需求任务状态页修正角色展示：`reporter_user_id` 展示为负责人，`assignee_user_id` 展示为执行人；指派、改派、任务看板和关键任务表统一使用“执行人”。
+
+### 最新验证结果
+
+- `npm run build`：通过。
+- 前端内联脚本语法检查：通过。
+- `/api/v1/health`：正常，数据库连接正常。
+- `/api/v1/requirements/business-category-owners`：登录后可返回四个业务大类负责人配置。
 
 ## 2026-06-15 最新状态
 

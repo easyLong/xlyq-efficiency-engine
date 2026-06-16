@@ -120,7 +120,9 @@ export class RequirementsService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureRequirementsSchema();
+    await this.ensureBusinessCategoryOwnerConfigTable();
     await this.ensureDemandIntakeTables();
+    await this.backfillTaskReportersFromBusinessCategoryOwners();
   }
 
   async findAll(projectId?: string) {
@@ -189,6 +191,78 @@ export class RequirementsService implements OnModuleInit {
       tasks,
       quoteMappings,
     };
+  }
+
+  async listBusinessCategoryOwners() {
+    await this.ensureBusinessCategoryOwnerConfigTable();
+    return this.dataSource.query(`
+      SELECT
+        config.id,
+        config.business_category_code AS businessCategoryCode,
+        config.business_category_name AS businessCategoryName,
+        config.owner_user_id AS ownerUserId,
+        user.display_name AS ownerName,
+        user.username AS ownerUsername,
+        config.status,
+        config.remark,
+        config.updated_at AS updatedAt
+      FROM business_category_owner_configs config
+      LEFT JOIN users user ON user.id = config.owner_user_id
+      WHERE config.deleted_at IS NULL
+      ORDER BY FIELD(config.business_category_code, 'design', 'copywriting', 'operation', 'community'), config.business_category_code
+    `);
+  }
+
+  async updateBusinessCategoryOwner(
+    categoryCode: string,
+    dto: { ownerUserId?: string | null },
+  ) {
+    await this.ensureBusinessCategoryOwnerConfigTable();
+    const normalizedCategoryCode =
+      this.normalizeBusinessCategoryCode(categoryCode);
+    if (!normalizedCategoryCode) {
+      throw new BadRequestException('Business category is required');
+    }
+
+    const ownerUserId = dto.ownerUserId?.trim() || null;
+    if (ownerUserId) {
+      const owner = await this.usersRepository.findOne({
+        where: { id: ownerUserId, status: 'active' },
+      });
+      if (!owner) {
+        throw new BadRequestException('Owner user not found or inactive');
+      }
+    }
+
+    await this.dataSource.query(
+      `
+        INSERT INTO business_category_owner_configs (
+          id,
+          business_category_code,
+          business_category_name,
+          owner_user_id,
+          status,
+          remark
+        )
+        VALUES (?, ?, ?, ?, 'active', '按业务大类配置需求负责人')
+        ON DUPLICATE KEY UPDATE
+          business_category_name = VALUES(business_category_name),
+          owner_user_id = VALUES(owner_user_id),
+          status = 'active',
+          updated_at = CURRENT_TIMESTAMP
+      `,
+      [
+        randomUUID(),
+        normalizedCategoryCode,
+        this.businessCategoryName(normalizedCategoryCode),
+        ownerUserId,
+      ],
+    );
+
+    await this.backfillTaskReportersForBusinessCategory(
+      normalizedCategoryCode,
+    );
+    return this.listBusinessCategoryOwners();
   }
 
   async listAiPreviewCandidates(limit = 12) {
@@ -869,6 +943,9 @@ export class RequirementsService implements OnModuleInit {
     const code = await this.nextRequirementCode();
     const priority = this.normalizePriority(input.priority);
     const urgencyLevel = this.normalizeUrgencyLevel(input.urgencyLevel);
+    const reporterUserId = await this.resolveRequirementReporterUserId(
+      input.businessCategory,
+    );
 
     const requirement = await this.requirementsRepository.save(
       this.requirementsRepository.create({
@@ -930,7 +1007,7 @@ export class RequirementsService implements OnModuleInit {
         planned_end_at: input.plannedEndAt
           ? new Date(input.plannedEndAt)
           : null,
-        reporter_user_id: null,
+        reporter_user_id: reporterUserId,
         blocked_reason: null,
         progress_percent: 0,
       }),
@@ -1633,6 +1710,76 @@ export class RequirementsService implements OnModuleInit {
     return detected;
   }
 
+  private normalizeBusinessCategoryCode(value?: string | null) {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) {
+      return null;
+    }
+    const exact = this.projectTypes.find(
+      (type) => type.value === normalized || type.label === normalized,
+    );
+    if (exact) {
+      return exact.value;
+    }
+    const lower = normalized.toLowerCase();
+    if (['design', 'designer'].includes(lower)) {
+      return 'design';
+    }
+    if (['copywriting', 'copy', 'content'].includes(lower)) {
+      return 'copywriting';
+    }
+    if (['operation', 'operations', 'ops'].includes(lower)) {
+      return 'operation';
+    }
+    if (['community'].includes(lower)) {
+      return 'community';
+    }
+    return normalized;
+  }
+
+  private businessCategoryName(categoryCode: string) {
+    return (
+      this.projectTypes.find((type) => type.value === categoryCode)?.label ??
+      categoryCode
+    );
+  }
+
+  private async resolveRequirementReporterUserId(
+    businessCategory?: string | null,
+  ) {
+    return this.resolveBusinessCategoryOwnerUserId(businessCategory);
+  }
+
+  private async resolveBusinessCategoryOwnerUserId(
+    businessCategory?: string | null,
+  ) {
+    const categoryCode = this.normalizeBusinessCategoryCode(businessCategory);
+    if (!categoryCode) {
+      return null;
+    }
+
+    const rows = await this.dataSource.query(
+      `
+        SELECT owner_user_id AS ownerUserId
+        FROM business_category_owner_configs
+        WHERE business_category_code = ?
+          AND status = 'active'
+          AND owner_user_id IS NOT NULL
+        LIMIT 1
+      `,
+      [categoryCode],
+    );
+    const ownerUserId = rows?.[0]?.ownerUserId;
+    if (!ownerUserId) {
+      return null;
+    }
+
+    const owner = await this.usersRepository.findOne({
+      where: { id: ownerUserId, status: 'active' },
+    });
+    return owner?.id ?? null;
+  }
+
   private normalizeUrgencyLevel(value?: string | null) {
     const normalized = String(value ?? '').trim();
     const allowed = new Set([
@@ -1690,6 +1837,91 @@ export class RequirementsService implements OnModuleInit {
       'requirement_items',
       'idx_requirement_items_item_no',
       ['item_no'],
+    );
+  }
+
+  private async ensureBusinessCategoryOwnerConfigTable() {
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS business_category_owner_configs (
+        id CHAR(36) NOT NULL,
+        business_category_code VARCHAR(64) NOT NULL,
+        business_category_name VARCHAR(64) NOT NULL,
+        owner_user_id CHAR(36) NULL,
+        status VARCHAR(32) NOT NULL DEFAULT 'active',
+        remark VARCHAR(255) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_business_category_owner (business_category_code),
+        KEY idx_business_category_owner_user (owner_user_id),
+        KEY idx_business_category_owner_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务大类负责人配置表'
+    `);
+
+    for (const type of this.projectTypes) {
+      await this.dataSource.query(
+        `
+          INSERT INTO business_category_owner_configs (
+            id,
+            business_category_code,
+            business_category_name,
+            owner_user_id,
+            status,
+            remark
+          )
+          VALUES (?, ?, ?, NULL, 'active', '按业务大类配置需求负责人')
+          ON DUPLICATE KEY UPDATE
+            business_category_name = VALUES(business_category_name),
+            status = IFNULL(status, VALUES(status))
+        `,
+        [randomUUID(), type.value, type.label],
+      );
+    }
+  }
+
+  private async backfillTaskReportersFromBusinessCategoryOwners() {
+    await this.dataSource.query(`
+      UPDATE tasks task
+      JOIN requirement_items item ON item.id = task.requirement_item_id
+      JOIN requirements requirement ON requirement.id = item.requirement_id
+      JOIN business_category_owner_configs owner_config
+        ON owner_config.business_category_code = requirement.business_category
+       AND owner_config.status = 'active'
+       AND owner_config.owner_user_id IS NOT NULL
+      JOIN users owner_user
+        ON owner_user.id = owner_config.owner_user_id
+       AND owner_user.status = 'active'
+      SET task.reporter_user_id = owner_config.owner_user_id
+      WHERE task.reporter_user_id IS NULL
+        AND task.deleted_at IS NULL
+        AND item.deleted_at IS NULL
+        AND requirement.deleted_at IS NULL
+    `);
+  }
+
+  private async backfillTaskReportersForBusinessCategory(
+    businessCategoryCode: string,
+  ) {
+    await this.dataSource.query(
+      `
+        UPDATE tasks task
+        JOIN requirement_items item ON item.id = task.requirement_item_id
+        JOIN requirements requirement ON requirement.id = item.requirement_id
+        JOIN business_category_owner_configs owner_config
+          ON owner_config.business_category_code = requirement.business_category
+         AND owner_config.status = 'active'
+         AND owner_config.owner_user_id IS NOT NULL
+        JOIN users owner_user
+          ON owner_user.id = owner_config.owner_user_id
+         AND owner_user.status = 'active'
+        SET task.reporter_user_id = owner_config.owner_user_id
+        WHERE requirement.business_category = ?
+          AND task.deleted_at IS NULL
+          AND item.deleted_at IS NULL
+          AND requirement.deleted_at IS NULL
+      `,
+      [businessCategoryCode],
     );
   }
 

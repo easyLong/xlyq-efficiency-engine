@@ -1,6 +1,6 @@
 # 向量引擎管理工作台后端接口设计 API 清单
 
-更新时间：2026-06-16
+更新时间：2026-06-17
 
 ## 最新 MVP 重点接口
 
@@ -18,6 +18,8 @@
 ### 需求与任务
 
 - `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务。
+- `GET /api/v1/requirements/business-category-owners`：查询业务大类负责人配置，返回大类编码、名称、负责人用户和状态。
+- `PATCH /api/v1/requirements/business-category-owners/{categoryCode}`：更新某个业务大类的负责人；更新后会回填该业务大类历史任务的 `reporter_user_id`。
 - `GET /api/v1/requirements/ai-preview-candidates?limit=12`：读取 AI 已识别但未确认的候选需求，并返回证据链。
 - `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/confirm`：将候选需求标记为已确认，避免正式录入后重复展示。
 - `POST /api/v1/requirements/ai-match-context`：根据文件内容匹配客户和业务大类。
@@ -252,6 +254,16 @@
 - 说明：快速创建需求、确认一个需求项，并自动生成一个待指派任务；用于当前 MVP“一个需求对应一个任务”的录入页
 - 关键字段：`projectId`、`customerId`、`title`、`rawContent`、`priority`、`estimatedHours`
 - 返回：`requirement`、`item`、`task`
+- 角色口径：按 `businessCategory` 查询 `business_category_owner_configs`，写入 `task.reporter_user_id` 作为需求负责人；任务执行人仍由后续指派动作写入 `task.assignee_user_id`。
+
+### `GET /requirements/business-category-owners`
+- 说明：查询业务大类负责人配置。
+- 返回：`businessCategoryCode`、`businessCategoryName`、`ownerUserId`、`ownerName`、`ownerUsername`、`status`、`remark`。
+
+### `PATCH /requirements/business-category-owners/{categoryCode}`
+- 说明：更新业务大类负责人配置，并立即回填该大类历史任务的 `reporter_user_id`。
+- 入参：`ownerUserId`
+- 约束：`ownerUserId` 为空表示未配置负责人；非空时必须是 active 用户。
 
 ### `POST /requirements/ai-split-with-tasks`
 - 说明：加载需求文件内容后，自动拆分为多条需求，并为每条需求生成一个待指派任务

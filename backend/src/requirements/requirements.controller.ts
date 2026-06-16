@@ -38,6 +38,22 @@ export class RequirementsController {
     );
   }
 
+  @Get('business-category-owners')
+  businessCategoryOwners() {
+    return this.requirementsService.listBusinessCategoryOwners();
+  }
+
+  @Patch('business-category-owners/:categoryCode')
+  updateBusinessCategoryOwner(
+    @Param('categoryCode') categoryCode: string,
+    @Body() dto: { ownerUserId?: string | null },
+  ) {
+    return this.requirementsService.updateBusinessCategoryOwner(
+      categoryCode,
+      dto,
+    );
+  }
+
   @Post('ai-preview-candidates/:candidateId/confirm')
   confirmAiPreviewCandidate(@Param('candidateId') candidateId: string) {
     return this.requirementsService.confirmAiPreviewCandidate(candidateId);
