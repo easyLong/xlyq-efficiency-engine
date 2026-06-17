@@ -39,6 +39,8 @@ DROP TABLE IF EXISTS `requirement_versions`;
 DROP TABLE IF EXISTS `requirements`;
 DROP TABLE IF EXISTS `project_members`;
 DROP TABLE IF EXISTS `projects`;
+DROP TABLE IF EXISTS `wechat_group_configs`;
+DROP TABLE IF EXISTS `source_contact_contexts`;
 DROP TABLE IF EXISTS `contact_context_configs`;
 DROP TABLE IF EXISTS `dimension_dictionaries`;
 DROP TABLE IF EXISTS `customers`;
@@ -130,6 +132,59 @@ CREATE TABLE `contact_context_configs` (
   KEY `idx_contact_context_business` (`business_platform`, `business_category`, `secondary_category`, `tertiary_category`),
   CONSTRAINT `fk_contact_context_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='对接人上下文配置表';
+
+CREATE TABLE `source_contact_contexts` (
+  `id` CHAR(36) NOT NULL,
+  `source_app` VARCHAR(32) NOT NULL DEFAULT 'crawler',
+  `source_type` VARCHAR(32) NOT NULL,
+  `source_key` CHAR(64) NOT NULL,
+  `source_name` VARCHAR(255) NOT NULL,
+  `external_source_id` VARCHAR(128) NULL,
+  `contact_context_config_id` CHAR(36) NOT NULL,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'active',
+  `is_primary` TINYINT(1) NOT NULL DEFAULT 1,
+  `priority` INT NOT NULL DEFAULT 100,
+  `match_method` VARCHAR(32) NULL,
+  `remark` VARCHAR(255) NULL,
+  `first_seen_at` DATETIME NULL,
+  `last_seen_at` DATETIME NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_source_contact_context_config` (`source_app`, `source_type`, `source_key`, `contact_context_config_id`),
+  KEY `idx_source_contact_source` (`source_app`, `source_type`, `source_key`),
+  KEY `idx_source_contact_name` (`source_name`),
+  KEY `idx_source_contact_config` (`contact_context_config_id`),
+  KEY `idx_source_contact_status` (`status`),
+  KEY `idx_source_contact_priority` (`source_app`, `source_type`, `source_key`, `status`, `is_primary`, `priority`),
+  CONSTRAINT `fk_source_contact_context_config` FOREIGN KEY (`contact_context_config_id`) REFERENCES `contact_context_configs` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='采集来源与业务上下文绑定表';
+
+CREATE TABLE `wechat_group_configs` (
+  `id` CHAR(36) NOT NULL,
+  `group_id` VARCHAR(128) NULL,
+  `group_name` VARCHAR(255) NOT NULL,
+  `source_key` CHAR(64) NOT NULL,
+  `customer_id` CHAR(36) NOT NULL,
+  `contact_context_config_id` CHAR(36) NULL,
+  `business_platform` VARCHAR(64) NULL,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'active',
+  `collect_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `sort_order` INT NOT NULL DEFAULT 100,
+  `remark` VARCHAR(255) NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_wechat_group_source` (`source_key`),
+  UNIQUE KEY `uk_wechat_group_id` (`group_id`),
+  KEY `idx_wechat_group_customer` (`customer_id`),
+  KEY `idx_wechat_group_contact` (`contact_context_config_id`),
+  KEY `idx_wechat_group_status_order` (`status`, `collect_enabled`, `sort_order`),
+  CONSTRAINT `fk_wechat_group_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
+  CONSTRAINT `fk_wechat_group_contact_context` FOREIGN KEY (`contact_context_config_id`) REFERENCES `contact_context_configs` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='微信群采集配置表';
 
 CREATE TABLE `dimension_dictionaries` (
   `id` CHAR(36) NOT NULL,

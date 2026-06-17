@@ -18,6 +18,8 @@ async function ensureTables(connection) {
       id CHAR(36) NOT NULL,
       source_app VARCHAR(32) NOT NULL DEFAULT 'crawler',
       external_candidate_id VARCHAR(64) NULL,
+      external_capture_run_id VARCHAR(64) NULL,
+      external_source_key CHAR(64) NULL,
       external_chat_id VARCHAR(64) NULL,
       source_chat_name VARCHAR(255) NULL,
       raw_customer_name VARCHAR(128) NULL,
@@ -30,6 +32,7 @@ async function ensureTables(connection) {
       deadline DATETIME NULL,
       business_name VARCHAR(255) NULL,
       demand_title VARCHAR(255) NULL,
+      demand_content LONGTEXT NULL,
       confidence DECIMAL(8,4) NULL,
       status VARCHAR(32) NOT NULL DEFAULT 'pending',
       match_suggestion TEXT NULL,
@@ -47,11 +50,16 @@ async function ensureTables(connection) {
       PRIMARY KEY (id),
       UNIQUE KEY uk_demand_intake_external (source_app, external_candidate_id),
       KEY idx_demand_intake_status_created (status, created_at),
+      KEY idx_demand_intake_capture (source_app, external_capture_run_id),
+      KEY idx_demand_intake_source_key (source_app, external_source_key),
       KEY idx_demand_intake_external_chat (source_app, external_chat_id),
       KEY idx_demand_intake_matched_contact (matched_contact_context_id),
       KEY idx_demand_intake_confirmed_requirement (confirmed_requirement_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='候选需求接入表'
   `);
+  await addColumnIfMissing(connection, 'demand_intake_candidates', 'demand_content', 'LONGTEXT NULL');
+  await addColumnIfMissing(connection, 'demand_intake_candidates', 'external_capture_run_id', 'VARCHAR(64) NULL');
+  await addColumnIfMissing(connection, 'demand_intake_candidates', 'external_source_key', 'CHAR(64) NULL');
 
   await connection.query(`
     CREATE TABLE IF NOT EXISTS demand_candidate_evidence (
@@ -73,6 +81,23 @@ async function ensureTables(connection) {
       KEY idx_demand_evidence_external (external_evidence_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='候选需求证据链表'
   `);
+}
+
+async function addColumnIfMissing(connection, tableName, columnName, columnDefinition) {
+  const [rows] = await connection.query(
+    `
+      SELECT COUNT(*) AS count
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = ?
+        AND column_name = ?
+    `,
+    [tableName, columnName],
+  );
+  if (Number(rows?.[0]?.count || 0) > 0) return;
+  await connection.query(
+    `ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${quoteIdentifier(columnName)} ${columnDefinition}`,
+  );
 }
 
 async function main() {
@@ -100,6 +125,8 @@ async function main() {
     `
       SELECT
         d.id AS external_candidate_id,
+        NULL AS external_capture_run_id,
+        NULL AS external_source_key,
         d.source_chat_id AS external_chat_id,
         c.chat_name AS source_chat_name,
         c.customer_name AS raw_customer_name,
@@ -112,6 +139,7 @@ async function main() {
         d.deadline,
         d.business_name,
         d.demand_title,
+        d.demand_content,
         d.confidence,
         COALESCE(d.status, 'pending') AS status,
         d.match_suggestion,
@@ -131,32 +159,38 @@ async function main() {
       `
         INSERT INTO demand_intake_candidates (
           id, source_app, external_candidate_id, external_chat_id,
+          external_capture_run_id, external_source_key,
           source_chat_name, raw_customer_name, raw_owner_name, raw_business_platform,
           business_category, secondary_category, tertiary_category, start_time, deadline,
-          business_name, demand_title, confidence, status, match_suggestion, created_at
-        ) VALUES (?, 'crawler', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()))
+          business_name, demand_title, demand_content, confidence, status, match_suggestion, created_at
+        ) VALUES (?, 'crawler', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()))
         ON DUPLICATE KEY UPDATE
-          external_chat_id = VALUES(external_chat_id),
-          source_chat_name = VALUES(source_chat_name),
-          raw_customer_name = VALUES(raw_customer_name),
-          raw_owner_name = VALUES(raw_owner_name),
-          raw_business_platform = VALUES(raw_business_platform),
-          business_category = VALUES(business_category),
-          secondary_category = VALUES(secondary_category),
-          tertiary_category = VALUES(tertiary_category),
-          start_time = VALUES(start_time),
-          deadline = VALUES(deadline),
-          business_name = VALUES(business_name),
-          demand_title = VALUES(demand_title),
-          confidence = VALUES(confidence),
+          external_capture_run_id = IF(status IN ('confirmed', 'rejected'), external_capture_run_id, VALUES(external_capture_run_id)),
+          external_source_key = IF(status IN ('confirmed', 'rejected'), external_source_key, VALUES(external_source_key)),
+          external_chat_id = IF(status IN ('confirmed', 'rejected'), external_chat_id, VALUES(external_chat_id)),
+          source_chat_name = IF(status IN ('confirmed', 'rejected'), source_chat_name, VALUES(source_chat_name)),
+          raw_customer_name = IF(status IN ('confirmed', 'rejected'), raw_customer_name, VALUES(raw_customer_name)),
+          raw_owner_name = IF(status IN ('confirmed', 'rejected'), raw_owner_name, VALUES(raw_owner_name)),
+          raw_business_platform = IF(status IN ('confirmed', 'rejected'), raw_business_platform, VALUES(raw_business_platform)),
+          business_category = IF(status IN ('confirmed', 'rejected'), business_category, VALUES(business_category)),
+          secondary_category = IF(status IN ('confirmed', 'rejected'), secondary_category, VALUES(secondary_category)),
+          tertiary_category = IF(status IN ('confirmed', 'rejected'), tertiary_category, VALUES(tertiary_category)),
+          start_time = IF(status IN ('confirmed', 'rejected'), start_time, VALUES(start_time)),
+          deadline = IF(status IN ('confirmed', 'rejected'), deadline, VALUES(deadline)),
+          business_name = IF(status IN ('confirmed', 'rejected'), business_name, VALUES(business_name)),
+          demand_title = IF(status IN ('confirmed', 'rejected'), demand_title, VALUES(demand_title)),
+          demand_content = IF(status IN ('confirmed', 'rejected'), demand_content, VALUES(demand_content)),
+          confidence = IF(status IN ('confirmed', 'rejected'), confidence, VALUES(confidence)),
           status = IF(status IN ('confirmed', 'rejected'), status, VALUES(status)),
-          match_suggestion = VALUES(match_suggestion),
-          deleted_at = NULL
+          match_suggestion = IF(status IN ('confirmed', 'rejected'), match_suggestion, VALUES(match_suggestion)),
+          deleted_at = IF(status IN ('confirmed', 'rejected'), deleted_at, NULL)
       `,
       [
         randomUUID(),
         String(row.external_candidate_id),
         row.external_chat_id ? String(row.external_chat_id) : null,
+        row.external_capture_run_id ? String(row.external_capture_run_id) : null,
+        row.external_source_key ? String(row.external_source_key) : null,
         row.source_chat_name ?? null,
         row.raw_customer_name ?? null,
         row.raw_owner_name ?? null,
@@ -168,6 +202,7 @@ async function main() {
         row.deadline ?? null,
         row.business_name ?? null,
         row.demand_title ?? null,
+        row.demand_content ?? null,
         row.confidence ?? null,
         row.status || 'pending',
         row.match_suggestion ?? null,

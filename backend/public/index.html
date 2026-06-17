@@ -2525,6 +2525,7 @@
         .filter(Boolean)
         .join("\n");
       return [
+        candidate.demand_content,
         candidate.demand_title || candidate.business_name,
         candidate.match_suggestion ? `匹配建议：${candidate.match_suggestion}` : "",
         evidenceText ? `证据链：\n${evidenceText}` : "",

@@ -295,6 +295,8 @@ export class RequirementsService implements OnModuleInit {
           c.raw_business_platform AS business_platform,
           c.id AS candidate_id,
           c.external_candidate_id,
+          c.external_capture_run_id,
+          c.external_source_key,
           c.external_chat_id,
           c.business_category,
           c.secondary_category,
@@ -303,6 +305,7 @@ export class RequirementsService implements OnModuleInit {
           c.deadline,
           c.business_name,
           c.demand_title,
+          c.demand_content,
           c.confidence,
           c.status,
           c.match_suggestion,
@@ -1931,6 +1934,8 @@ export class RequirementsService implements OnModuleInit {
         id CHAR(36) NOT NULL,
         source_app VARCHAR(32) NOT NULL DEFAULT 'crawler',
         external_candidate_id VARCHAR(64) NULL,
+        external_capture_run_id VARCHAR(64) NULL,
+        external_source_key CHAR(64) NULL,
         external_chat_id VARCHAR(64) NULL,
         source_chat_name VARCHAR(255) NULL,
         raw_customer_name VARCHAR(128) NULL,
@@ -1943,6 +1948,7 @@ export class RequirementsService implements OnModuleInit {
         deadline DATETIME NULL,
         business_name VARCHAR(255) NULL,
         demand_title VARCHAR(255) NULL,
+        demand_content LONGTEXT NULL,
         confidence DECIMAL(8,4) NULL,
         status VARCHAR(32) NOT NULL DEFAULT 'pending',
         match_suggestion TEXT NULL,
@@ -1960,11 +1966,37 @@ export class RequirementsService implements OnModuleInit {
         PRIMARY KEY (id),
         UNIQUE KEY uk_demand_intake_external (source_app, external_candidate_id),
         KEY idx_demand_intake_status_created (status, created_at),
+        KEY idx_demand_intake_capture (source_app, external_capture_run_id),
+        KEY idx_demand_intake_source_key (source_app, external_source_key),
         KEY idx_demand_intake_external_chat (source_app, external_chat_id),
         KEY idx_demand_intake_matched_contact (matched_contact_context_id),
         KEY idx_demand_intake_confirmed_requirement (confirmed_requirement_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='候选需求接入表'
     `);
+
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'demand_content',
+      'demand_content LONGTEXT NULL',
+    );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'external_capture_run_id',
+      'external_capture_run_id VARCHAR(64) NULL',
+    );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'external_source_key',
+      'external_source_key CHAR(64) NULL',
+    );
+    await ensureIndex(this.dataSource, 'demand_intake_candidates', 'idx_demand_intake_capture', [
+      'source_app',
+      'external_capture_run_id',
+    ]);
+    await ensureIndex(this.dataSource, 'demand_intake_candidates', 'idx_demand_intake_source_key', [
+      'source_app',
+      'external_source_key',
+    ]);
 
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS demand_candidate_evidence (
