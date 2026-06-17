@@ -582,10 +582,14 @@
     .metric { min-height: 118px; display: flex; flex-direction: column; justify-content: space-between; }
     .metric span { color: #687366; font-size: 13px; }
     .metric strong { font-size: 32px; }
-    .dashboard-kpi-grid,
+    .dashboard-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+    }
     .dashboard-board-grid {
       display: grid;
-      grid-template-columns: minmax(0, .86fr) minmax(420px, 1.14fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
       align-items: stretch;
     }
@@ -625,17 +629,13 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .dimension-summary-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-    }
+    .dimension-summary-grid { min-width: 0; }
     .dimension-summary-card {
       min-width: 0;
-      border: 1px solid #e2e7da;
-      border-radius: 14px;
-      background: #fffdf7;
-      padding: 12px;
+      display: grid;
+      grid-template-columns: minmax(260px, .86fr) minmax(320px, 1.14fr);
+      gap: 18px;
+      align-items: center;
     }
     .dimension-summary-card h4 {
       margin: 0 0 10px;
@@ -649,6 +649,117 @@
     .dimension-summary-card th,
     .dimension-summary-card td {
       padding: 7px 8px;
+    }
+    .dimension-summary-card tbody tr[data-filter-key] {
+      cursor: pointer;
+    }
+    .dimension-summary-card tbody tr[data-filter-key]:hover {
+      background: #f4f8ef;
+    }
+    .dimension-donut-wrap {
+      display: grid;
+      place-items: center;
+      min-height: 284px;
+    }
+    .dimension-donut {
+      width: min(280px, 100%);
+      aspect-ratio: 1;
+      overflow: visible;
+    }
+    .dimension-donut path {
+      cursor: pointer;
+      transition: transform .16s ease, opacity .16s ease;
+      transform-origin: 120px 120px;
+    }
+    .dimension-donut path:hover {
+      transform: scale(1.025);
+      opacity: .86;
+    }
+    .dimension-donut-center {
+      fill: #18231d;
+      font-weight: 900;
+      font-size: 22px;
+      text-anchor: middle;
+    }
+    .dimension-donut-caption {
+      fill: #687366;
+      font-size: 11px;
+      text-anchor: middle;
+    }
+    .dimension-drill-list {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .dimension-drill-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid #e2e7da;
+      border-radius: 12px;
+      background: #fffdf7;
+      padding: 9px 10px;
+      cursor: pointer;
+    }
+    .dimension-drill-row:hover { background: #f4f8ef; }
+    .dimension-drill-row.is-static { cursor: default; }
+    .dimension-drill-row.is-static:hover { background: #fffdf7; }
+    .dimension-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+    }
+    .dimension-drill-name {
+      min-width: 0;
+      color: #263426;
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dimension-drill-meta {
+      margin-top: 3px;
+      color: #687366;
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dimension-drill-value {
+      color: #18231d;
+      font-size: 18px;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+    }
+    .dimension-drill-path {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      color: #687366;
+      font-size: 12px;
+    }
+    .dimension-drill-path button {
+      min-height: 26px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid #d8e2d0;
+      background: #fffdf7;
+      color: #2f6b45;
+      font-weight: 800;
+    }
+    .dimension-drill-path .crumb {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #edf5ee;
+      color: #2f6b45;
+      font-weight: 800;
     }
     .dashboard-stat-row {
       display: grid;
@@ -748,6 +859,7 @@
     }
     .funnel-fill.warn { background: #ff7d55; color: #fff; }
     .funnel-fill.mid { background: #ffd84d; }
+    .funnel-fill.neutral { background: #9fb0a4; color: #fff; }
     .funnel-rate { color: #687366; font-size: 12px; text-align: right; white-space: nowrap; }
     .priority-strip {
       display: grid;
@@ -763,7 +875,7 @@
     }
     .priority-card span { color: #687366; font-size: 12px; }
     .priority-card strong { display: block; margin-top: 5px; font-size: 24px; }
-    .key-task-table table { min-width: 1060px; }
+    .key-task-table table { min-width: 900px; }
     .key-task-table th,
     .key-task-table td { padding: 8px 9px; font-size: 12px; vertical-align: top; }
     .key-task-title { max-width: 210px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 800; }
@@ -868,7 +980,8 @@
     }
     .hidden { display: none !important; }
     @media (max-width: 980px) {
-      .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-kpi-grid, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
+      .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
+      .dimension-summary-card { grid-template-columns: 1fr; }
       .edit-panel { grid-template-columns: 1fr; }
       .quotation-import-actions { flex-wrap: wrap; }
       .side { position: static; flex-wrap: wrap; }
@@ -1224,14 +1337,15 @@
           <div class="section-title">
             <div>
               <h3>需求面板</h3>
-              <p>围绕需求全链路展示任务状态、报价确认、资产交付和维度统计，支持按基金、平台、分类和员工筛选。</p>
+              <p>围绕需求进度展示任务状态、优先级、延期风险、资产交付和维度下钻，支持按基金、平台、分类和员工筛选。</p>
             </div>
           </div>
         </div>
         <div class="panel">
           <div id="analyticsDimensionFilters" class="form-grid"></div>
+          <div id="dashboardDrillPath" class="dimension-drill-path"></div>
         </div>
-        <div id="metrics" class="grid cols-4"></div>
+        <div id="metrics" class="dashboard-metrics-grid"></div>
         <div class="dashboard-board-grid">
           <div id="taskStatusOverview" class="panel dashboard-focus-card"></div>
           <div id="taskPriorityOverview" class="panel dashboard-focus-card"></div>
@@ -1239,7 +1353,7 @@
         <div class="panel">
           <div class="section-title">
             <div>
-              <div class="kicker">Dimension Summary</div>
+              <div class="kicker">维度统计</div>
               <h3>维度汇总</h3>
             </div>
             <span class="tag">自动联动</span>
@@ -1250,7 +1364,7 @@
           <div class="panel dashboard-card">
             <div class="section-title">
               <div>
-                <div class="kicker">Urgency</div>
+                <div class="kicker">任务紧急度</div>
                 <h3>任务紧急程度分布</h3>
               </div>
               <span class="tag">结合优先级和逾期</span>
@@ -1260,7 +1374,7 @@
           <div class="panel dashboard-card">
             <div class="section-title">
               <div>
-                <div class="kicker">Progress Funnel</div>
+                <div class="kicker">任务进展</div>
                 <h3>任务进展看板</h3>
               </div>
               <span class="tag">漏斗图</span>
@@ -1271,16 +1385,12 @@
         <div class="panel">
           <div class="section-title">
             <div>
-              <div class="kicker">Key Tasks</div>
+              <div class="kicker">重点跟进</div>
               <h3>关键任务</h3>
             </div>
-            <span class="tag">优先展示延期、P0/P1 和待报价任务</span>
+            <span class="tag">优先展示延期、待验收、P0/P1 和即将到期任务</span>
           </div>
           <div id="keyTaskBoard" class="table-wrap"></div>
-        </div>
-        <div class="panel">
-          <h3>任务资产明细</h3>
-          <div id="boardBox" class="table-wrap"></div>
         </div>
       </section>
 
@@ -1378,7 +1488,6 @@
       aiContextMatch: null,
       aiMatchSourceText: "",
       analyticsCustomerId: "all",
-      analyticsQuarter: null,
       analyticsRequestSeq: 0,
       editingRequirementId: null,
       editingQuotationItemId: null,
@@ -1514,7 +1623,6 @@
       state.mappingCustomerId ||= customers[0]?.customer_code || null;
       state.mappingQuarter ||= currentQuarter();
       state.settlementQuarter ||= currentQuarter();
-      state.analyticsQuarter ||= currentQuarter();
       if (state.mappingCustomerId) qs("mappingCustomerSelect").value = state.mappingCustomerId;
       qs("mappingQuarterSelect").value = state.mappingQuarter;
       qs("settlementCustomerSelect").value = state.settlementCustomerId;
@@ -1651,7 +1759,7 @@
         quotations: ["合同报价录入", "上传合同报价并拆成最细粒度子项，为后续需求任务挂靠做准备。"],
         mappings: ["报价子项选择", "在历史需求任务中为需求选择对应基金的报价子项。"],
         settlement: ["结算统计", "按基金、平台、业务分类和员工维度统计结算金额与资产数量。"],
-        dashboard: ["需求面板", "按不同维度查看需求、任务、报价和资产交付情况，并通过图表观察进展。"],
+        dashboard: ["需求面板", "按不同维度查看需求进度、任务状态、延期风险和资产交付情况。"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
       };
       qs("pageTitle").textContent = titles[view][0];
@@ -1937,6 +2045,27 @@
       ];
       box.innerHTML = specs.map(([label, key, allLabel]) => dimensionSelect(label, key, allLabel, onChangeHandler, linked)).join("");
     }
+    function dashboardFilterLabel(key, value) {
+      if (!value || value === "all") return "";
+      if (key === "customerId") return customerName(value);
+      if (key === "businessCategory") return projectTypeLabel(value);
+      if (key === "assigneeUserId") return assigneeName(value);
+      return value;
+    }
+    function renderDashboardDrillPath() {
+      const box = qs("dashboardDrillPath");
+      if (!box) return;
+      const crumbs = dashboardDimensionOrder()
+        .map(key => {
+          const value = state.dimensionFilters[key] || "all";
+          const label = dashboardFilterLabel(key, value);
+          return label ? { key, label } : null;
+        })
+        .filter(Boolean);
+      box.innerHTML = crumbs.length
+        ? `<span>当前下钻</span><button onclick="resetDashboardDimensionFilters()">全部需求</button>${crumbs.map(item => `<span class="crumb">${escapeHtml(item.label)}</span>`).join("<span>/</span>")}`
+        : `<span>当前下钻</span><span class="crumb">全部需求</span>`;
+    }
     function syncPrimaryCustomerSelects(customerId) {
       state.dimensionFilters.customerId = customerId || "all";
       state.analyticsCustomerId = state.dimensionFilters.customerId;
@@ -1961,6 +2090,19 @@
           state.dimensionFilters[childKey] = "all";
         }
       }
+      refreshAnalytics();
+    }
+    function drillDashboardDimension(key, value) {
+      if (!key || !value || value === "-") return;
+      setDashboardDimensionFilter(key, value);
+    }
+    function drillDashboardDimensionFromElement(element) {
+      drillDashboardDimension(element?.dataset?.filterKey, element?.dataset?.filterValue);
+    }
+    function resetDashboardDimensionFilters() {
+      dashboardDimensionOrder().forEach(key => state.dimensionFilters[key] = "all");
+      state.dimensionFilters.contactContextId = "all";
+      syncPrimaryCustomerSelects("all");
       refreshAnalytics();
     }
     function setSettlementDimensionFilter(key, value) {
@@ -4603,14 +4745,13 @@
       const requestSeq = ++state.analyticsRequestSeq;
       state.dimensionFilters.contactContextId = "all";
       const customerId = state.dimensionFilters.customerId || "all";
-      const quarter = state.analyticsQuarter || currentQuarter();
       state.analyticsCustomerId = customerId;
-      state.analyticsQuarter = quarter;
       syncPrimaryCustomerSelects(customerId);
       renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", true, true);
+      renderDashboardDrillPath();
       const query = new URLSearchParams({ liveAssetCount: "true" });
       if (customerId !== "all") query.set("customerCode", customerId);
-      qs("metrics").innerHTML = `<div class="panel metric"><span>正在刷新</span><strong>...</strong><span>同步资产表和报价子项选择</span></div>`;
+      qs("metrics").innerHTML = `<div class="panel metric"><span>正在刷新</span><strong>...</strong><span>同步需求进度和资产交付</span></div>`;
       try {
         const analyticsCustomers = selectedAnalyticsCustomers(customerId);
         const board = await request(`/tasks/board?${query.toString()}`);
@@ -4623,9 +4764,16 @@
             const requirement = requirementForTask(task);
             return (!taskCustomerId || customerCodes.has(taskCustomerId)) && dimensionMatchesRequirement(requirement, task);
           });
-        const quarterTasks = rows;
-        const totalAssets = quarterTasks.reduce((sum, task) => sum + Number(task.asset_count || task.assetCount || 0), 0);
-        const completedTasks = quarterTasks.filter(task => task.status === "completed").length;
+        const visibleTasks = rows;
+        const totalAssets = visibleTasks.reduce((sum, task) => sum + Number(task.asset_count || task.assetCount || 0), 0);
+        const completedRequirementIds = new Set();
+        let completedUnlinkedTasks = 0;
+        visibleTasks.filter(isTaskCompleted).forEach(task => {
+          const requirementId = requirementForTask(task)?.id;
+          if (requirementId) completedRequirementIds.add(requirementId);
+          else completedUnlinkedTasks += 1;
+        });
+        const completedDemandCount = completedRequirementIds.size + completedUnlinkedTasks;
         const scopedRequirements = state.requirements.filter(requirement => {
           if (!customerCodes.has(requirement.customer_code)) return false;
           if (!dimensionMatchesRequirement(requirement, taskForRequirement(requirement.id))) return false;
@@ -4633,19 +4781,22 @@
         });
         const scopedRequirementIds = new Set(scopedRequirements.map(requirement => requirement.id));
         const scopedRequirementItems = state.requirementItems.filter(item => scopedRequirementIds.has(item.requirement_id));
-        const quoteMatchedCount = scopedRequirementItems.filter(item => item.quote_scope_status === "matched").length;
-        const quotePendingCount = scopedRequirementItems.filter(item => isPendingQuoteScopeStatus(item.quote_scope_status)).length;
         const scopeText = `${customerId === "all" ? "全部基金" : customerName(customerId)}`;
-        const factRows = buildAnalyticsFactRows(scopedRequirementItems, rows);
+        const factRows = buildAnalyticsFactRows(scopedRequirementItems, visibleTasks);
+        const inProgressCount = visibleTasks.filter(task => taskProgressGroup(task) === "inProgress").length;
+        const pendingReviewCount = visibleTasks.filter(task => taskProgressGroup(task) === "pendingReview").length;
+        const overdueCount = visibleTasks.filter(isTaskOverdue).length;
+        const dueSoonCount = visibleTasks.filter(isTaskDueSoon).length;
         qs("metrics").innerHTML = [
           ["需求总数", scopedRequirements.length, scopeText],
-          ["资产链接数", totalAssets, "自动读取资产表 URL 并去重"],
-          ["验收完成需求", completedTasks, "管理者已通过验收的任务"],
-          ["报价已确认", quoteMatchedCount, `待确认 ${quotePendingCount} 项`],
+          ["进行中任务", inProgressCount, "员工正在处理的任务"],
+          ["待验收任务", pendingReviewCount, "员工已提交，等待管理者验收"],
+          ["已验收需求", completedDemandCount, "管理者已通过验收的需求"],
+          ["延期任务", overdueCount, `3天内到期 ${dueSoonCount} 项`],
+          ["交付资产数", totalAssets, "自动读取资产表中的图片和交付链接"],
         ].map(([label, value, hint]) => `<div class="panel metric"><span>${label}</span><strong>${value}</strong><span>${hint}</span></div>`).join("");
         const analyticsContext = {
-          quarter,
-          quarterTasks,
+          visibleTasks,
           scopedRequirements,
           scopedRequirementItems,
         };
@@ -4655,7 +4806,6 @@
         renderUrgencyBoard(analyticsContext);
         renderTaskFunnelBoard(analyticsContext);
         renderKeyTaskBoard(analyticsContext);
-        renderDashboardTaskDetails(factRows);
       } catch (error) {
         toast(error.message);
       }
@@ -4687,108 +4837,148 @@
           tertiaryCategory: dimensions.tertiaryCategory || "-",
           employeeName: task?.assignee_user_id ? assigneeName(task.assignee_user_id) : "未指派",
           assetCount,
-          quoteMatched: item.quote_scope_status === "matched",
-          quotePending: isPendingQuoteScopeStatus(item.quote_scope_status),
           completed: task ? isTaskCompleted(task) : false,
           overdue: task ? isTaskOverdue(task) : false,
         };
       });
     }
-    function summarizeFactsBy(factRows, title, getter) {
+    function summarizeFactsBy(factRows, title, getter, valueGetter = getter, filterKey = "") {
       const groups = new Map();
       for (const row of factRows) {
         const label = getter(row) || "-";
-        const current = groups.get(label) || {
+        const value = valueGetter(row) || label;
+        const groupKey = `${filterKey || title}:${value}`;
+        const current = groups.get(groupKey) || {
           label,
+          value,
+          filterKey,
           requirementIds: new Set(),
           taskCount: 0,
+          inProgressCount: 0,
+          pendingReviewCount: 0,
           completedCount: 0,
           overdueCount: 0,
           assetCount: 0,
         };
         if (row.requirement?.id) current.requirementIds.add(row.requirement.id);
         if (row.task?.id) current.taskCount += 1;
+        if (row.task && taskProgressGroup(row.task) === "inProgress") current.inProgressCount += 1;
+        if (row.task && taskProgressGroup(row.task) === "pendingReview") current.pendingReviewCount += 1;
         if (row.completed) current.completedCount += 1;
         if (row.overdue) current.overdueCount += 1;
         current.assetCount += row.assetCount;
-        groups.set(label, current);
+        groups.set(groupKey, current);
       }
       return {
         title,
         rows: [...groups.values()]
           .map(row => ({ ...row, requirementCount: row.requirementIds.size, requirementIds: undefined }))
-          .sort((a, b) => b.requirementCount - a.requirementCount || b.taskCount - a.taskCount || b.assetCount - a.assetCount)
-          .slice(0, 8),
+          .sort((a, b) => b.requirementCount - a.requirementCount || b.taskCount - a.taskCount || b.assetCount - a.assetCount),
       };
     }
-    function dashboardSummaryGroupingSpec() {
-      const selectedCustomer = state.dimensionFilters.customerId || "all";
-      const selectedPlatform = state.dimensionFilters.businessPlatform || "all";
-      const selectedCategory = state.dimensionFilters.businessCategory || "all";
-      const selectedSecondary = state.dimensionFilters.secondaryCategory || "all";
-      const selectedEmployee = state.dimensionFilters.assigneeUserId || "all";
-      if (!selectedCustomer || selectedCustomer === "all") {
-        return { title: "基金客户", getter: row => row.customerName };
-      }
-      if (!selectedPlatform || selectedPlatform === "all") {
-        return { title: "业务平台", getter: row => row.businessPlatform };
-      }
-      if (!selectedCategory || selectedCategory === "all") {
-        return { title: "业务大类", getter: row => row.businessCategory };
-      }
-      if (!selectedSecondary || selectedSecondary === "all") {
-        return { title: "二级分类", getter: row => row.secondaryCategory };
-      }
-      if (!selectedEmployee || selectedEmployee === "all") {
-        return { title: "员工", getter: row => row.employeeName };
-      }
-      return { title: "报价状态", getter: row => quoteScopeStatusLabel(row.item?.quote_scope_status) };
+    function dashboardDrillSpecs() {
+      return [
+        { key: "customerId", title: "基金客户", getter: row => row.customerName, valueGetter: row => row.customerId },
+        { key: "businessPlatform", title: "业务平台", getter: row => row.businessPlatform, valueGetter: row => row.dimensions.businessPlatform },
+        { key: "businessCategory", title: "业务大类", getter: row => row.businessCategory, valueGetter: row => row.dimensions.businessCategory },
+        { key: "secondaryCategory", title: "二级分类", getter: row => row.secondaryCategory, valueGetter: row => row.dimensions.secondaryCategory },
+        { key: "assigneeUserId", title: "执行员工", getter: row => row.employeeName, valueGetter: row => row.dimensions.assigneeUserId },
+      ];
+    }
+    function activeDashboardDrillSpec() {
+      return dashboardDrillSpecs().find(spec => (state.dimensionFilters[spec.key] || "all") === "all")
+        || { key: "taskStatus", title: "任务状态", static: true, getter: row => row.task ? taskStatusLabel(row.task.status) : "未生成", valueGetter: row => row.task?.status || "missing" };
+    }
+    function donutPoint(cx, cy, radius, angle) {
+      const radians = (angle - 90) * Math.PI / 180;
+      return {
+        x: cx + radius * Math.cos(radians),
+        y: cy + radius * Math.sin(radians),
+      };
+    }
+    function donutSegmentPath(cx, cy, outerRadius, innerRadius, startAngle, endAngle) {
+      const safeEnd = endAngle - startAngle >= 359.99 ? startAngle + 359.99 : endAngle;
+      const outerStart = donutPoint(cx, cy, outerRadius, startAngle);
+      const outerEnd = donutPoint(cx, cy, outerRadius, safeEnd);
+      const innerStart = donutPoint(cx, cy, innerRadius, safeEnd);
+      const innerEnd = donutPoint(cx, cy, innerRadius, startAngle);
+      const largeArc = safeEnd - startAngle > 180 ? 1 : 0;
+      return [
+        `M ${outerStart.x.toFixed(3)} ${outerStart.y.toFixed(3)}`,
+        `A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${outerEnd.x.toFixed(3)} ${outerEnd.y.toFixed(3)}`,
+        `L ${innerStart.x.toFixed(3)} ${innerStart.y.toFixed(3)}`,
+        `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${innerEnd.x.toFixed(3)} ${innerEnd.y.toFixed(3)}`,
+        "Z",
+      ].join(" ");
+    }
+    function renderDimensionDonut(summary, spec) {
+      const colors = ["#2f6b45", "#b8d95d", "#ff7d55", "#ffd84d", "#5f8f73", "#9fb0a4", "#d9a441", "#7bb6a0"];
+      const sourceRows = summary.rows.map(row => ({ ...row, chartValue: row.requirementCount || row.taskCount || 0 })).filter(row => row.chartValue > 0);
+      const rows = sourceRows.length > 8
+        ? [
+            ...sourceRows.slice(0, 7),
+            sourceRows.slice(7).reduce((acc, row) => ({
+              label: "其他",
+              value: "-",
+              filterKey: "",
+              chartValue: acc.chartValue + row.chartValue,
+              inProgressCount: acc.inProgressCount + row.inProgressCount,
+              pendingReviewCount: acc.pendingReviewCount + row.pendingReviewCount,
+              overdueCount: acc.overdueCount + row.overdueCount,
+            }), { chartValue: 0, inProgressCount: 0, pendingReviewCount: 0, overdueCount: 0 }),
+          ]
+        : sourceRows;
+      const total = rows.reduce((sum, row) => sum + row.chartValue, 0);
+      if (!total) return `<div class="empty-list">暂无可下钻数据</div>`;
+      let currentAngle = 0;
+      const paths = rows.map((row, index) => {
+        const start = currentAngle;
+        const end = currentAngle + row.chartValue / total * 360;
+        currentAngle = end;
+        const color = colors[index % colors.length];
+        const clickable = !spec.static && row.value && row.value !== "-";
+        return `<path d="${donutSegmentPath(120, 120, 104, 58, start, end)}" fill="${color}" ${clickable ? `data-filter-key="${escapeAttr(spec.key)}" data-filter-value="${escapeAttr(row.value)}" onclick="drillDashboardDimensionFromElement(this)"` : ""}><title>${escapeHtml(row.label)} ${row.chartValue}</title></path>`;
+      }).join("");
+      const list = rows.map((row, index) => {
+        const color = colors[index % colors.length];
+        const clickable = !spec.static && row.value && row.value !== "-";
+        return `
+          <div class="dimension-drill-row ${clickable ? "" : "is-static"}" ${clickable ? `data-filter-key="${escapeAttr(spec.key)}" data-filter-value="${escapeAttr(row.value)}" onclick="drillDashboardDimensionFromElement(this)"` : ""}>
+            <i class="dimension-dot" style="background:${color}"></i>
+            <div>
+              <div class="dimension-drill-name" title="${escapeAttr(row.label)}">${escapeHtml(row.label)}</div>
+              <div class="dimension-drill-meta">进行中 ${row.inProgressCount} · 待验收 ${row.pendingReviewCount} · 延期 ${row.overdueCount}</div>
+            </div>
+            <div class="dimension-drill-value">${row.chartValue}</div>
+          </div>
+        `;
+      }).join("");
+      return `
+        <div class="dimension-donut-wrap">
+          <svg class="dimension-donut" viewBox="0 0 240 240" role="img" aria-label="${escapeAttr(summary.title)}下钻饼图">
+            ${paths}
+            <circle cx="120" cy="120" r="52" fill="#fffdf7"></circle>
+            <text x="120" y="116" class="dimension-donut-center">${total}</text>
+            <text x="120" y="137" class="dimension-donut-caption">需求</text>
+          </svg>
+        </div>
+        <div class="dimension-drill-list">${list}</div>
+      `;
     }
     function renderDimensionSummaryBoard(factRows) {
       const box = qs("dimensionSummaryBoard");
       if (!box) return;
-      const grouping = dashboardSummaryGroupingSpec();
-      const summary = summarizeFactsBy(factRows, grouping.title, grouping.getter);
+      const spec = activeDashboardDrillSpec();
+      const summary = summarizeFactsBy(factRows, spec.title, spec.getter, spec.valueGetter, spec.key);
       box.innerHTML = `
         <div class="dimension-summary-card">
-          <h4>按${escapeHtml(summary.title)}汇总</h4>
-          ${summary.rows.length ? `
-            <table>
-              <thead><tr><th>名称</th><th>需求</th><th>任务</th><th>资产</th></tr></thead>
-              <tbody>
-                ${summary.rows.map(row => `
-                  <tr>
-                    <td><div class="dimension-cell-sub" title="${escapeAttr(row.label)}">${escapeHtml(row.label)}</div></td>
-                    <td>${row.requirementCount}</td>
-                    <td>${row.taskCount}</td>
-                    <td>${row.assetCount}</td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-          ` : `<div class="empty-list">暂无数据</div>`}
+          <div>
+            <div class="kicker">当前下钻维度</div>
+            <h4>按${escapeHtml(summary.title)}查看需求占比</h4>
+            <p class="row-sub">${spec.static ? "已到最细维度，当前按任务状态查看分布。" : "点击饼图扇区或右侧条目继续下钻。"}</p>
+          </div>
+          ${renderDimensionDonut(summary, spec)}
         </div>
-      `;
-    }
-    function renderDashboardTaskDetails(factRows) {
-      const box = qs("boardBox");
-      if (!box) return;
-      const rows = factRows.filter(row => row.task).sort((a, b) => taskRiskScore(b.task) - taskRiskScore(a.task));
-      box.innerHTML = `
-        <table>
-          <thead><tr><th>基金客户</th><th>业务维度</th><th>任务</th><th>执行人</th><th>状态</th><th>报价</th><th>资产</th></tr></thead>
-          <tbody>${rows.map(row => `
-            <tr>
-              <td>${safeText(row.customerName)}</td>
-              <td>${safeText(row.businessCategory)}<br><span class="row-sub">${safeText(row.businessPlatform)} · ${safeText(row.secondaryCategory)} · ${safeText(row.tertiaryCategory)}</span></td>
-              <td>${safeText(row.task.task_no)}<br><span class="row-sub">${safeText(row.task.task_name)}</span></td>
-              <td>${safeText(row.employeeName)}</td>
-              <td><span class="tag">${safeText(row.overdue ? "已延期" : taskStatusLabel(row.task.status))}</span></td>
-              <td>${safeText(quoteScopeStatusLabel(row.item.quote_scope_status))}</td>
-              <td>${safeText(assetCountText(row.task))}</td>
-            </tr>
-          `).join("") || `<tr><td colspan="7" class="muted">暂无任务数据</td></tr>`}</tbody>
-        </table>
       `;
     }
     function taskAssetCount(task) {
@@ -4833,7 +5023,8 @@
     }
     function taskProgressGroup(task) {
       if (isTaskCompleted(task)) return "completed";
-      if (["in_progress", "blocked", "pending_review"].includes(task?.status)) return "inProgress";
+      if (task?.status === "pending_review") return "pendingReview";
+      if (["in_progress", "blocked"].includes(task?.status)) return "inProgress";
       if (["todo", "pending", "assigned"].includes(task?.status) && taskAssetCount(task) === 0) return "notStarted";
       return "inProgress";
     }
@@ -4855,17 +5046,17 @@
       if (!total) return 0;
       return Math.round((value / total) * 100);
     }
-    function renderTaskStatusOverview({ quarterTasks }) {
+    function renderTaskStatusOverview({ visibleTasks }) {
       const box = qs("taskStatusOverview");
       if (!box) return;
-      const total = quarterTasks.length;
-      const overdue = quarterTasks.filter(isTaskOverdue).length;
-      const completed = quarterTasks.filter(isTaskCompleted).length;
-      const notStarted = quarterTasks.filter(task => taskProgressGroup(task) === "notStarted").length;
+      const total = visibleTasks.length;
+      const overdue = visibleTasks.filter(isTaskOverdue).length;
+      const completed = visibleTasks.filter(isTaskCompleted).length;
+      const pendingReview = visibleTasks.filter(task => taskProgressGroup(task) === "pendingReview").length;
       box.innerHTML = `
         <div class="section-title">
           <div>
-            <div class="kicker">Task Status</div>
+            <div class="kicker">任务状态</div>
             <h3>任务状态总览</h3>
           </div>
           <span class="tag">按当前筛选实时统计</span>
@@ -4873,17 +5064,17 @@
         <div class="dashboard-stat-row">
           <div class="dashboard-stat-card"><span>任务数</span><strong>${total}</strong></div>
           <div class="dashboard-stat-card warn"><span>延期任务</span><strong>${overdue}</strong></div>
+          <div class="dashboard-stat-card neutral"><span>待验收任务</span><strong>${pendingReview}</strong></div>
           <div class="dashboard-stat-card ok"><span>已验收任务</span><strong>${completed}</strong></div>
-          <div class="dashboard-stat-card neutral"><span>未开始任务</span><strong>${notStarted}</strong></div>
         </div>
       `;
     }
-    function renderTaskPriorityOverview({ quarterTasks }) {
+    function renderTaskPriorityOverview({ visibleTasks }) {
       const box = qs("taskPriorityOverview");
       if (!box) return;
       const counts = new Map();
       let unsetCount = 0;
-      quarterTasks.forEach(task => {
+      visibleTasks.forEach(task => {
         const index = priorityIndexFromValue(task?.priority);
         if (index === null) {
           unsetCount += 1;
@@ -4891,7 +5082,7 @@
         }
         counts.set(index, (counts.get(index) || 0) + 1);
       });
-      const indexes = [...counts.keys()].sort((a, b) => a - b).slice(0, 7);
+      const indexes = [...counts.keys()].filter(index => index <= 4).sort((a, b) => a - b);
       const cards = indexes.map(index => [
         `P${index}`,
         index === 0 ? "今天完成" : index === 4 ? "3天后" : `${index}天后完成`,
@@ -4902,27 +5093,27 @@
       box.innerHTML = `
         <div class="section-title">
           <div>
-            <div class="kicker">Priority</div>
+            <div class="kicker">优先级</div>
             <h3>任务优先级</h3>
           </div>
-          <span class="tag">P0-PN</span>
+          <span class="tag">P0-P4</span>
         </div>
-        <div class="priority-strip">
+        ${cards.length ? `<div class="priority-strip">
           ${cards.map(([level, label, count, tone]) => `
             <div class="priority-card">
               <span>${level} · ${label}</span>
               <strong>${count}</strong>
-              <div class="bar-track"><div class="bar-fill ${tone}" style="width:${count ? Math.max(6, percentage(count, quarterTasks.length)) : 0}%"></div></div>
+              <div class="bar-track"><div class="bar-fill ${tone}" style="width:${count ? Math.max(6, percentage(count, visibleTasks.length)) : 0}%"></div></div>
             </div>
           `).join("")}
-        </div>
+        </div>` : `<div class="empty-list">暂无优先级数据</div>`}
       `;
     }
-    function renderAssigneeLoadBoard({ quarterTasks }) {
+    function renderAssigneeLoadBoard({ visibleTasks }) {
       const box = qs("assigneeLoadBoard");
       if (!box) return;
       const groups = new Map();
-      quarterTasks.forEach(task => {
+      visibleTasks.forEach(task => {
         const id = task.assignee_user_id || "unassigned";
         const current = groups.get(id) || { label: id === "unassigned" ? "未指派" : assigneeName(id), normal: 0, overdue: 0, total: 0 };
         current.total += 1;
@@ -4933,11 +5124,11 @@
       const rows = [...groups.values()].sort((a, b) => b.total - a.total || b.overdue - a.overdue).slice(0, 8);
       renderStackedBarList(box, rows, "暂无执行人任务数据");
     }
-    function renderCategoryTaskBoard({ quarterTasks }) {
+    function renderCategoryTaskBoard({ visibleTasks }) {
       const box = qs("categoryTaskBoard");
       if (!box) return;
       const groups = new Map();
-      quarterTasks.forEach(task => {
+      visibleTasks.forEach(task => {
         const dimensions = requirementDimensionSnapshot(requirementForTask(task), task);
         const label = dimensions.tertiaryCategory || dimensions.secondaryCategory || projectTypeLabel(dimensions.businessCategory);
         const key = label || "未分类";
@@ -4946,7 +5137,7 @@
       const rows = [...groups.entries()].map(([label, total]) => ({ label, total })).sort((a, b) => b.total - a.total).slice(0, 8);
       renderBarList(box, rows, "暂无分类任务数据");
     }
-    function renderUrgencyBoard({ quarterTasks }) {
+    function renderUrgencyBoard({ visibleTasks }) {
       const box = qs("urgencyBoard");
       if (!box) return;
       const labels = {
@@ -4956,7 +5147,7 @@
         normal: "不紧急不重要",
       };
       const groups = Object.fromEntries(Object.keys(labels).map(key => [key, { label: labels[key], normal: 0, overdue: 0, total: 0 }]));
-      quarterTasks.forEach(task => {
+      visibleTasks.forEach(task => {
         const current = groups[urgencyBucket(task)];
         current.total += 1;
         if (isTaskOverdue(task)) current.overdue += 1;
@@ -4964,16 +5155,17 @@
       });
       renderStackedBarList(box, Object.values(groups), "暂无紧急程度数据");
     }
-    function renderTaskFunnelBoard({ quarterTasks }) {
+    function renderTaskFunnelBoard({ visibleTasks }) {
       const box = qs("taskFunnelBoard");
       if (!box) return;
-      const counts = { notStarted: 0, inProgress: 0, completed: 0 };
-      quarterTasks.forEach(task => counts[taskProgressGroup(task)] += 1);
-      const total = quarterTasks.length;
+      const counts = { notStarted: 0, inProgress: 0, pendingReview: 0, completed: 0 };
+      visibleTasks.forEach(task => counts[taskProgressGroup(task)] += 1);
+      const total = visibleTasks.length;
       const steps = [
         ["待开始", counts.notStarted, "warn", total],
         ["进行中", counts.inProgress, "ok", counts.notStarted || total],
-        ["已验收", counts.completed, "mid", counts.inProgress || total],
+        ["待验收", counts.pendingReview, "neutral", counts.inProgress || total],
+        ["已验收", counts.completed, "mid", counts.pendingReview || total],
       ];
       box.innerHTML = total ? `
         <div class="funnel">
@@ -4991,11 +5183,11 @@
         </div>
       ` : `<div class="empty-list">暂无任务进展数据</div>`;
     }
-    function renderKeyTaskBoard({ quarterTasks }) {
+    function renderKeyTaskBoard({ visibleTasks }) {
       const box = qs("keyTaskBoard");
       if (!box) return;
       box.classList.add("key-task-table");
-      const rows = [...quarterTasks]
+      const rows = [...visibleTasks]
         .sort((a, b) => taskRiskScore(b) - taskRiskScore(a) || new Date(b.created_at || 0) - new Date(a.created_at || 0))
         .slice(0, 12);
       if (!rows.length) {
@@ -5004,7 +5196,7 @@
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>编号</th><th>基金客户</th><th>业务维度</th><th>任务</th><th>执行人</th><th>状态</th><th>优先级</th><th>报价</th><th>资产</th><th>截止时间</th></tr></thead>
+          <thead><tr><th>编号</th><th>基金客户</th><th>业务维度</th><th>任务</th><th>执行人</th><th>状态</th><th>优先级</th><th>资产</th><th>截止时间</th></tr></thead>
           <tbody>
             ${rows.map(task => {
               const requirement = requirementForTask(task);
@@ -5020,7 +5212,6 @@
                   <td>${safeText(assigneeName(task.assignee_user_id))}</td>
                   <td><span class="tag">${safeText(isTaskOverdue(task) ? "已延期" : taskStatusLabel(task.status))}</span></td>
                   <td>${safeText(priorityLabel(task.priority))}</td>
-                  <td>${safeText(quoteScopeStatusLabel(item?.quote_scope_status))}</td>
                   <td>${safeText(assetCountText(task))}</td>
                   <td>${safeText(shortDate(taskDueDate(task)))}</td>
                 </tr>
@@ -5088,12 +5279,11 @@
       `;
     }
     function taskRiskScore(task) {
-      const item = taskRequirementItem(task);
       let score = 0;
       if (isTaskOverdue(task)) score += 100;
       const priorityIndex = priorityIndexFromValue(task?.priority);
       if (priorityIndex !== null) score += Math.max(0, 55 - priorityIndex * 8);
-      if (isPendingQuoteScopeStatus(item?.quote_scope_status)) score += 18;
+      if (task?.status === "pending_review") score += 30;
       if (taskProgressGroup(task) === "notStarted") score += 10;
       if (isTaskDueSoon(task)) score += 8;
       return score;
