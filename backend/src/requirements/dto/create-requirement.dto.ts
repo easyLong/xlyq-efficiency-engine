@@ -4,8 +4,13 @@ export class CreateRequirementDto {
   @IsUUID()
   projectId!: string;
 
-  @IsUUID()
-  customerId!: string;
+  @IsString()
+  @IsNotEmpty()
+  customerCode!: string;
+
+  @IsOptional()
+  @IsString()
+  customerId?: string;
 
   @IsString()
   @IsNotEmpty()

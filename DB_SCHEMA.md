@@ -13,7 +13,7 @@
 - 当前运行库名为 `ops_platform`。
 - 当前 MVP 仍保留 `projects` 作为后台挂靠对象，但业务筛选不再使用“项目”作为前台维度。
 - 前台核心筛选维度为：基金、业务平台、业务大类、二级分类、员工；对接人保留为需求来源和录入辅助，不再作为全局统计筛选。
-- 对接人配置表为 `contact_context_configs`，当前只明确维护对接人、基金客户、业务平台。
+- 群内对接人映射表为 `group_contact_mappings`，用于维护“群 + 对接人 -> 基金客户 + 业务平台”；旧的 `contact_context_configs`、`source_contact_contexts`、`wechat_group_configs` 仅作为迁移来源。
 - 业务大类与二级分类关系表为 `business_category_secondary_categories`，用于大类选择后二级分类下拉联动。
 - 业务大类负责人配置表为 `business_category_owner_configs`，用于将需求录入后的任务负责人写入 `tasks.reporter_user_id`；任务被指派员工写入 `tasks.assignee_user_id`。
 - 合同报价导入只选择基金客户和文件/文本；报价合同可覆盖多个业务大类。CSV 合同优先按表格结构解析，识别最细粒度子项、单位和单价。
@@ -99,6 +99,7 @@ users n---n roles (via user_roles)
 projects n---n users (via project_members)
 tasks 1---n task_status_histories
 dimension_dictionaries self parent_code/dimension_code hierarchy
+group_contact_mappings maps group + contact to customer + platform
 business_category_secondary_categories stores category-secondary relation
 business_category_owner_configs maps business category to requirement owner
 ```
@@ -138,6 +139,30 @@ business_category_owner_configs maps business category to requirement owner
 唯一约束：
 
 - `(dimension_type, dimension_code)`
+
+### `group_contact_mappings`
+
+??????????????????????????
+
+| ?? | ?? | ?? |
+|---|---|---|
+| id | char(36) | ?? |
+| group_key | varchar(255) | ????????? ID???? ID ????? hash |
+| group_name | varchar(255) | ??? |
+| contact_name | varchar(64) | ??????? |
+| customer_code | varchar(32) | 基金简称，关联 `customers.customer_code` |
+| business_platform | varchar(64) | ???? |
+| collect_enabled | tinyint(1) | ?????? |
+| status | varchar(32) | active/inactive |
+| remark | varchar(255) | ?? |
+| created_at / updated_at / deleted_at | datetime | ???? |
+
+?????
+- `(group_key, contact_name)`
+
+???
+- ??????????????????
+- ??????? `group_contact_mappings`?`contact_context_configs`?`source_contact_contexts`?`wechat_group_configs` ???????????
 
 ### `business_category_secondary_categories`
 
@@ -268,7 +293,7 @@ business_category_owner_configs maps business category to requirement owner
 | id | uuid | pk | 项目ID |
 | project_code | varchar(32) | unique, not null | 项目编码 |
 | project_name | varchar(128) | not null | 项目名称 |
-| customer_id | uuid | fk, not null | 客户ID |
+| customer_code | varchar(32) | not null | 基金简称，关联 `customers.customer_code` |
 | owner_user_id | uuid | fk, not null | 项目经理 |
 | project_type | varchar(32) | null | 项目类型 |
 | status | varchar(32) | not null | `pending/in_progress/paused/completed/settled` |
@@ -285,7 +310,7 @@ business_category_owner_configs maps business category to requirement owner
 索引建议：
 
 - `uk_projects_project_code`
-- `idx_projects_customer_id`
+- `idx_projects_customer_code`
 - `idx_projects_owner_user_id`
 - `idx_projects_status`
 - `idx_projects_planned_end_date`
@@ -336,7 +361,7 @@ business_category_owner_configs maps business category to requirement owner
 | id | uuid | pk | 需求ID |
 | requirement_code | varchar(32) | unique, not null | 需求编码 |
 | project_id | uuid | fk, not null | 所属项目 |
-| customer_id | uuid | fk, not null | 所属客户 |
+| customer_code | varchar(32) | not null | 基金简称，关联 `customers.customer_code` |
 | title | varchar(256) | not null | 需求标题 |
 | source_type | varchar(32) | not null | `manual/feishu_doc/feishu_message/import` |
 | source_ref_id | varchar(128) | null | 外部来源ID |
@@ -356,7 +381,7 @@ business_category_owner_configs maps business category to requirement owner
 
 - `uk_requirements_requirement_code`
 - `idx_requirements_project_id`
-- `idx_requirements_customer_id`
+- `idx_requirements_customer_code`
 - `idx_requirements_status`
 - `idx_requirements_source_type_source_ref_id`
 
@@ -671,7 +696,7 @@ business_category_owner_configs maps business category to requirement owner
 | id | uuid | pk | 报价单ID |
 | quotation_no | varchar(32) | unique, not null | 报价单编号 |
 | project_id | uuid | fk, not null | 项目ID |
-| customer_id | uuid | fk, not null | 客户ID |
+| customer_code | varchar(32) | not null | 基金简称，关联 `customers.customer_code` |
 | status | varchar(32) | not null | `draft/pending_review/pending_customer_confirm/confirmed/rejected/settled` |
 | pricing_basis | varchar(32) | not null | `mapping/manual/mixed` |
 | total_amount | numeric(14,2) | not null default 0 | 总金额 |
@@ -690,7 +715,7 @@ business_category_owner_configs maps business category to requirement owner
 
 - `uk_quotations_quotation_no`
 - `idx_quotations_project_id`
-- `idx_quotations_customer_id`
+- `idx_quotations_customer_code`
 - `idx_quotations_status`
 
 ## 12.4 `quotation_items`

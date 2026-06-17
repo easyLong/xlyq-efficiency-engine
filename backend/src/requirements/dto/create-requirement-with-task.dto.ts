@@ -4,8 +4,13 @@ export class CreateRequirementWithTaskDto {
   @IsUUID()
   projectId!: string;
 
-  @IsUUID()
-  customerId!: string;
+  @IsString()
+  @IsNotEmpty()
+  customerCode!: string;
+
+  @IsOptional()
+  @IsString()
+  customerId?: string;
 
   @IsString()
   @IsNotEmpty()

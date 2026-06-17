@@ -178,7 +178,13 @@
       box-shadow: 0 10px 26px rgba(45, 63, 46, .1);
     }
     .ai-preview-main { min-width: 0; display: grid; gap: 8px; }
-    .ai-preview-title { font-size: 15px; font-weight: 700; color: #253125; line-height: 1.35; }
+    .ai-preview-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .ai-preview-title { min-width: 0; font-size: 15px; font-weight: 700; color: #253125; line-height: 1.35; }
     .ai-preview-meta,
     .ai-preview-dims { display: flex; flex-wrap: wrap; gap: 6px; }
     .ai-preview-meta span,
@@ -199,6 +205,14 @@
       overflow: auto;
       padding-left: 12px;
       border-left: 1px solid #e2e8da;
+    }
+    .ai-preview-reject {
+      flex: 0 0 auto;
+      width: auto;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
     }
     .ai-preview-side-title { margin-bottom: 6px; color: #667163; font-size: 12px; font-weight: 700; }
     .ai-preview-evidence { display: grid; gap: 7px; }
@@ -968,7 +982,6 @@
                   </select>
                 </label>
               </div>
-              <div id="projectPreview" class="preview-box muted">请选择客户和业务大类。</div>
               <label>业务命名
                 <input id="businessNameInput" placeholder="人工填写，例如：2026Q2国联安季报制作" />
               </label>
@@ -1018,7 +1031,7 @@
               </div>
               <span class="tag">等待管理者确认</span>
             </div>
-            <div class="panel-note" id="aiPreviewNote">自动读取 AI 预览候选，先展示待确认需求，不进入正式需求库。</div>
+            <div class="panel-note" id="aiPreviewNote">自动读取AI识别到的预览候选，需人工确认后进入真实需求库。</div>
             <div id="aiPreviewBoard"></div>
           </div>
           <div id="requirementMetrics" class="summary-strip requirement-metrics"></div>
@@ -1493,12 +1506,12 @@
       renderLoginUsers();
       const fundCustomers = state.customers.filter(c => c.industry === "公募基金");
       const customers = [...(fundCustomers.length ? fundCustomers : state.customers)].sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
-      qs("customerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
-      qs("quoteCustomerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
-      qs("mappingCustomerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
+      qs("customerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_name || c.customer_code || "客户")}</option>`).join("");
+      qs("quoteCustomerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
+      qs("mappingCustomerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
       qs("mappingQuarterSelect").innerHTML = quarterOptions().map(item => `<option value="${item.value}">${item.label}</option>`).join("");
-      qs("settlementCustomerSelect").innerHTML = [`<option value="all">全部基金客户</option>`, ...customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`)].join("");
-      state.mappingCustomerId ||= customers[0]?.id || null;
+      qs("settlementCustomerSelect").innerHTML = [`<option value="all">全部基金客户</option>`, ...customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`)].join("");
+      state.mappingCustomerId ||= customers[0]?.customer_code || null;
       state.mappingQuarter ||= currentQuarter();
       state.settlementQuarter ||= currentQuarter();
       state.analyticsQuarter ||= currentQuarter();
@@ -1530,7 +1543,7 @@
       if (!select) return;
       select.innerHTML = [
         `<option value="all">全部基金客户</option>`,
-        ...customers.map(c => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.customer_code || "基金")} · ${escapeHtml(c.customer_name)}</option>`),
+        ...customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "基金")} · ${escapeHtml(c.customer_name)}</option>`),
       ].join("");
       select.value = state.analyticsCustomerId;
     }
@@ -1540,12 +1553,12 @@
       const activeContexts = state.contactContexts.filter(item => item.status !== "inactive");
       select.innerHTML = [
         `<option value="">手动选择客户和平台</option>`,
-        ...activeContexts.map(item => `<option value="${item.id}">${escapeHtml(contactContextLabel(item))}</option>`),
+        ...activeContexts.map(item => `<option value="${item.id}">${escapeHtml(item.contact_name || "对接人")}</option>`),
       ].join("");
       syncContactContextPreview(null);
     }
     function contactContextLabel(context) {
-      const customer = state.customers.find(item => item.id === context.customer_id);
+      const customer = state.customers.find(item => item.customer_code === context.customer_code);
       return [
         context.contact_name,
         customer?.customer_name,
@@ -1563,12 +1576,12 @@
         await syncProjectSelection(false);
         return;
       }
-      if (context.customer_id && qs("customerSelect")) qs("customerSelect").value = context.customer_id;
+      if (context.customer_code && qs("customerSelect")) qs("customerSelect").value = context.customer_code;
       syncContactContextPreview(context);
       await syncProjectSelection(false);
     }
     function syncContactContextPreview(context) {
-      if (qs("businessPlatformInput")) qs("businessPlatformInput").value = context?.business_platform || "";
+      if (qs("businessPlatformInput")) qs("businessPlatformInput").value = normalizeBusinessPlatform(context?.business_platform || "");
     }
     async function login() {
       const username = qs("loginUsername").value.trim() || qs("loginUser").value;
@@ -1650,7 +1663,7 @@
       if (view === "messages") refreshMessages();
     }
     function selectedCustomer() {
-      return state.customers.find(c => c.id === qs("customerSelect").value);
+      return state.customers.find(c => c.customer_code === qs("customerSelect").value);
     }
     function selectedProjectType() {
       return projectTypes.find(t => t.value === qs("projectTypeSelect").value) || projectTypes[0];
@@ -1770,7 +1783,7 @@
     }
     function customerNameForTask(task) {
       const project = projectForTask(task);
-      return project ? customerName(project.customer_id) : "-";
+      return project ? customerName(project.customer_code) : "-";
     }
     function assigneeName(id) {
       const user = getLookupMaps().userById.get(id);
@@ -1810,7 +1823,7 @@
       const context = contactContextForRequirement(requirement);
       const project = projectForRequirement(requirement);
       return {
-        customerId: requirement?.customer_id || project?.customer_id || "",
+        customerId: requirement?.customer_code || project?.customer_code || "",
         contactContextId: requirement?.source_ref_id || "",
         businessPlatform: requirement?.business_platform || context?.business_platform || "",
         businessCategory: requirement?.business_category || project?.project_type || "",
@@ -1851,7 +1864,7 @@
       const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
       return [...(fundCustomers.length ? fundCustomers : state.customers)]
         .sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""))
-        .map(customer => ({ value: customer.id, label: `${customer.customer_code || "基金"} · ${customer.customer_name}` }));
+        .map(customer => ({ value: customer.customer_code, label: `${customer.customer_code || "基金"} · ${customer.customer_name}` }));
     }
     function dimensionEmployeeOptions() {
       return state.users
@@ -2275,7 +2288,7 @@
           requirement,
           item,
           task,
-          customer: customerName(requirement.customer_id),
+          customer: customerName(requirement.customer_code),
           contactContext: context?.contact_name || "",
           businessPlatform: dimensions.businessPlatform,
           businessCategory: projectTypeLabel(dimensions.businessCategory),
@@ -2393,7 +2406,10 @@
           return `
             <article class="ai-preview-card ${isActive ? "active" : ""}" onclick="applyAiPreviewCandidate('${escapeAttr(row.candidate_id || "")}')">
               <div class="ai-preview-main">
-                <div class="ai-preview-title">${safeText(row.demand_title || row.business_name || `候选需求 #${row.candidate_id}`)}</div>
+                <div class="ai-preview-head">
+                  <div class="ai-preview-title">${safeText(row.demand_title || row.business_name || `候选需求 #${row.candidate_id}`)}</div>
+                  <button class="btn danger ai-preview-reject" onclick="rejectAiPreviewCandidate(event, '${escapeAttr(row.candidate_id || "")}')">标记伪需求</button>
+                </div>
                 <div class="ai-preview-meta">
                   <span>${safeText(row.chat_name || row.customer_name || "-")}</span>
                   ${row.owner_name ? `<span>对接人 ${safeText(row.owner_name)}</span>` : ""}
@@ -2424,6 +2440,28 @@
           `;
         }).join("")
       }</div>`;
+    }
+    async function rejectAiPreviewCandidate(event, candidateId) {
+      event?.stopPropagation();
+      if (!candidateId) return;
+      const confirmed = await confirmDialog({
+        title: "标记伪需求",
+        message: "确认将这条 AI 预览候选标记为伪需求吗？标记后将不再显示在预览区。",
+        okText: "标记伪需求",
+      });
+      if (!confirmed) return;
+      try {
+        await request(`/requirements/ai-preview-candidates/${encodeURIComponent(candidateId)}/reject`, { method: "POST" });
+        state.aiPreviewCandidates = (state.aiPreviewCandidates || []).filter(item => String(item.candidate_id) !== String(candidateId));
+        if (String(state.selectedAiPreviewCandidateId || "") === String(candidateId)) {
+          state.selectedAiPreviewCandidateId = null;
+          updateCreateRequirementButtonLabel();
+        }
+        renderAiPreviewBoard();
+        toast("已标记为伪需求");
+      } catch (error) {
+        toast(error.message);
+      }
     }
     function normalizePreviewText(value) {
       return String(value || "").replace(/\s+/g, "").toLowerCase();
@@ -2482,15 +2520,15 @@
         });
         if (ownerNames.length && bestNameScore <= 0) continue;
         let score = bestNameScore;
-        if (matchedCustomer?.id && context.customer_id === matchedCustomer.id) score += 35;
+        if (matchedCustomer?.customer_code && context.customer_code === matchedCustomer.customer_code) score += 35;
         score += platformMatchScore(context.business_platform, candidate.business_platform);
         scored.push({ context, score, bestNameIndex });
       }
       scored.sort((a, b) => b.score - a.score || a.bestNameIndex - b.bestNameIndex);
       if (scored[0]?.score > 0) return scored[0].context;
-      if (!ownerNames.length && matchedCustomer?.id) {
+      if (!ownerNames.length && matchedCustomer?.customer_code) {
         const fallback = activeContexts.filter(context =>
-          context.customer_id === matchedCustomer.id &&
+          context.customer_code === matchedCustomer.customer_code &&
           (!candidate.business_platform || platformMatchScore(context.business_platform, candidate.business_platform) > 0)
         );
         return fallback.length === 1 ? fallback[0] : null;
@@ -2542,15 +2580,14 @@
         qs("contactContextSelect").value = contactContext.id;
         syncContactContextPreview(contactContext);
       }
-      if ((contactContext?.customer_id || customer?.id) && qs("customerSelect")) {
-        qs("customerSelect").value = contactContext?.customer_id || customer.id;
+      if ((contactContext?.customer_code || customer?.customer_code) && qs("customerSelect")) {
+        qs("customerSelect").value = contactContext?.customer_code || customer.customer_code;
       }
       const categoryValue = matchBusinessCategoryValue(candidate.business_category);
       ensureSelectOption(qs("projectTypeSelect"), categoryValue);
       if (categoryValue && qs("projectTypeSelect")) qs("projectTypeSelect").value = categoryValue;
       await syncProjectSelection(false);
-      const businessPlatform = candidate.business_platform || contactContext?.business_platform || "";
-      ensureSelectOption(qs("businessPlatformInput"), businessPlatform);
+      const businessPlatform = normalizeBusinessPlatform(candidate.business_platform || contactContext?.business_platform || "");
       if (qs("businessPlatformInput")) qs("businessPlatformInput").value = businessPlatform;
       renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", candidate.secondary_category || "");
       if (qs("secondaryCategoryInput")) qs("secondaryCategoryInput").value = candidate.secondary_category || "";
@@ -2751,7 +2788,7 @@
           </div>
         `;
       }
-      const hasLoadedItems = quotationsForCustomer(row.requirement.customer_id).some(quotation => (state.quotationItemsById[quotation.id] || []).length);
+      const hasLoadedItems = quotationsForCustomer(row.requirement.customer_code).some(quotation => (state.quotationItemsById[quotation.id] || []).length);
       return `
         <div class="quote-action ${hasLoadedItems || selectedItem ? "with-select" : "quote-action-compact"}" onclick="event.stopPropagation()">
           ${hasLoadedItems || selectedItem
@@ -2765,7 +2802,7 @@
       `;
     }
     function requirementQuoteItemOptions(row) {
-      const quotations = quotationsForCustomer(row.requirement.customer_id);
+      const quotations = quotationsForCustomer(row.requirement.customer_code);
       const selectedId = row.mapping?.quotation_item_id || "";
       const options = [`<option value="">选择报价子项</option>`];
       for (const quotation of quotations) {
@@ -2784,7 +2821,7 @@
     }
     function quotationsForCustomer(customerId) {
       return state.quotations
-        .filter(item => item.customer_id === customerId)
+        .filter(item => item.customer_code === customerId)
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     }
     async function loadRequirementQuoteOptions(requirementId) {
@@ -2795,7 +2832,7 @@
       state.busyActionId = `quote-${row.item.id}`;
       renderRequirementBoard();
       try {
-        const quotations = quotationsForCustomer(row.requirement.customer_id);
+        const quotations = quotationsForCustomer(row.requirement.customer_code);
         if (!quotations.length) {
           state.quoteEditingItemId = null;
           toast("该基金暂无合同报价，请先上传合同报价");
@@ -2873,7 +2910,7 @@
               <label>
                 基金客户
                 <select id="edit-customer-${requirement.id}" onchange="renderEditProjectHint('${requirement.id}')">
-                  ${editCustomerOptions(requirement.customer_id)}
+                  ${editCustomerOptions(requirement.customer_code)}
                 </select>
               </label>
               <label>
@@ -2883,7 +2920,7 @@
                 </select>
               </label>
               <div class="edit-project-hint muted" id="edit-project-hint-${requirement.id}">
-                ${editProjectHint(requirement.customer_id, project?.project_type)}
+                ${editProjectHint(requirement.customer_code, project?.project_type)}
               </div>
               <label>
                 业务命名
@@ -2931,15 +2968,15 @@
       const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
       const customers = [...(fundCustomers.length ? fundCustomers : state.customers)]
         .sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
-      return customers.map(customer => `<option value="${customer.id}" ${customer.id === selectedCustomerId ? "selected" : ""}>${customer.customer_code || "客户"} · ${customer.customer_name}</option>`).join("");
+      return customers.map(customer => `<option value="${customer.customer_code}" ${customer.customer_code === selectedCustomerId ? "selected" : ""}>${customer.customer_code || "客户"} · ${customer.customer_name}</option>`).join("");
     }
     function editProjectTypeOptions(selectedProjectType) {
       return projectTypes.map(type => `<option value="${type.value}" ${type.value === selectedProjectType ? "selected" : ""}>${type.label}</option>`).join("");
     }
     function editProjectHint(customerId, projectType) {
-      const customer = state.customers.find(item => item.id === customerId);
+      const customer = state.customers.find(item => item.customer_code === customerId);
       const type = projectTypes.find(item => item.value === projectType) || projectTypes[0];
-      const project = state.projects.find(item => item.customer_id === customerId && item.project_type === type?.value);
+      const project = state.projects.find(item => item.customer_code === customerId && item.project_type === type?.value);
       if (project) return `后台挂靠：${project.project_name}`;
       return `保存时会自动创建后台挂靠：${customer?.customer_name || ""}${type?.label || ""}`;
     }
@@ -3002,7 +3039,7 @@
       const priority = qs(`edit-priority-${requirementId}`)?.value;
       const urgencyLevel = qs(`edit-urgency-${requirementId}`)?.value;
       const businessName = qs(`edit-business-name-${requirementId}`)?.value.trim();
-      const businessPlatform = qs(`edit-business-platform-${requirementId}`)?.value;
+      const businessPlatform = normalizeBusinessPlatform(qs(`edit-business-platform-${requirementId}`)?.value);
       const tertiaryCategory = qs(`edit-tertiary-category-${requirementId}`)?.value.trim();
       const customerId = qs(`edit-customer-${requirementId}`)?.value;
       const projectType = qs(`edit-project-type-${requirementId}`)?.value;
@@ -3018,7 +3055,7 @@
 
         const result = await request(`/requirements/${requirementId}`, {
           method: "PATCH",
-          body: { title, rawContent, priority, urgencyLevel, customerId, projectId: project.id, businessName, businessPlatform: businessPlatform || undefined, tertiaryCategory },
+          body: { title, rawContent, priority, urgencyLevel, customerCode: customerId, projectId: project.id, businessName, businessPlatform: businessPlatform || undefined, tertiaryCategory },
         });
         if (result.requirement) {
           state.requirements = state.requirements.map(item => item.id === requirementId ? result.requirement : item);
@@ -3046,13 +3083,13 @@
       }
     }
     async function ensureProjectForContext(customerId, projectType) {
-      const customer = state.customers.find(item => item.id === customerId);
+      const customer = state.customers.find(item => item.customer_code === customerId);
       const type = projectTypes.find(item => item.value === projectType)
         || (projectType === "quotation_contract"
           ? { value: "quotation_contract", label: "合同报价", budgetAmount: "0", description: "合同报价后台挂靠，不作为业务筛选维度。" }
           : null);
       if (!customer || !type) return null;
-      let project = state.projects.find(item => item.customer_id === customerId && item.project_type === projectType);
+      let project = state.projects.find(item => item.customer_code === customerId && item.project_type === projectType);
       if (project) return project;
 
       const ownerUserId = state.user?.id || state.users.find(user => user.username === "demo.pm.v2")?.id || state.users[0]?.id;
@@ -3060,7 +3097,7 @@
         method: "POST",
         body: {
           projectName: `${customer.customer_name}${type.label}项目`,
-          customerId,
+          customerCode: customerId,
           ownerUserId,
           projectType,
           priority: "high",
@@ -3115,14 +3152,14 @@
         secondarySelect?.dataset.category === type.value ? secondarySelect.value || "" : "",
       );
 
-      let project = state.projects.find(p => p.customer_id === customer.id && p.project_type === type.value);
+      let project = state.projects.find(p => p.customer_code === customer.customer_code && p.project_type === type.value);
       if (!project && createIfMissing) {
         const ownerUserId = state.user?.id || state.users.find(u => u.username === "demo.pm.v2")?.id || state.users[0]?.id;
         project = await request("/projects", {
           method: "POST",
           body: {
             projectName: `${customer.customer_name}${type.label}项目`,
-            customerId: customer.id,
+            customerCode: customer.customer_code,
             ownerUserId,
             projectType: type.value,
             priority: "high",
@@ -3141,17 +3178,10 @@
       return project;
     }
     function renderProjectPreview(customer = selectedCustomer(), type = selectedProjectType(), project = state.currentProject) {
-      const projectText = project
-        ? `后台挂靠已匹配：${project.project_name}（${project.project_code}）`
-        : `保存需求时会自动创建后台挂靠：${customer?.customer_name || ""}${type?.label || ""}`;
-      qs("projectPreview").innerHTML = `
-        <strong>${customer?.customer_name || "未选择客户"} / ${type?.label || "未选择大类"}</strong>
-        <span>${projectText}</span><br>
-        <span>基金池：${state.customers.filter(c => c.industry === "公募基金").length} 家基金客户；业务大类：${projectTypes.length} 类。</span>
-      `;
+      return;
     }
     function selectedQuoteCustomer() {
-      return state.customers.find(c => c.id === qs("quoteCustomerSelect")?.value);
+      return state.customers.find(c => c.customer_code === qs("quoteCustomerSelect")?.value);
     }
     function selectedQuoteProjectType() {
       return { value: "quotation_contract", label: "合同报价", budgetAmount: "0", description: "合同报价后台挂靠，不作为业务筛选维度。" };
@@ -3161,8 +3191,8 @@
       const type = selectedQuoteProjectType();
       if (!customer || !type) return null;
       const project = createIfMissing
-        ? await ensureProjectForContext(customer.id, type.value)
-        : state.projects.find(item => item.customer_id === customer.id && item.project_type === type.value);
+        ? await ensureProjectForContext(customer.customer_code, type.value)
+        : state.projects.find(item => item.customer_code === customer.customer_code && item.project_type === type.value);
       renderQuoteProjectPreview(customer, type, project);
       return project || null;
     }
@@ -3328,7 +3358,7 @@
           method: "POST",
           body: {
             projectId: project.id,
-            customerId: qs("quoteCustomerSelect").value,
+            customerCode: qs("quoteCustomerSelect").value,
             rawContent,
             fileName: state.loadedQuotationFileName || "手工粘贴合同报价",
           },
@@ -3350,7 +3380,7 @@
         })), result.ignoredLines || [], result);
         renderQuotationsBoard();
         renderQuotationItems(result.quotation.id);
-        linkMappingContext(result.quotation.customer_id, quarterForDate(result.quotation.created_at), result.quotation.id);
+        linkMappingContext(result.quotation.customer_code, quarterForDate(result.quotation.created_at), result.quotation.id);
         await loadQuarterMappingWorkbench(false);
         if (isViewActive("settlement")) await loadSettlementStatement(false);
       } catch (error) {
@@ -3388,7 +3418,7 @@
       renderQuotationsBoard();
       const quotation = state.quotations.find(item => item.id === quotationId);
       if (quotation) {
-        linkMappingContext(quotation.customer_id, quarterForDate(quotation.created_at), quotationId);
+        linkMappingContext(quotation.customer_code, quarterForDate(quotation.created_at), quotationId);
         loadQuarterMappingWorkbench(false);
       }
       if (isViewActive("settlement")) loadSettlementStatement(false);
@@ -3408,7 +3438,7 @@
             ${state.quotations.map(item => `
               <tr class="${state.selectedQuotationId === item.id ? "requirement-row active" : "requirement-row"}">
                 <td><div class="row-title">${safeText(item.quotation_no)}</div><div class="row-sub">${safeText(item.remark || item.pricing_basis)}</div></td>
-                <td>${safeText(customerName(item.customer_id))}</td>
+                <td>${safeText(customerName(item.customer_code))}</td>
                 <td><span class="tag">${quotationStatusLabel(item.status)}</span></td>
                 <td>${new Date(item.created_at).toLocaleString()}</td>
                 <td>
@@ -3431,7 +3461,7 @@
       }
       const quotation = state.quotations.find(item => item.id === quotationId);
       if (quotation) {
-        linkMappingContext(quotation.customer_id, quarterForDate(quotation.created_at), quotation.id);
+        linkMappingContext(quotation.customer_code, quarterForDate(quotation.created_at), quotation.id);
         loadQuarterMappingWorkbench(false);
       }
       renderQuotationsBoard();
@@ -3669,7 +3699,7 @@
       state.mappingCustomerId = customerId;
       state.mappingQuarter = quarter;
       state.mappingQuotationId = quotationId || null;
-      const query = new URLSearchParams({ customerId, quarter });
+      const query = new URLSearchParams({ customerCode: customerId, quarter });
       if (quotationId) query.set("quotationId", quotationId);
       try {
         const workbench = await request(`/quote-mappings/quarter-workbench?${query.toString()}`);
@@ -3815,11 +3845,14 @@
     }
     function businessPlatformOptions(selectedValue = "") {
       const values = [...businessPlatforms];
-      if (selectedValue && !values.includes(selectedValue)) values.unshift(selectedValue);
+      const normalizedSelectedValue = values.includes(selectedValue) ? selectedValue : "";
       return [
         `<option value="">全部平台</option>`,
-        ...values.map(value => `<option value="${escapeAttr(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHtml(value)}</option>`),
+        ...values.map(value => `<option value="${escapeAttr(value)}" ${value === normalizedSelectedValue ? "selected" : ""}>${escapeHtml(value)}</option>`),
       ].join("");
+    }
+    function normalizeBusinessPlatform(value) {
+      return businessPlatforms.includes(value) ? value : "";
     }
     function secondaryCategoryOptions(categoryValue = "", selectedValue = "") {
       const def = businessCategoryDefinitions().find(item => item.value === categoryValue);
@@ -3922,8 +3955,8 @@
     async function saveQuotationDimensionRule(quotationItemId, ruleId = "") {
       const body = {
         quotationItemId,
-        customerId: state.mappingWorkbench?.customerId || undefined,
-        businessPlatform: qs(`rule-platform-${quotationItemId}`)?.value || undefined,
+        customerCode: state.mappingWorkbench?.customerId || undefined,
+        businessPlatform: normalizeBusinessPlatform(qs(`rule-platform-${quotationItemId}`)?.value) || undefined,
         businessCategory: qs(`rule-category-${quotationItemId}`)?.value || undefined,
         secondaryCategory: qs(`rule-secondary-${quotationItemId}`)?.value || undefined,
         tertiaryCategory: qs(`rule-tertiary-${quotationItemId}`)?.value.trim() || undefined,
@@ -3977,7 +4010,7 @@
       try {
         const result = await request("/quote-mappings/quarter-suggest", {
           method: "POST",
-          body: { customerId, quarter, quotationId },
+          body: { customerCode: customerId, quarter, quotationId },
         });
         state.mappingWorkbench = result.workbench;
         syncRequirementItemsFromMappingWorkbench(result.workbench);
@@ -4057,12 +4090,12 @@
       const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
       const customers = customerId === "all"
         ? (fundCustomers.length ? fundCustomers : state.customers)
-        : state.customers.filter(customer => customer.id === customerId);
+        : state.customers.filter(customer => customer.customer_code === customerId);
       try {
         const [board, workbenchBundle] = await Promise.all([
           request(`/tasks/board?${new URLSearchParams({
             liveAssetCount: "true",
-            ...(customerId !== "all" ? { customerId } : {}),
+            ...(customerId !== "all" ? { customerCode: customerId } : {}),
           }).toString()}`),
           loadQuarterWorkbenches(customers, quarter),
         ]);
@@ -4072,7 +4105,7 @@
         const taskByRequirementItemId = new Map(taskRows.filter(task => task.requirement_item_id).map(task => [task.requirement_item_id, task]));
         const rows = workbenches
           .flatMap(workbench => buildSettlementRows(workbench, taskByRequirementItemId))
-          .filter(row => dimensionMatchesRequirement(row.requirement || { customer_id: row.customerId }, row.task));
+          .filter(row => dimensionMatchesRequirement(row.requirement || { customer_code: row.customerId }, row.task));
         state.settlementStatement = {
           customerId,
           quarter,
@@ -4086,10 +4119,10 @@
       }
     }
     async function loadQuarterWorkbenches(customers, quarter) {
-      const customerIds = customers.map(customer => customer.id).filter(Boolean);
-      if (!customerIds.length) return { quarter, workbenches: [], summary: {} };
+      const customerCodes = customers.map(customer => customer.customer_code).filter(Boolean);
+      if (!customerCodes.length) return { quarter, workbenches: [], summary: {} };
       return request(`/quote-mappings/quarter-workbenches?${new URLSearchParams({
-        customerIds: customerIds.join(","),
+        customerCodes: customerCodes.join(","),
         quarter,
       }).toString()}`);
     }
@@ -4101,8 +4134,8 @@
         const isConfirmed = row.mapping?.mapping_status === "matched" && !!row.quotationItem;
         const amount = isConfirmed && assetCount > 0 ? assetCount * unitPrice : 0;
         return {
-          customerId: row.requirement?.customer_id || workbench.customerId,
-          customerName: customerName(row.requirement?.customer_id || workbench.customerId),
+          customerId: row.requirement?.customer_code || workbench.customerId,
+          customerName: customerName(row.requirement?.customer_code || workbench.customerId),
           quarter: workbench.quarter,
           quotationNo: workbench.selectedQuotation?.quotation_no || "-",
           requirementCode: row.requirement?.requirement_code || "-",
@@ -4316,7 +4349,7 @@
       const project = await syncProjectSelection(true);
       if (!project) return toast("请先选择客户和业务大类");
       const businessName = qs("businessNameInput").value.trim();
-      const businessPlatform = qs("businessPlatformInput").value;
+      const businessPlatform = normalizeBusinessPlatform(qs("businessPlatformInput").value);
       const secondaryCategory = qs("secondaryCategoryInput").value;
       const tertiaryCategory = qs("tertiaryCategoryInput").value.trim();
       const plannedStartAt = qs("plannedStartAtInput").value;
@@ -4350,7 +4383,7 @@
           method: "POST",
           body: {
             projectId: project.id,
-            customerId: qs("customerSelect").value,
+            customerCode: qs("customerSelect").value,
             title,
             rawContent: content,
             priority,
@@ -4384,7 +4417,7 @@
         state.tasks = [state.task, ...state.tasks.filter(existing => existing.id !== state.task.id)];
         invalidateLookupMaps();
         addLog("需求录入并生成任务成功", result);
-        linkMappingContext(state.requirement.customer_id, quarterForDate(state.requirement.created_at));
+        linkMappingContext(state.requirement.customer_code, quarterForDate(state.requirement.created_at));
         await Promise.all([
           refreshRequirementBoard({ force: true, preserveScroll: true }),
           loadQuarterMappingWorkbench(false),
@@ -4438,7 +4471,7 @@
           method: "POST",
           body: {
             projectId: project.id,
-            customerId: qs("customerSelect").value,
+            customerCode: qs("customerSelect").value,
             rawContent: content,
             fileName: state.loadedFileName || qs("aiRequirementTitle").value || "手工粘贴内容",
             priority: "high",
@@ -4454,7 +4487,7 @@
           state.requirement = items[0].requirement;
           state.item = items[0].item;
           state.task = items[0].task;
-          linkMappingContext(state.requirement.customer_id, quarterForDate(state.requirement.created_at));
+          linkMappingContext(state.requirement.customer_code, quarterForDate(state.requirement.created_at));
           await Promise.all([
             refreshRequirementBoard({ force: true, preserveScroll: true }),
             loadQuarterMappingWorkbench(false),
@@ -4576,25 +4609,25 @@
       syncPrimaryCustomerSelects(customerId);
       renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", true, true);
       const query = new URLSearchParams({ liveAssetCount: "true" });
-      if (customerId !== "all") query.set("customerId", customerId);
+      if (customerId !== "all") query.set("customerCode", customerId);
       qs("metrics").innerHTML = `<div class="panel metric"><span>正在刷新</span><strong>...</strong><span>同步资产表和报价子项选择</span></div>`;
       try {
         const analyticsCustomers = selectedAnalyticsCustomers(customerId);
         const board = await request(`/tasks/board?${query.toString()}`);
         if (requestSeq !== state.analyticsRequestSeq) return;
-        const customerIds = new Set(analyticsCustomers.map(customer => customer.id));
+        const customerCodes = new Set(analyticsCustomers.map(customer => customer.customer_code));
         const rows = Object.entries(board)
           .flatMap(([status, tasks]) => (tasks || []).map(t => ({ status, ...t })))
           .filter(task => {
-            const taskCustomerId = projectForTask(task)?.customer_id;
+            const taskCustomerId = projectForTask(task)?.customer_code;
             const requirement = requirementForTask(task);
-            return (!taskCustomerId || customerIds.has(taskCustomerId)) && dimensionMatchesRequirement(requirement, task);
+            return (!taskCustomerId || customerCodes.has(taskCustomerId)) && dimensionMatchesRequirement(requirement, task);
           });
         const quarterTasks = rows;
         const totalAssets = quarterTasks.reduce((sum, task) => sum + Number(task.asset_count || task.assetCount || 0), 0);
         const completedTasks = quarterTasks.filter(task => task.status === "completed").length;
         const scopedRequirements = state.requirements.filter(requirement => {
-          if (!customerIds.has(requirement.customer_id)) return false;
+          if (!customerCodes.has(requirement.customer_code)) return false;
           if (!dimensionMatchesRequirement(requirement, taskForRequirement(requirement.id))) return false;
           return true;
         });
@@ -4629,7 +4662,7 @@
     }
     function selectedAnalyticsCustomers(customerId) {
       const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
-      if (customerId !== "all") return state.customers.filter(customer => customer.id === customerId);
+      if (customerId !== "all") return state.customers.filter(customer => customer.customer_code === customerId);
       return fundCustomers.length ? fundCustomers : state.customers;
     }
     function buildAnalyticsFactRows(requirementItems, tasks) {

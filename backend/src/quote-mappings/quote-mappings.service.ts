@@ -189,25 +189,25 @@ export class QuoteMappingsService implements OnModuleInit {
     };
   }
 
-  async quarterWorkbenches(customerIds: string[], quarter: string) {
-    const uniqueCustomerIds = Array.from(
-      new Set(customerIds.map((id) => id.trim()).filter(Boolean)),
+  async quarterWorkbenches(customerCodes: string[], quarter: string) {
+    const uniqueCustomerCodes = Array.from(
+      new Set(customerCodes.map((code) => code.trim()).filter(Boolean)),
     );
-    if (uniqueCustomerIds.length === 0) {
-      throw new BadRequestException('customerIds is required');
+    if (uniqueCustomerCodes.length === 0) {
+      throw new BadRequestException('customerCodes is required');
     }
     const workbenches = await Promise.all(
-      uniqueCustomerIds.map((customerId) =>
-        this.quarterWorkbench(customerId, quarter),
+      uniqueCustomerCodes.map((customerCode) =>
+        this.quarterWorkbench(customerCode, quarter),
       ),
     );
 
     return {
       quarter,
-      customerIds: uniqueCustomerIds,
+      customerCodes: uniqueCustomerCodes,
       workbenches,
       summary: {
-        customerCount: uniqueCustomerIds.length,
+        customerCount: uniqueCustomerCodes.length,
         requirementItemCount: workbenches.reduce(
           (sum, item) => sum + (item.summary?.requirementItemCount ?? 0),
           0,
@@ -233,8 +233,12 @@ export class QuoteMappingsService implements OnModuleInit {
   }
 
   async quarterSuggest(dto: QuarterQuoteMappingDto) {
+    const customerCode = dto.customerCode ?? dto.customerId;
+    if (!customerCode) {
+      throw new BadRequestException('customerCode is required');
+    }
     const context = await this.loadQuarterContext(
-      dto.customerId,
+      customerCode,
       dto.quarter,
       dto.quotationId,
     );
@@ -317,7 +321,7 @@ export class QuoteMappingsService implements OnModuleInit {
       object_type: 'quotation',
       object_id: context.selectedQuotation.id,
       input_json: {
-        customerId: dto.customerId,
+        customerCode,
         quarter: dto.quarter,
         quotationId: context.selectedQuotation.id,
         requirementItemCount: targetRequirementItems.length,
@@ -338,7 +342,7 @@ export class QuoteMappingsService implements OnModuleInit {
       aiLogId: aiLog.id,
       suggestions,
       workbench: await this.quarterWorkbench(
-        dto.customerId,
+        customerCode,
         dto.quarter,
         context.selectedQuotation.id,
       ),
@@ -445,7 +449,7 @@ export class QuoteMappingsService implements OnModuleInit {
     return this.dimensionRulesRepository.save(
       this.dimensionRulesRepository.create({
         quotation_item_id: dto.quotationItemId,
-        customer_id: this.emptyToNull(dto.customerId),
+        customer_code: this.emptyToNull(dto.customerCode ?? dto.customerId),
         business_platform: this.emptyToNull(dto.businessPlatform),
         business_category: this.emptyToNull(dto.businessCategory),
         secondary_category: this.emptyToNull(dto.secondaryCategory),
@@ -470,10 +474,10 @@ export class QuoteMappingsService implements OnModuleInit {
     }
     Object.assign(rule, {
       quotation_item_id: dto.quotationItemId ?? rule.quotation_item_id,
-      customer_id:
-        dto.customerId !== undefined
-          ? this.emptyToNull(dto.customerId)
-          : rule.customer_id,
+      customer_code:
+        dto.customerCode !== undefined || dto.customerId !== undefined
+          ? this.emptyToNull(dto.customerCode ?? dto.customerId)
+          : rule.customer_code,
       business_platform:
         dto.businessPlatform !== undefined
           ? this.emptyToNull(dto.businessPlatform)
@@ -605,7 +609,7 @@ export class QuoteMappingsService implements OnModuleInit {
     const [quarterRequirements, quotations] = await Promise.all([
       this.requirementsRepository
         .createQueryBuilder('requirement')
-        .where('requirement.customer_id = :customerId', { customerId })
+        .where('requirement.customer_code = :customerId', { customerId })
         .andWhere('requirement.created_at >= :startAt', {
           startAt: period.startAt,
         })
@@ -614,7 +618,7 @@ export class QuoteMappingsService implements OnModuleInit {
         .getMany(),
       this.quotationsRepository
         .createQueryBuilder('quotation')
-        .where('quotation.customer_id = :customerId', { customerId })
+        .where('quotation.customer_code = :customerId', { customerId })
         .andWhere('quotation.created_at >= :startAt', {
           startAt: period.startAt,
         })
@@ -813,7 +817,7 @@ export class QuoteMappingsService implements OnModuleInit {
         'Quotation item does not belong to quotation',
       );
     }
-    if (quotation && quotation.customer_id !== requirement.customer_id) {
+    if (quotation && quotation.customer_code !== requirement.customer_code) {
       throw new BadRequestException(
         'Quotation customer does not match requirement customer',
       );
@@ -939,14 +943,14 @@ export class QuoteMappingsService implements OnModuleInit {
       return 0;
     }
     const snapshot = {
-      customer_id: requirement.customer_id,
+      customer_code: requirement.customer_code,
       business_platform: requirement.business_platform,
       business_category: requirement.business_category,
       secondary_category: requirement.secondary_category,
       tertiary_category: requirement.tertiary_category,
     };
     const weights = {
-      customer_id: 0.15,
+      customer_code: 0.15,
       business_platform: 0.15,
       business_category: 0.25,
       secondary_category: 0.25,

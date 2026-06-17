@@ -59,6 +59,11 @@ export class RequirementsController {
     return this.requirementsService.confirmAiPreviewCandidate(candidateId);
   }
 
+  @Post('ai-preview-candidates/:candidateId/reject')
+  rejectAiPreviewCandidate(@Param('candidateId') candidateId: string) {
+    return this.requirementsService.rejectAiPreviewCandidate(candidateId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.requirementsService.findOne(id);

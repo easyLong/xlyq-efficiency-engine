@@ -39,6 +39,7 @@ DROP TABLE IF EXISTS `requirement_versions`;
 DROP TABLE IF EXISTS `requirements`;
 DROP TABLE IF EXISTS `project_members`;
 DROP TABLE IF EXISTS `projects`;
+DROP TABLE IF EXISTS `group_contact_mappings`;
 DROP TABLE IF EXISTS `wechat_group_configs`;
 DROP TABLE IF EXISTS `source_contact_contexts`;
 DROP TABLE IF EXISTS `contact_context_configs`;
@@ -110,81 +111,26 @@ CREATE TABLE `customers` (
   KEY `idx_customers_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户表';
 
-CREATE TABLE `contact_context_configs` (
+CREATE TABLE `group_contact_mappings` (
   `id` CHAR(36) NOT NULL,
-  `contact_name` VARCHAR(64) NOT NULL,
-  `contact_mobile` VARCHAR(32) NULL,
-  `contact_email` VARCHAR(128) NULL,
-  `customer_id` CHAR(36) NOT NULL,
-  `business_platform` VARCHAR(64) NULL,
-  `business_category` VARCHAR(32) NOT NULL,
-  `secondary_category` VARCHAR(64) NULL,
-  `tertiary_category` VARCHAR(64) NULL,
-  `status` VARCHAR(32) NOT NULL,
-  `remark` VARCHAR(255) NULL,
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `deleted_at` DATETIME NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_contact_context_customer_id` (`customer_id`),
-  KEY `idx_contact_context_contact_name` (`contact_name`),
-  KEY `idx_contact_context_status` (`status`),
-  KEY `idx_contact_context_business` (`business_platform`, `business_category`, `secondary_category`, `tertiary_category`),
-  CONSTRAINT `fk_contact_context_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='对接人上下文配置表';
-
-CREATE TABLE `source_contact_contexts` (
-  `id` CHAR(36) NOT NULL,
-  `source_app` VARCHAR(32) NOT NULL DEFAULT 'crawler',
-  `source_type` VARCHAR(32) NOT NULL,
-  `source_key` CHAR(64) NOT NULL,
-  `source_name` VARCHAR(255) NOT NULL,
-  `external_source_id` VARCHAR(128) NULL,
-  `contact_context_config_id` CHAR(36) NOT NULL,
-  `status` VARCHAR(32) NOT NULL DEFAULT 'active',
-  `is_primary` TINYINT(1) NOT NULL DEFAULT 1,
-  `priority` INT NOT NULL DEFAULT 100,
-  `match_method` VARCHAR(32) NULL,
-  `remark` VARCHAR(255) NULL,
-  `first_seen_at` DATETIME NULL,
-  `last_seen_at` DATETIME NULL,
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `deleted_at` DATETIME NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_source_contact_context_config` (`source_app`, `source_type`, `source_key`, `contact_context_config_id`),
-  KEY `idx_source_contact_source` (`source_app`, `source_type`, `source_key`),
-  KEY `idx_source_contact_name` (`source_name`),
-  KEY `idx_source_contact_config` (`contact_context_config_id`),
-  KEY `idx_source_contact_status` (`status`),
-  KEY `idx_source_contact_priority` (`source_app`, `source_type`, `source_key`, `status`, `is_primary`, `priority`),
-  CONSTRAINT `fk_source_contact_context_config` FOREIGN KEY (`contact_context_config_id`) REFERENCES `contact_context_configs` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='采集来源与业务上下文绑定表';
-
-CREATE TABLE `wechat_group_configs` (
-  `id` CHAR(36) NOT NULL,
-  `group_id` VARCHAR(128) NULL,
+  `group_key` VARCHAR(255) NOT NULL,
   `group_name` VARCHAR(255) NOT NULL,
-  `source_key` CHAR(64) NOT NULL,
-  `customer_id` CHAR(36) NOT NULL,
-  `contact_context_config_id` CHAR(36) NULL,
+  `contact_name` VARCHAR(64) NOT NULL,
+  `customer_code` VARCHAR(32) NOT NULL,
   `business_platform` VARCHAR(64) NULL,
-  `status` VARCHAR(32) NOT NULL DEFAULT 'active',
   `collect_enabled` TINYINT(1) NOT NULL DEFAULT 1,
-  `sort_order` INT NOT NULL DEFAULT 100,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'active',
   `remark` VARCHAR(255) NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted_at` DATETIME NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_wechat_group_source` (`source_key`),
-  UNIQUE KEY `uk_wechat_group_id` (`group_id`),
-  KEY `idx_wechat_group_customer` (`customer_id`),
-  KEY `idx_wechat_group_contact` (`contact_context_config_id`),
-  KEY `idx_wechat_group_status_order` (`status`, `collect_enabled`, `sort_order`),
-  CONSTRAINT `fk_wechat_group_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
-  CONSTRAINT `fk_wechat_group_contact_context` FOREIGN KEY (`contact_context_config_id`) REFERENCES `contact_context_configs` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='微信群采集配置表';
+  UNIQUE KEY `uk_group_contact_mapping` (`group_key`, `contact_name`),
+  KEY `idx_group_contact_group` (`group_key`),
+  KEY `idx_group_contact_name` (`contact_name`),
+  KEY `idx_group_contact_customer_platform` (`customer_code`, `business_platform`),
+  KEY `idx_group_contact_status` (`status`, `collect_enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='????????';
 
 CREATE TABLE `dimension_dictionaries` (
   `id` CHAR(36) NOT NULL,
@@ -208,7 +154,7 @@ CREATE TABLE `projects` (
   `id` CHAR(36) NOT NULL,
   `project_code` VARCHAR(32) NOT NULL,
   `project_name` VARCHAR(128) NOT NULL,
-  `customer_id` CHAR(36) NOT NULL,
+  `customer_code` VARCHAR(32) NOT NULL,
   `owner_user_id` CHAR(36) NOT NULL,
   `project_type` VARCHAR(32) NULL,
   `status` VARCHAR(32) NOT NULL,
@@ -223,11 +169,10 @@ CREATE TABLE `projects` (
   `deleted_at` DATETIME NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_projects_project_code` (`project_code`),
-  KEY `idx_projects_customer_id` (`customer_id`),
+  KEY `idx_projects_customer_code` (`customer_code`),
   KEY `idx_projects_owner_user_id` (`owner_user_id`),
   KEY `idx_projects_status` (`status`),
   KEY `idx_projects_planned_end_date` (`planned_end_date`),
-  CONSTRAINT `fk_projects_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
   CONSTRAINT `fk_projects_owner_user` FOREIGN KEY (`owner_user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目表';
 
@@ -250,7 +195,7 @@ CREATE TABLE `requirements` (
   `id` CHAR(36) NOT NULL,
   `requirement_code` VARCHAR(32) NOT NULL,
   `project_id` CHAR(36) NOT NULL,
-  `customer_id` CHAR(36) NOT NULL,
+  `customer_code` VARCHAR(32) NOT NULL,
   `title` VARCHAR(256) NOT NULL,
   `source_type` VARCHAR(32) NOT NULL,
   `source_ref_id` VARCHAR(128) NULL,
@@ -273,11 +218,10 @@ CREATE TABLE `requirements` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_requirements_requirement_code` (`requirement_code`),
   KEY `idx_requirements_project_id` (`project_id`),
-  KEY `idx_requirements_customer_id` (`customer_id`),
+  KEY `idx_requirements_customer_code` (`customer_code`),
   KEY `idx_requirements_status` (`status`),
   KEY `idx_requirements_source_ref` (`source_type`, `source_ref_id`),
   CONSTRAINT `fk_requirements_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`),
-  CONSTRAINT `fk_requirements_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
   CONSTRAINT `fk_requirements_submitted_by` FOREIGN KEY (`submitted_by_user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_requirements_confirmed_by` FOREIGN KEY (`confirmed_by_user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求主表';
@@ -546,7 +490,7 @@ CREATE TABLE `quotations` (
   `id` CHAR(36) NOT NULL,
   `quotation_no` VARCHAR(32) NOT NULL,
   `project_id` CHAR(36) NOT NULL,
-  `customer_id` CHAR(36) NOT NULL,
+  `customer_code` VARCHAR(32) NOT NULL,
   `status` VARCHAR(32) NOT NULL,
   `pricing_basis` VARCHAR(32) NOT NULL,
   `total_amount` DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -563,12 +507,11 @@ CREATE TABLE `quotations` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_quotations_quotation_no` (`quotation_no`),
   KEY `idx_quotations_project_id` (`project_id`),
-  KEY `idx_quotations_customer_id` (`customer_id`),
+  KEY `idx_quotations_customer_code` (`customer_code`),
   KEY `idx_quotations_status` (`status`),
   KEY `idx_quotations_created_by` (`created_by`),
   KEY `idx_quotations_reviewed_by` (`reviewed_by`),
   CONSTRAINT `fk_quotations_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`),
-  CONSTRAINT `fk_quotations_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
   CONSTRAINT `fk_quotations_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_quotations_reviewed_by` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='报价单表';
@@ -599,7 +542,7 @@ CREATE TABLE `quotation_items` (
 CREATE TABLE `quotation_item_dimension_rules` (
   `id` CHAR(36) NOT NULL,
   `quotation_item_id` CHAR(36) NOT NULL,
-  `customer_id` CHAR(36) NULL,
+  `customer_code` VARCHAR(32) NULL,
   `business_platform` VARCHAR(64) NULL,
   `business_category` VARCHAR(32) NULL,
   `secondary_category` VARCHAR(64) NULL,
@@ -612,11 +555,10 @@ CREATE TABLE `quotation_item_dimension_rules` (
   `deleted_at` DATETIME NULL,
   PRIMARY KEY (`id`),
   KEY `idx_qidr_quotation_item_id` (`quotation_item_id`),
-  KEY `idx_qidr_customer_id` (`customer_id`),
+  KEY `idx_qidr_customer_code` (`customer_code`),
   KEY `idx_qidr_dimensions` (`business_category`, `secondary_category`, `tertiary_category`),
   KEY `idx_qidr_status_priority` (`status`, `priority`),
-  CONSTRAINT `fk_qidr_quotation_item` FOREIGN KEY (`quotation_item_id`) REFERENCES `quotation_items` (`id`),
-  CONSTRAINT `fk_qidr_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`)
+  CONSTRAINT `fk_qidr_quotation_item` FOREIGN KEY (`quotation_item_id`) REFERENCES `quotation_items` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='报价子项维度映射规则表';
 
 CREATE TABLE `change_requests` (

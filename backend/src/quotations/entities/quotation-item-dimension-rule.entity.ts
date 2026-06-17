@@ -6,8 +6,8 @@ export class QuotationItemDimensionRuleEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'char', length: 36 })
   quotation_item_id!: string;
 
-  @Column({ type: 'char', length: 36, nullable: true })
-  customer_id!: string | null;
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  customer_code!: string | null;
 
   @Column({ type: 'varchar', length: 64, nullable: true })
   business_platform!: string | null;

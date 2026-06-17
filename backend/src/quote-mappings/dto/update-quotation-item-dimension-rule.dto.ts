@@ -6,7 +6,11 @@ export class UpdateQuotationItemDimensionRuleDto {
   quotationItemId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  customerCode?: string;
+
+  @IsOptional()
+  @IsString()
   customerId?: string;
 
   @IsOptional()

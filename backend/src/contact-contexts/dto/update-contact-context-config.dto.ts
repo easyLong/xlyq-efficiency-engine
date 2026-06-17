@@ -1,6 +1,14 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class UpdateContactContextConfigDto {
+  @IsOptional()
+  @IsString()
+  groupKey?: string;
+
+  @IsOptional()
+  @IsString()
+  groupName?: string;
+
   @IsOptional()
   @IsString()
   contactName?: string;
@@ -14,7 +22,11 @@ export class UpdateContactContextConfigDto {
   contactEmail?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  customerCode?: string;
+
+  @IsOptional()
+  @IsString()
   customerId?: string;
 
   @IsOptional()

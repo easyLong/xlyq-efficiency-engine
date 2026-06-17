@@ -172,7 +172,7 @@ export class TasksService implements OnModuleInit {
     const projects = await this.projectsRepository.find({
       select: { id: true },
       where: {
-        customer_id: customerId,
+        customer_code: customerId,
         ...(projectId ? { id: projectId } : {}),
       },
     });
@@ -1253,9 +1253,9 @@ export class TasksService implements OnModuleInit {
         FROM tasks task
         LEFT JOIN requirement_items item ON item.id = task.requirement_item_id
         LEFT JOIN requirements requirement ON requirement.id = item.requirement_id
-        LEFT JOIN customers requirement_customer ON requirement_customer.id = requirement.customer_id
+        LEFT JOIN customers requirement_customer ON requirement_customer.customer_code = requirement.customer_code
         LEFT JOIN projects project ON project.id = task.project_id
-        LEFT JOIN customers project_customer ON project_customer.id = project.customer_id
+        LEFT JOIN customers project_customer ON project_customer.customer_code = project.customer_code
         WHERE task.id = ?
         LIMIT 1
       `,

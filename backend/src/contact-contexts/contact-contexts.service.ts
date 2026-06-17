@@ -15,69 +15,41 @@ import { CreateWechatGroupConfigDto } from './dto/create-wechat-group-config.dto
 import { UpdateContactContextConfigDto } from './dto/update-contact-context-config.dto';
 import { UpdateSourceContactContextDto } from './dto/update-source-contact-context.dto';
 import { UpdateWechatGroupConfigDto } from './dto/update-wechat-group-config.dto';
-import { ContactContextConfigEntity } from './entities/contact-context-config.entity';
 
 @Injectable()
 export class ContactContextsService implements OnModuleInit {
   constructor(
-    @InjectRepository(ContactContextConfigEntity)
-    private readonly configsRepository: Repository<ContactContextConfigEntity>,
     @InjectRepository(CustomerEntity)
     private readonly customersRepository: Repository<CustomerEntity>,
     private readonly dataSource: DataSource,
   ) {}
 
   async onModuleInit() {
-    await this.ensureContactContextSchema();
-    await this.ensureSourceContactContextSchema();
-    await this.ensureWechatGroupConfigSchema();
+    await this.ensureGroupContactMappingsSchema();
+    await this.migrateLegacyContactContextsToGroupMappings();
+    await this.migrateWechatGroupConfigsToGroupMappings();
+    await this.migrateSourceContextsToGroupMappings();
   }
 
-  async findAll(status?: string, customerId?: string, keyword?: string) {
-    const qb = this.configsRepository.createQueryBuilder('config');
-    if (status) {
-      qb.andWhere('config.status = :status', { status });
-    }
-    if (customerId) {
-      qb.andWhere('config.customer_id = :customerId', { customerId });
-    }
-    if (keyword) {
-      qb.andWhere(
-        [
-          'config.contact_name LIKE :keyword',
-          'config.contact_mobile LIKE :keyword',
-          'config.contact_email LIKE :keyword',
-          'config.business_platform LIKE :keyword',
-        ].join(' OR '),
-        { keyword: `%${keyword}%` },
-      );
-    }
-    return qb.orderBy('config.created_at', 'DESC').take(500).getMany();
-  }
-
-  async findOne(id: string) {
-    const config = await this.configsRepository.findOne({ where: { id } });
-    if (!config) {
-      throw new NotFoundException('Contact context config not found');
-    }
-    return config;
-  }
-
-  async listSourceContexts(status?: string, keyword?: string) {
-    await this.ensureSourceContactContextSchema();
-    const where: string[] = ['source.deleted_at IS NULL'];
+  async findAll(status?: string, customerCode?: string, keyword?: string) {
+    await this.ensureGroupContactMappingsSchema();
+    const where: string[] = ['mapping.deleted_at IS NULL'];
     const params: unknown[] = [];
     if (status) {
-      where.push('source.status = ?');
+      where.push('mapping.status = ?');
       params.push(status);
+    }
+    if (customerCode) {
+      where.push('mapping.customer_code = ?');
+      params.push(customerCode);
     }
     if (keyword) {
       where.push(
         [
-          'source.source_name LIKE ?',
-          'source.source_key LIKE ?',
-          'source.external_source_id LIKE ?',
-          'context.contact_name LIKE ?',
+          'mapping.group_name LIKE ?',
+          'mapping.group_key LIKE ?',
+          'mapping.contact_name LIKE ?',
+          'mapping.business_platform LIKE ?',
           'customer.customer_name LIKE ?',
         ].join(' OR '),
       );
@@ -87,20 +59,121 @@ export class ContactContextsService implements OnModuleInit {
     return this.dataSource.query(
       `
         SELECT
-          source.*,
-          context.contact_name,
-          context.customer_id,
-          context.business_platform,
+          mapping.id,
+          mapping.group_key,
+          mapping.group_name,
+          mapping.contact_name,
+          NULL AS contact_mobile,
+          NULL AS contact_email,
+          mapping.customer_code AS customer_id,
+          mapping.customer_code,
+          mapping.business_platform,
+          mapping.collect_enabled,
+          mapping.status,
+          mapping.remark,
+          mapping.created_at,
+          mapping.updated_at,
+          mapping.deleted_at,
           customer.customer_name
-        FROM source_contact_contexts source
-        JOIN contact_context_configs context
-          ON context.id = source.contact_context_config_id
-         AND context.deleted_at IS NULL
+        FROM group_contact_mappings mapping
         JOIN customers customer
-          ON customer.id = context.customer_id
+          ON customer.customer_code = mapping.customer_code
          AND customer.deleted_at IS NULL
         WHERE ${where.map((item) => `(${item})`).join(' AND ')}
-        ORDER BY source.source_name ASC, source.is_primary DESC, source.priority ASC, source.updated_at DESC
+        ORDER BY mapping.group_name ASC, mapping.contact_name ASC, mapping.updated_at DESC
+        LIMIT 500
+      `,
+      params,
+    );
+  }
+
+  async findOne(id: string) {
+    await this.ensureGroupContactMappingsSchema();
+    const rows = await this.dataSource.query(
+      `
+        SELECT
+          mapping.id,
+          mapping.group_key,
+          mapping.group_name,
+          mapping.contact_name,
+          NULL AS contact_mobile,
+          NULL AS contact_email,
+          mapping.customer_code AS customer_id,
+          mapping.customer_code,
+          mapping.business_platform,
+          mapping.collect_enabled,
+          mapping.status,
+          mapping.remark,
+          mapping.created_at,
+          mapping.updated_at,
+          mapping.deleted_at
+        FROM group_contact_mappings mapping
+        JOIN customers customer
+          ON customer.customer_code = mapping.customer_code
+         AND customer.deleted_at IS NULL
+        WHERE mapping.id = ?
+          AND mapping.deleted_at IS NULL
+        LIMIT 1
+      `,
+      [id],
+    );
+    if (!rows?.[0]) {
+      throw new NotFoundException('Contact context config not found');
+    }
+    return rows[0];
+  }
+
+  async listSourceContexts(status?: string, keyword?: string) {
+    await this.ensureGroupContactMappingsSchema();
+    const where: string[] = ['mapping.deleted_at IS NULL'];
+    const params: unknown[] = [];
+    if (status) {
+      where.push('mapping.status = ?');
+      params.push(status);
+    }
+    if (keyword) {
+      where.push(
+        [
+          'mapping.group_name LIKE ?',
+          'mapping.group_key LIKE ?',
+          'mapping.contact_name LIKE ?',
+          'customer.customer_name LIKE ?',
+        ].join(' OR '),
+      );
+      const like = `%${keyword}%`;
+      params.push(like, like, like, like);
+    }
+    return this.dataSource.query(
+      `
+        SELECT
+          mapping.id,
+          'crawler' AS source_app,
+          'wechat_group' AS source_type,
+          mapping.group_key AS source_key,
+          mapping.group_name AS source_name,
+          mapping.group_key AS external_source_id,
+          mapping.id AS contact_context_config_id,
+          mapping.status,
+          1 AS is_primary,
+          100 AS priority,
+          'group_contact_mapping' AS match_method,
+          mapping.remark,
+          mapping.created_at AS first_seen_at,
+          mapping.updated_at AS last_seen_at,
+          mapping.created_at,
+          mapping.updated_at,
+          mapping.deleted_at,
+          mapping.contact_name,
+          mapping.customer_code AS customer_id,
+          mapping.customer_code,
+          mapping.business_platform,
+          customer.customer_name
+        FROM group_contact_mappings mapping
+        JOIN customers customer
+          ON customer.customer_code = mapping.customer_code
+         AND customer.deleted_at IS NULL
+        WHERE ${where.map((item) => `(${item})`).join(' AND ')}
+        ORDER BY mapping.group_name ASC, mapping.contact_name ASC, mapping.updated_at DESC
         LIMIT 500
       `,
       params,
@@ -108,21 +181,21 @@ export class ContactContextsService implements OnModuleInit {
   }
 
   async listWechatGroupConfigs(status?: string, keyword?: string) {
-    await this.ensureWechatGroupConfigSchema();
-    const where: string[] = ['group_config.deleted_at IS NULL'];
+    await this.ensureGroupContactMappingsSchema();
+    const where: string[] = ['mapping.deleted_at IS NULL'];
     const params: unknown[] = [];
     if (status) {
-      where.push('group_config.status = ?');
+      where.push('mapping.status = ?');
       params.push(status);
     }
     if (keyword) {
       where.push(
         [
-          'group_config.group_name LIKE ?',
-          'group_config.group_id LIKE ?',
+          'mapping.group_name LIKE ?',
+          'mapping.group_key LIKE ?',
           'customer.customer_name LIKE ?',
-          'context.contact_name LIKE ?',
-          'group_config.business_platform LIKE ?',
+          'mapping.contact_name LIKE ?',
+          'mapping.business_platform LIKE ?',
         ].join(' OR '),
       );
       const like = `%${keyword}%`;
@@ -131,19 +204,30 @@ export class ContactContextsService implements OnModuleInit {
     return this.dataSource.query(
       `
         SELECT
-          group_config.*,
+          mapping.id,
+          mapping.group_key AS group_id,
+          mapping.group_name,
+          mapping.group_key AS source_key,
+          mapping.customer_code AS customer_id,
+          mapping.customer_code,
+          mapping.id AS contact_context_config_id,
+          mapping.business_platform,
+          mapping.status,
+          mapping.collect_enabled,
+          100 AS sort_order,
+          mapping.remark,
+          mapping.created_at,
+          mapping.updated_at,
+          mapping.deleted_at,
           customer.customer_name,
-          context.contact_name,
-          COALESCE(group_config.business_platform, context.business_platform) AS resolved_business_platform
-        FROM wechat_group_configs group_config
+          mapping.contact_name,
+          mapping.business_platform AS resolved_business_platform
+        FROM group_contact_mappings mapping
         JOIN customers customer
-          ON customer.id = group_config.customer_id
+          ON customer.customer_code = mapping.customer_code
          AND customer.deleted_at IS NULL
-        LEFT JOIN contact_context_configs context
-          ON context.id = group_config.contact_context_config_id
-         AND context.deleted_at IS NULL
         WHERE ${where.map((item) => `(${item})`).join(' AND ')}
-        ORDER BY group_config.sort_order ASC, group_config.updated_at DESC
+        ORDER BY mapping.group_name ASC, mapping.contact_name ASC, mapping.updated_at DESC
         LIMIT 500
       `,
       params,
@@ -151,256 +235,533 @@ export class ContactContextsService implements OnModuleInit {
   }
 
   async createWechatGroupConfig(dto: CreateWechatGroupConfigDto) {
-    await this.ensureWechatGroupConfigSchema();
-    await this.ensureCustomer(dto.customerId);
+    await this.ensureGroupContactMappingsSchema();
+    const customerCode = await this.resolveCustomerCodeInput(
+      dto.customerCode,
+      dto.customerId,
+    );
+    let existingContext: Record<string, unknown> | null = null;
     if (dto.contactContextConfigId) {
-      await this.findOne(dto.contactContextConfigId);
+      existingContext = await this.findOne(dto.contactContextConfigId);
     }
-    const sourceKey = this.makeSourceKey(
-      'wechat_group',
-      dto.groupName,
-      dto.groupId,
-    );
-    await this.dataSource.query(
-      `
-        INSERT INTO wechat_group_configs (
-          id, group_id, group_name, source_key, customer_id,
-          contact_context_config_id, business_platform, status,
-          collect_enabled, sort_order, remark
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-          group_id = VALUES(group_id),
-          group_name = VALUES(group_name),
-          customer_id = VALUES(customer_id),
-          contact_context_config_id = VALUES(contact_context_config_id),
-          business_platform = VALUES(business_platform),
-          status = 'active',
-          collect_enabled = VALUES(collect_enabled),
-          sort_order = VALUES(sort_order),
-          remark = VALUES(remark),
-          deleted_at = NULL
-      `,
-      [
-        randomUUID(),
-        dto.groupId ?? null,
-        dto.groupName,
-        sourceKey,
-        dto.customerId,
-        dto.contactContextConfigId ?? null,
-        dto.businessPlatform ?? null,
-        dto.collectEnabled === undefined ? 1 : dto.collectEnabled ? 1 : 0,
-        dto.sortOrder ?? 100,
-        dto.remark ?? null,
-      ],
-    );
-    return this.findWechatGroupConfigBySourceKey(sourceKey);
-  }
-
-  async updateWechatGroupConfig(id: string, dto: UpdateWechatGroupConfigDto) {
-    await this.ensureWechatGroupConfigSchema();
-    if (dto.customerId) {
-      await this.ensureCustomer(dto.customerId);
+    const contactName =
+      dto.contactName ?? String(existingContext?.contact_name ?? '').trim();
+    if (!contactName) {
+      throw new BadRequestException('Contact name is required');
     }
-    if (dto.contactContextConfigId) {
-      await this.findOne(dto.contactContextConfigId);
-    }
-    const currentRows = await this.dataSource.query(
-      'SELECT * FROM wechat_group_configs WHERE id = ? AND deleted_at IS NULL LIMIT 1',
-      [id],
-    );
-    if (!currentRows?.[0]) {
-      throw new NotFoundException('Wechat group config not found');
-    }
-    const current = currentRows[0];
-    const nextGroupName = dto.groupName ?? current.group_name;
-    const nextGroupId = dto.groupId ?? current.group_id;
-    const sourceKey =
-      dto.groupName !== undefined || dto.groupId !== undefined
-        ? this.makeSourceKey('wechat_group', nextGroupName, nextGroupId)
-        : current.source_key;
-    await this.dataSource.query(
-      `
-        UPDATE wechat_group_configs
-        SET
-          group_id = COALESCE(?, group_id),
-          group_name = COALESCE(?, group_name),
-          source_key = ?,
-          customer_id = COALESCE(?, customer_id),
-          contact_context_config_id = COALESCE(?, contact_context_config_id),
-          business_platform = COALESCE(?, business_platform),
-          status = COALESCE(?, status),
-          collect_enabled = COALESCE(?, collect_enabled),
-          sort_order = COALESCE(?, sort_order),
-          remark = COALESCE(?, remark),
-          updated_at = NOW(),
-          deleted_at = CASE WHEN ? = 'inactive' THEN deleted_at ELSE NULL END
-        WHERE id = ?
-      `,
-      [
-        dto.groupId ?? null,
-        dto.groupName ?? null,
-        sourceKey,
-        dto.customerId ?? null,
-        dto.contactContextConfigId ?? null,
-        dto.businessPlatform ?? null,
-        dto.status ?? null,
-        dto.collectEnabled === undefined ? null : dto.collectEnabled ? 1 : 0,
-        dto.sortOrder ?? null,
-        dto.remark ?? null,
-        dto.status ?? null,
-        id,
-      ],
-    );
-    return this.findWechatGroupConfigById(id);
-  }
-
-  async createSourceContext(dto: CreateSourceContactContextDto) {
-    await this.ensureSourceContactContextSchema();
-    await this.findOne(dto.contactContextConfigId);
-    const sourceApp = dto.sourceApp || 'crawler';
-    const sourceKey =
-      dto.sourceKey ||
-      this.makeSourceKey(
-        dto.sourceType,
-        dto.sourceName,
-        dto.externalSourceId,
-      );
-    await this.dataSource.query(
-      `
-        INSERT INTO source_contact_contexts (
-          id, source_app, source_type, source_key, source_name,
-          external_source_id, contact_context_config_id, status,
-          is_primary, priority, match_method, remark, first_seen_at, last_seen_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, NOW(), NOW())
-        ON DUPLICATE KEY UPDATE
-          source_name = VALUES(source_name),
-          external_source_id = VALUES(external_source_id),
-          status = 'active',
-          is_primary = VALUES(is_primary),
-          priority = VALUES(priority),
-          match_method = VALUES(match_method),
-          remark = VALUES(remark),
-          last_seen_at = VALUES(last_seen_at),
-          deleted_at = NULL
-      `,
-      [
-        randomUUID(),
-        sourceApp,
-        dto.sourceType,
-        sourceKey,
-        dto.sourceName,
-        dto.externalSourceId ?? null,
-        dto.contactContextConfigId,
-        (dto.isPrimary ?? true) ? 1 : 0,
-        dto.priority ?? 100,
-        dto.matchMethod ?? 'manual',
-        dto.remark ?? null,
-      ],
-    );
-    if (dto.isPrimary ?? true) {
-      await this.demoteOtherSourceContexts(
-        sourceApp,
-        dto.sourceType,
-        sourceKey,
-        dto.contactContextConfigId,
-      );
-    }
-    const rows = await this.dataSource.query(
-      `
-        SELECT *
-        FROM source_contact_contexts
-        WHERE source_app = ? AND source_type = ? AND source_key = ?
-          AND contact_context_config_id = ?
-        LIMIT 1
-      `,
-      [sourceApp, dto.sourceType, sourceKey, dto.contactContextConfigId],
-    );
-    return rows?.[0] ?? null;
-  }
-
-  async updateSourceContext(id: string, dto: UpdateSourceContactContextDto) {
-    await this.ensureSourceContactContextSchema();
-    if (dto.contactContextConfigId) {
-      await this.findOne(dto.contactContextConfigId);
-    }
-    await this.dataSource.query(
-      `
-        UPDATE source_contact_contexts
-        SET
-          source_name = COALESCE(?, source_name),
-          external_source_id = COALESCE(?, external_source_id),
-          contact_context_config_id = COALESCE(?, contact_context_config_id),
-          status = COALESCE(?, status),
-          is_primary = COALESCE(?, is_primary),
-          priority = COALESCE(?, priority),
-          match_method = COALESCE(?, match_method),
-          remark = COALESCE(?, remark),
-          last_seen_at = NOW(),
-          updated_at = NOW(),
-          deleted_at = CASE WHEN ? = 'inactive' THEN deleted_at ELSE NULL END
-        WHERE id = ?
-      `,
-      [
-        dto.sourceName ?? null,
-        dto.externalSourceId ?? null,
-        dto.contactContextConfigId ?? null,
-        dto.status ?? null,
-        dto.isPrimary === undefined ? null : dto.isPrimary ? 1 : 0,
-        dto.priority ?? null,
-        dto.matchMethod ?? null,
-        dto.remark ?? null,
-        dto.status ?? null,
-        id,
-      ],
-    );
-    const rows = await this.dataSource.query(
-      'SELECT * FROM source_contact_contexts WHERE id = ? LIMIT 1',
-      [id],
-    );
-    if (!rows?.[0]) {
-      throw new NotFoundException('Source contact context not found');
-    }
-    if (dto.isPrimary) {
-      await this.demoteOtherSourceContexts(
-        rows[0].source_app,
-        rows[0].source_type,
-        rows[0].source_key,
-        rows[0].contact_context_config_id,
-      );
-    }
-    return rows[0];
-  }
-
-  async create(dto: CreateContactContextConfigDto) {
-    await this.ensureCustomer(dto.customerId);
-    const config = this.configsRepository.create({
-      id: randomUUID(),
-      contact_name: dto.contactName,
-      contact_mobile: dto.contactMobile ?? null,
-      contact_email: dto.contactEmail ?? null,
-      customer_id: dto.customerId,
-      business_platform: dto.businessPlatform ?? null,
+    const groupKey = dto.groupId || this.makeGroupKey(dto.groupName);
+    const saved = await this.upsertGroupContactMapping({
+      id: dto.contactContextConfigId,
+      groupKey,
+      groupName: dto.groupName,
+      contactName,
+      customerCode,
+      businessPlatform:
+        dto.businessPlatform ??
+        this.normalizeNullableText(existingContext?.business_platform),
+      collectEnabled:
+        dto.collectEnabled === undefined ? true : dto.collectEnabled,
       status: 'active',
       remark: dto.remark ?? null,
     });
-    return this.configsRepository.save(config);
+    return this.toWechatGroupConfigShape(saved);
+  }
+
+  async updateWechatGroupConfig(id: string, dto: UpdateWechatGroupConfigDto) {
+    await this.ensureGroupContactMappingsSchema();
+    const current = await this.findOne(id);
+    const customerCode =
+      dto.customerCode || dto.customerId
+        ? await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId)
+        : String(current.customer_code);
+    let existingContext: Record<string, unknown> | null = null;
+    if (dto.contactContextConfigId) {
+      existingContext = await this.findOne(dto.contactContextConfigId);
+    }
+    const saved = await this.upsertGroupContactMapping({
+      id,
+      groupKey: dto.groupId ?? String(current.group_key),
+      groupName: dto.groupName ?? String(current.group_name),
+      contactName:
+        dto.contactName ??
+        String(existingContext?.contact_name ?? current.contact_name),
+      customerCode,
+      businessPlatform:
+        dto.businessPlatform ??
+        this.normalizeNullableText(
+          existingContext?.business_platform ?? current.business_platform,
+        ),
+      collectEnabled:
+        dto.collectEnabled === undefined
+          ? Boolean(current.collect_enabled)
+          : dto.collectEnabled,
+      status: dto.status ?? String(current.status),
+      remark: dto.remark ?? (current.remark as string | null),
+    });
+    return this.toWechatGroupConfigShape(saved);
+  }
+
+  async createSourceContext(dto: CreateSourceContactContextDto) {
+    await this.ensureGroupContactMappingsSchema();
+    const context = await this.findOne(dto.contactContextConfigId);
+    const groupKey =
+      dto.sourceKey || dto.externalSourceId || this.makeGroupKey(dto.sourceName);
+    const saved = await this.upsertGroupContactMapping({
+      id: dto.contactContextConfigId,
+      groupKey,
+      groupName: dto.sourceName,
+      contactName: String(context.contact_name),
+      customerCode: String(context.customer_code),
+      businessPlatform: this.normalizeNullableText(context.business_platform),
+      collectEnabled: true,
+      status: 'active',
+      remark: dto.remark ?? null,
+    });
+    return this.toSourceContextShape(saved);
+  }
+
+  async updateSourceContext(id: string, dto: UpdateSourceContactContextDto) {
+    await this.ensureGroupContactMappingsSchema();
+    const current = await this.findOne(id);
+    const context = dto.contactContextConfigId
+      ? await this.findOne(dto.contactContextConfigId)
+      : current;
+    const saved = await this.upsertGroupContactMapping({
+      id,
+      groupKey: dto.externalSourceId ?? String(current.group_key),
+      groupName: dto.sourceName ?? String(current.group_name),
+      contactName: String(context.contact_name),
+      customerCode: String(context.customer_code),
+      businessPlatform: this.normalizeNullableText(context.business_platform),
+      collectEnabled: true,
+      status: dto.status ?? String(current.status),
+      remark: dto.remark ?? (current.remark as string | null),
+    });
+    return this.toSourceContextShape(saved);
+  }
+
+  async create(dto: CreateContactContextConfigDto) {
+    await this.ensureGroupContactMappingsSchema();
+    const customerCode = await this.resolveCustomerCodeInput(
+      dto.customerCode,
+      dto.customerId,
+    );
+    return this.upsertGroupContactMapping({
+      groupKey: dto.groupKey || this.makeGroupKey(dto.groupName || dto.contactName),
+      groupName: dto.groupName || dto.contactName,
+      contactName: dto.contactName,
+      customerCode,
+      businessPlatform: this.normalizeNullableText(dto.businessPlatform),
+      collectEnabled: true,
+      status: 'active',
+      remark: dto.remark ?? null,
+    });
   }
 
   async update(id: string, dto: UpdateContactContextConfigDto) {
+    await this.ensureGroupContactMappingsSchema();
     const config = await this.findOne(id);
-    if (dto.customerId) {
-      await this.ensureCustomer(dto.customerId);
-    }
-    Object.assign(config, {
-      contact_name: dto.contactName ?? config.contact_name,
-      contact_mobile: dto.contactMobile ?? config.contact_mobile,
-      contact_email: dto.contactEmail ?? config.contact_email,
-      customer_id: dto.customerId ?? config.customer_id,
-      business_platform: dto.businessPlatform ?? config.business_platform,
+    const customerCode =
+      dto.customerCode || dto.customerId
+        ? await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId)
+        : String(config.customer_code);
+    return this.upsertGroupContactMapping({
+      id,
+      groupKey: dto.groupKey ?? String(config.group_key),
+      groupName: dto.groupName ?? String(config.group_name),
+      contactName: dto.contactName ?? String(config.contact_name),
+      customerCode,
+      businessPlatform:
+        dto.businessPlatform !== undefined
+          ? this.normalizeNullableText(dto.businessPlatform)
+          : this.normalizeNullableText(config.business_platform),
+      collectEnabled: Boolean(config.collect_enabled),
       status: dto.status ?? config.status,
       remark: dto.remark ?? config.remark,
     });
-    return this.configsRepository.save(config);
+  }
+
+  private async ensureGroupContactMappingsSchema() {
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS group_contact_mappings (
+        id CHAR(36) NOT NULL,
+        group_key VARCHAR(255) NOT NULL,
+        group_name VARCHAR(255) NOT NULL,
+        contact_name VARCHAR(64) NOT NULL,
+        customer_code VARCHAR(32) NOT NULL,
+        business_platform VARCHAR(64) NULL,
+        collect_enabled TINYINT(1) NOT NULL DEFAULT 1,
+        status VARCHAR(32) NOT NULL DEFAULT 'active',
+        remark VARCHAR(255) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_group_contact_mapping (group_key, contact_name),
+        KEY idx_group_contact_group (group_key),
+        KEY idx_group_contact_name (contact_name),
+        KEY idx_group_contact_customer_platform (customer_code, business_platform),
+        KEY idx_group_contact_status (status, collect_enabled)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='群内对接人映射表'
+    `);
+    await this.addColumnIfMissing(
+      'group_contact_mappings',
+      'customer_code',
+      'VARCHAR(32) NULL',
+    );
+    await this.backfillGroupContactCustomerCodes();
+    await this.modifyColumnIfNeeded(
+      'group_contact_mappings',
+      'customer_code',
+      'VARCHAR(32) NOT NULL',
+    );
+    await this.dropForeignKeyIfExists(
+      'group_contact_mappings',
+      'fk_group_contact_customer',
+    );
+    await this.dropIndexIfExists(
+      'group_contact_mappings',
+      'idx_group_contact_customer_platform',
+    );
+    await this.dropColumnIfExists('group_contact_mappings', 'customer_id');
+    await ensureIndex(
+      this.dataSource,
+      'group_contact_mappings',
+      'idx_group_contact_customer_platform',
+      ['customer_code', 'business_platform'],
+    );
+  }
+
+  private async upsertGroupContactMapping(input: {
+    id?: string | null;
+    groupKey: string;
+    groupName: string;
+    contactName: string;
+    customerCode: string;
+    businessPlatform?: string | null;
+    collectEnabled?: boolean;
+    status?: string;
+    remark?: string | null;
+  }) {
+    const groupKey = String(input.groupKey || '').trim();
+    const groupName = String(input.groupName || '').trim();
+    const contactName = String(input.contactName || '').trim();
+    if (!groupKey || !groupName || !contactName) {
+      throw new BadRequestException('Group and contact are required');
+    }
+    await this.ensureCustomerCode(input.customerCode);
+    await this.dataSource.query(
+      `
+        INSERT INTO group_contact_mappings (
+          id,
+          group_key,
+          group_name,
+          contact_name,
+          customer_code,
+          business_platform,
+          collect_enabled,
+          status,
+          remark
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          group_name = VALUES(group_name),
+          customer_code = VALUES(customer_code),
+          business_platform = VALUES(business_platform),
+          collect_enabled = VALUES(collect_enabled),
+          status = VALUES(status),
+          remark = VALUES(remark),
+          deleted_at = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      `,
+      [
+        input.id || randomUUID(),
+        groupKey,
+        groupName,
+        contactName,
+        input.customerCode,
+        input.businessPlatform || null,
+        input.collectEnabled === false ? 0 : 1,
+        input.status || 'active',
+        input.remark ?? null,
+      ],
+    );
+    const rows = await this.dataSource.query(
+      `
+        SELECT
+          mapping.*,
+          mapping.customer_code AS customer_id,
+          customer.customer_name
+        FROM group_contact_mappings mapping
+        JOIN customers customer
+          ON customer.customer_code = mapping.customer_code
+         AND customer.deleted_at IS NULL
+        WHERE mapping.group_key = ?
+          AND mapping.contact_name = ?
+          AND mapping.deleted_at IS NULL
+        LIMIT 1
+      `,
+      [groupKey, contactName],
+    );
+    return rows[0];
+  }
+
+  private async backfillGroupContactCustomerCodes() {
+    if (!(await this.columnExists('group_contact_mappings', 'customer_id'))) {
+      return;
+    }
+    await this.dataSource.query(`
+      UPDATE group_contact_mappings mapping
+      JOIN customers customer
+        ON customer.id = mapping.customer_id
+       AND customer.deleted_at IS NULL
+      SET mapping.customer_code = customer.customer_code
+      WHERE (mapping.customer_code IS NULL OR mapping.customer_code = '')
+        AND customer.customer_code IS NOT NULL
+        AND customer.customer_code <> ''
+    `);
+  }
+
+  private async customerCodeForId(customerId: string) {
+    const customer = await this.customersRepository.findOne({
+      where: { id: customerId },
+    });
+    if (!customer) {
+      throw new BadRequestException('Customer not found');
+    }
+    const customerCode = this.normalizeNullableText(customer.customer_code);
+    if (!customerCode) {
+      throw new BadRequestException('Customer code is required');
+    }
+    return customerCode;
+  }
+
+  private async ensureCustomerCode(customerCode: string) {
+    const customer = await this.customersRepository.findOne({
+      where: { customer_code: customerCode },
+    });
+    if (!customer) {
+      throw new BadRequestException('Customer code not found');
+    }
+  }
+
+  private async resolveCustomerCodeInput(
+    customerCode?: string,
+    legacyCustomerId?: string,
+  ) {
+    const normalizedCode = this.normalizeNullableText(customerCode);
+    if (normalizedCode) {
+      await this.ensureCustomerCode(normalizedCode);
+      return normalizedCode;
+    }
+    const normalizedId = this.normalizeNullableText(legacyCustomerId);
+    if (!normalizedId) {
+      throw new BadRequestException('Customer code is required');
+    }
+    if (await this.customerCodeExists(normalizedId)) {
+      return normalizedId;
+    }
+    return this.customerCodeForId(normalizedId);
+  }
+
+  private async customerCodeExists(customerCode: string) {
+    const customer = await this.customersRepository.findOne({
+      where: { customer_code: customerCode },
+    });
+    return Boolean(customer);
+  }
+
+  private normalizeNullableText(value: unknown) {
+    const normalized = String(value ?? '').trim();
+    return normalized || null;
+  }
+
+  private toWechatGroupConfigShape(mapping: Record<string, unknown>) {
+    return {
+      id: mapping.id,
+      group_id: mapping.group_key,
+      group_name: mapping.group_name,
+      source_key: mapping.group_key,
+      customer_id: mapping.customer_code,
+      customer_code: mapping.customer_code,
+      contact_context_config_id: mapping.id,
+      business_platform: mapping.business_platform,
+      status: mapping.status,
+      collect_enabled: mapping.collect_enabled,
+      sort_order: 100,
+      remark: mapping.remark,
+      created_at: mapping.created_at,
+      updated_at: mapping.updated_at,
+      deleted_at: mapping.deleted_at,
+      contact_name: mapping.contact_name,
+      resolved_business_platform: mapping.business_platform,
+    };
+  }
+
+  private toSourceContextShape(mapping: Record<string, unknown>) {
+    return {
+      id: mapping.id,
+      source_app: 'crawler',
+      source_type: 'wechat_group',
+      source_key: mapping.group_key,
+      source_name: mapping.group_name,
+      external_source_id: mapping.group_key,
+      contact_context_config_id: mapping.id,
+      status: mapping.status,
+      is_primary: 1,
+      priority: 100,
+      match_method: 'group_contact_mapping',
+      remark: mapping.remark,
+      first_seen_at: mapping.created_at,
+      last_seen_at: mapping.updated_at,
+      created_at: mapping.created_at,
+      updated_at: mapping.updated_at,
+      deleted_at: mapping.deleted_at,
+      contact_name: mapping.contact_name,
+      customer_id: mapping.customer_code,
+      customer_code: mapping.customer_code,
+      business_platform: mapping.business_platform,
+    };
+  }
+
+  private makeGroupKey(groupName: string) {
+    return createHash('sha256')
+      .update(`group:${String(groupName || '').trim()}`, 'utf8')
+      .digest('hex');
+  }
+
+  private async tableExists(tableName: string) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.tables
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+      `,
+      [tableName],
+    );
+    return Number(rows?.[0]?.count || 0) > 0;
+  }
+
+  private async migrateLegacyContactContextsToGroupMappings() {
+    if (!(await this.tableExists('contact_context_configs'))) return;
+    await this.dataSource.query(`
+      INSERT IGNORE INTO group_contact_mappings (
+        id,
+        group_key,
+        group_name,
+        contact_name,
+        customer_code,
+        business_platform,
+        collect_enabled,
+        status,
+        remark,
+        created_at,
+        updated_at,
+        deleted_at
+      )
+      SELECT
+        context.id,
+        SHA2(CONCAT('legacy:', context.id), 256),
+        COALESCE(NULLIF(context.remark, ''), context.contact_name),
+        context.contact_name,
+        customer.customer_code,
+        context.business_platform,
+        1,
+        context.status,
+        context.remark,
+        context.created_at,
+        context.updated_at,
+        context.deleted_at
+      FROM contact_context_configs context
+      JOIN customers customer
+        ON customer.id = context.customer_id
+       AND customer.deleted_at IS NULL
+      WHERE context.deleted_at IS NULL
+    `);
+  }
+
+  private async migrateWechatGroupConfigsToGroupMappings() {
+    if (!(await this.tableExists('wechat_group_configs'))) return;
+    await this.dataSource.query(`
+      INSERT IGNORE INTO group_contact_mappings (
+        id,
+        group_key,
+        group_name,
+        contact_name,
+        customer_code,
+        business_platform,
+        collect_enabled,
+        status,
+        remark,
+        created_at,
+        updated_at,
+        deleted_at
+      )
+      SELECT
+        UUID(),
+        COALESCE(NULLIF(group_config.group_id, ''), group_config.source_key, SHA2(CONCAT('group:', group_config.group_name), 256)),
+        group_config.group_name,
+        COALESCE(context.contact_name, group_config.group_name),
+        customer.customer_code,
+        COALESCE(group_config.business_platform, context.business_platform),
+        COALESCE(group_config.collect_enabled, 1),
+        group_config.status,
+        group_config.remark,
+        group_config.created_at,
+        group_config.updated_at,
+        group_config.deleted_at
+      FROM wechat_group_configs group_config
+      JOIN customers customer
+        ON customer.id = group_config.customer_id
+       AND customer.deleted_at IS NULL
+      LEFT JOIN contact_context_configs context
+        ON context.id = group_config.contact_context_config_id
+       AND context.deleted_at IS NULL
+      WHERE group_config.deleted_at IS NULL
+    `);
+  }
+
+  private async migrateSourceContextsToGroupMappings() {
+    if (!(await this.tableExists('source_contact_contexts'))) return;
+    await this.dataSource.query(`
+      INSERT IGNORE INTO group_contact_mappings (
+        id,
+        group_key,
+        group_name,
+        contact_name,
+        customer_code,
+        business_platform,
+        collect_enabled,
+        status,
+        remark,
+        created_at,
+        updated_at,
+        deleted_at
+      )
+      SELECT
+        UUID(),
+        source.source_key,
+        source.source_name,
+        context.contact_name,
+        customer.customer_code,
+        context.business_platform,
+        1,
+        source.status,
+        source.remark,
+        source.created_at,
+        source.updated_at,
+        source.deleted_at
+      FROM source_contact_contexts source
+      JOIN contact_context_configs context
+        ON context.id = source.contact_context_config_id
+       AND context.deleted_at IS NULL
+      JOIN customers customer
+        ON customer.id = context.customer_id
+       AND customer.deleted_at IS NULL
+      WHERE source.deleted_at IS NULL
+        AND source.source_type IN ('wechat_group', 'crawler_chat', 'chat')
+    `);
   }
 
   private async ensureCustomer(customerId: string) {
@@ -738,6 +1099,13 @@ export class ContactContextsService implements OnModuleInit {
   }
 
   private async dropColumnIfExists(tableName: string, columnName: string) {
+    if (!(await this.columnExists(tableName, columnName))) return;
+    await this.dataSource.query(
+      `ALTER TABLE \`${tableName}\` DROP COLUMN \`${columnName}\``,
+    );
+  }
+
+  private async columnExists(tableName: string, columnName: string) {
     const rows = await this.dataSource.query(
       `
         SELECT COUNT(*) AS count
@@ -748,10 +1116,7 @@ export class ContactContextsService implements OnModuleInit {
       `,
       [tableName, columnName],
     );
-    if (Number(rows?.[0]?.count || 0) === 0) return;
-    await this.dataSource.query(
-      `ALTER TABLE \`${tableName}\` DROP COLUMN \`${columnName}\``,
-    );
+    return Number(rows?.[0]?.count || 0) > 0;
   }
 
   private async addColumnIfMissing(
@@ -821,6 +1186,24 @@ export class ContactContextsService implements OnModuleInit {
     if (Number(rows?.[0]?.count || 0) === 0) return;
     await this.dataSource.query(
       `ALTER TABLE \`${tableName}\` DROP INDEX \`${indexName}\``,
+    );
+  }
+
+  private async dropForeignKeyIfExists(tableName: string, constraintName: string) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.table_constraints
+        WHERE constraint_schema = DATABASE()
+          AND table_name = ?
+          AND constraint_name = ?
+          AND constraint_type = 'FOREIGN KEY'
+      `,
+      [tableName, constraintName],
+    );
+    if (Number(rows?.[0]?.count || 0) === 0) return;
+    await this.dataSource.query(
+      `ALTER TABLE \`${tableName}\` DROP FOREIGN KEY \`${constraintName}\``,
     );
   }
 

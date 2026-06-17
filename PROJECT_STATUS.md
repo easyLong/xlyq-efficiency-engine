@@ -7,7 +7,7 @@
 当前项目已经完成可运行 MVP，覆盖：
 
 - 需求录入、AI 候选需求预览和确认入库
-- 对接人维度配置
+- 群内对接人映射配置
 - 业务大类负责人配置，需求负责人和任务执行人拆分
 - 一条需求自动生成一个任务
 - 历史需求任务编辑、删除、筛选
@@ -25,7 +25,7 @@
 
 - 管理端由 `backend/public/index.html` 承载，后端通过 `useStaticAssets` 托管。
 - 需求录入支持手动录入，以及从 AI 候选需求预览卡片一键填充后确认入库。
-- 手动录入支持选择对接人，由对接人带出基金客户、业务平台；业务大类和二级分类通过字典关系下拉选择。
+- 手动录入支持选择群内对接人映射，由 `group_contact_mappings` 带出基金客户、业务平台；业务大类和二级分类通过字典关系下拉选择。
 - 需求负责人由 `business_category_owner_configs` 按业务大类配置，写入 `tasks.reporter_user_id`；指派/改派员工写入 `tasks.assignee_user_id`，页面统一展示为“执行人”。
 - 历史需求任务支持快速筛选：全部、待指派、处理中、待验收、已验收、待报价，并支持需求名称关键词搜索。
 - 历史需求任务支持维度筛选：基金、业务平台、业务大类、二级分类、员工。
@@ -106,10 +106,14 @@ npm run test:e2e -- --runInBand
 
 ### 已完成优化
 
+- 新增 `group_contact_mappings`，将 `contact_context_configs`、`source_contact_contexts`、`wechat_group_configs` 收敛为“群 + 对接人 -> 基金简称 customer_code + 业务平台”的最小配置模型。
+- `/api/v1/contact-contexts`、`/api/v1/contact-contexts/wechat-groups`、`/api/v1/contact-contexts/sources` 已兼容读取新表，旧表仅作为启动迁移来源。
 - 新增 `business_category_owner_configs`，启动时自动初始化设计、文案、运营、社区四个业务大类配置。
-- `POST /api/v1/requirements/with-task` 创建任务时，按业务大类配置自动写入 `tasks.reporter_user_id`；未配置时保持为空，避免误把项目创建人当负责人。
+- `business_category_owner_configs.owner_user_id` 现在会规范化为真实 `users.id`；配置里临时填写姓名/用户名时，启动时会解析或创建本地负责人用户，并按业务大类回填历史任务。
+- `POST /api/v1/requirements/with-task` 创建任务时，只按业务大类配置自动写入 `tasks.reporter_user_id`；未配置时保持为空，避免误把基金、对接人、平台或项目创建人当负责人。
 - 新增 `GET /api/v1/requirements/business-category-owners` 和 `PATCH /api/v1/requirements/business-category-owners/{categoryCode}`，支持查询/更新业务大类负责人，并在更新后回填历史任务负责人。
 - 历史需求任务状态页修正角色展示：`reporter_user_id` 展示为负责人，`assignee_user_id` 展示为执行人；指派、改派、任务看板和关键任务表统一使用“执行人”。
+- AI 预览区只展示 `pending` 候选；新增“标记伪需求”操作，调用 `/api/v1/requirements/ai-preview-candidates/{candidateId}/reject` 后将候选置为 `rejected` 并立即移出预览区。
 
 ### 最新验证结果
 

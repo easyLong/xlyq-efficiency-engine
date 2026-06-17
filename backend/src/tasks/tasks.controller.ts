@@ -36,12 +36,13 @@ export class TasksController {
   board(
     @Query('projectId') projectId?: string,
     @Query('liveAssetCount') liveAssetCount?: string,
+    @Query('customerCode') customerCode?: string,
     @Query('customerId') customerId?: string,
   ) {
     return this.tasksService.board(
       projectId,
       liveAssetCount === 'true',
-      customerId,
+      customerCode ?? customerId,
     );
   }
 

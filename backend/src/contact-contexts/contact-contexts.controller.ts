@@ -14,10 +14,15 @@ export class ContactContextsController {
   @Get()
   findAll(
     @Query('status') status?: string,
+    @Query('customerCode') customerCode?: string,
     @Query('customerId') customerId?: string,
     @Query('keyword') keyword?: string,
   ) {
-    return this.contactContextsService.findAll(status, customerId, keyword);
+    return this.contactContextsService.findAll(
+      status,
+      customerCode ?? customerId,
+      keyword,
+    );
   }
 
   @Get('wechat-groups')

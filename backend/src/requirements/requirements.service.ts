@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { getAiPrompt } from '../ai-prompts/prompt-registry';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { ensureIndex } from '../common/schema-maintenance';
@@ -121,6 +121,7 @@ export class RequirementsService implements OnModuleInit {
   async onModuleInit() {
     await this.ensureRequirementsSchema();
     await this.ensureBusinessCategoryOwnerConfigTable();
+    await this.normalizeBusinessCategoryOwnerConfigUsers();
     await this.ensureDemandIntakeTables();
     await this.backfillTaskReportersFromBusinessCategoryOwners();
   }
@@ -224,15 +225,10 @@ export class RequirementsService implements OnModuleInit {
       throw new BadRequestException('Business category is required');
     }
 
-    const ownerUserId = dto.ownerUserId?.trim() || null;
-    if (ownerUserId) {
-      const owner = await this.usersRepository.findOne({
-        where: { id: ownerUserId, status: 'active' },
-      });
-      if (!owner) {
-        throw new BadRequestException('Owner user not found or inactive');
-      }
-    }
+    const ownerUserId = await this.resolveBusinessCategoryOwnerReference(
+      dto.ownerUserId,
+      true,
+    );
 
     await this.dataSource.query(
       `
@@ -285,6 +281,23 @@ export class RequirementsService implements OnModuleInit {
     };
   }
 
+  async rejectAiPreviewCandidate(candidateId: string) {
+    const result = await this.dataSource.query(
+      `
+        UPDATE demand_intake_candidates
+        SET status = 'rejected',
+            match_reason = COALESCE(match_reason, '人工标记伪需求'),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? OR external_candidate_id = ?
+      `,
+      [candidateId, candidateId],
+    );
+    return {
+      updated: result?.affectedRows ?? result?.[0]?.affectedRows ?? 0,
+      source: 'ops_platform',
+    };
+  }
+
   private async listOpsAiPreviewCandidates(limit: number) {
     const rows = await this.dataSource.query(
       `
@@ -309,11 +322,15 @@ export class RequirementsService implements OnModuleInit {
           c.confidence,
           c.status,
           c.match_suggestion,
+          COALESCE(c.matched_customer_code, matched_customer.customer_code) AS matched_customer_code,
           c.matched_customer_id,
           c.matched_contact_context_id,
           c.match_confidence,
           c.match_reason
         FROM demand_intake_candidates c
+        LEFT JOIN customers matched_customer
+          ON matched_customer.id = c.matched_customer_id
+         AND matched_customer.deleted_at IS NULL
         WHERE c.deleted_at IS NULL
           AND COALESCE(c.status, 'pending') NOT IN ('confirmed', 'rejected')
         ORDER BY c.created_at DESC
@@ -385,11 +402,15 @@ export class RequirementsService implements OnModuleInit {
   }
 
   async create(dto: CreateRequirementDto) {
+    const customerCode = await this.resolveCustomerCodeInput(
+      dto.customerCode,
+      dto.customerId,
+    );
     const requirement = this.requirementsRepository.create({
       id: randomUUID(),
       requirement_code: await this.nextRequirementCode(),
       project_id: dto.projectId,
-      customer_id: dto.customerId,
+      customer_code: customerCode,
       title: dto.title,
       source_type: 'manual',
       source_ref_id: null,
@@ -411,11 +432,14 @@ export class RequirementsService implements OnModuleInit {
     const contactContext = dto.contactContextId
       ? await this.resolveContactContext(dto.contactContextId)
       : null;
+    const customerCode = contactContext?.customer_code
+      ? String(contactContext.customer_code)
+      : await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId);
 
     return this.createRequirementTaskBundle({
       ...dto,
       projectId: dto.projectId,
-      customerId: contactContext?.customer_id ?? dto.customerId,
+      customerCode,
       contactContextId: contactContext?.id ?? dto.contactContextId,
       businessName: dto.businessName,
       businessPlatform:
@@ -478,13 +502,15 @@ export class RequirementsService implements OnModuleInit {
         .join('\n');
       const itemMatch = this.matchContextByRules(contextText, customers);
       const customerId =
-        itemMatch.customerId ?? batchFallbackMatch.customerId ?? dto.customerId;
+        itemMatch.customerId ??
+        batchFallbackMatch.customerId ??
+        (await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId));
       const projectType =
         itemMatch.customerId || itemMatch.customerLocked
           ? itemMatch.projectType
           : batchFallbackMatch.projectType;
       const project = await this.ensureProjectForAiRequirement({
-        customerId,
+        customerCode: customerId,
         projectType,
       });
       const title =
@@ -500,7 +526,7 @@ export class RequirementsService implements OnModuleInit {
         customerName:
           itemMatch.customerName ??
           batchFallbackMatch.customerName ??
-          customers.find((customer) => customer.id === customerId)
+          customers.find((customer) => customer.customer_code === customerId)
             ?.customer_name ??
           null,
         projectType,
@@ -514,7 +540,7 @@ export class RequirementsService implements OnModuleInit {
       };
       const bundle = await this.createRequirementTaskBundle({
         projectId: project.id,
-        customerId,
+        customerCode: customerId,
         title,
         rawContent: content,
         priority: dto.priority ?? suggestion.priority,
@@ -630,7 +656,10 @@ export class RequirementsService implements OnModuleInit {
   async update(id: string, dto: UpdateRequirementDto) {
     const requirement = await this.findOne(id);
     const targetProjectId = dto.projectId ?? requirement.project_id;
-    const targetCustomerId = dto.customerId ?? requirement.customer_id;
+    const targetCustomerCode =
+      dto.customerCode || dto.customerId
+        ? await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId)
+        : requirement.customer_code;
     const priority =
       dto.priority !== undefined
         ? this.normalizePriority(dto.priority)
@@ -647,7 +676,7 @@ export class RequirementsService implements OnModuleInit {
       if (!project) {
         throw new NotFoundException('Project not found');
       }
-      if (targetCustomerId && project.customer_id !== targetCustomerId) {
+      if (targetCustomerCode && project.customer_code !== targetCustomerCode) {
         throw new BadRequestException('Project does not belong to customer');
       }
     }
@@ -658,7 +687,7 @@ export class RequirementsService implements OnModuleInit {
       priority,
       urgency_level: urgencyLevel,
       project_id: targetProjectId,
-      customer_id: targetCustomerId,
+      customer_code: targetCustomerCode,
       business_name: dto.businessName ?? requirement.business_name,
       business_platform: dto.businessPlatform ?? requirement.business_platform,
       business_category: dto.businessCategory ?? requirement.business_category,
@@ -683,7 +712,10 @@ export class RequirementsService implements OnModuleInit {
       dto.rawContent !== undefined ||
       dto.priority !== undefined ||
       dto.urgencyLevel !== undefined;
-    const shouldSyncTask = shouldSyncItem || dto.projectId !== undefined;
+    const shouldSyncTask =
+      shouldSyncItem ||
+      dto.projectId !== undefined ||
+      dto.businessCategory !== undefined;
     if (item && shouldSyncItem) {
       item.item_title = dto.title ?? item.item_title;
       item.item_description = dto.rawContent ?? item.item_description;
@@ -705,6 +737,11 @@ export class RequirementsService implements OnModuleInit {
         task.description = dto.rawContent ?? task.description;
         task.priority = priority ?? task.priority;
         task.urgency_level = urgencyLevel ?? task.urgency_level;
+        if (dto.businessCategory !== undefined) {
+          task.reporter_user_id = await this.resolveRequirementReporterUserId(
+            savedRequirement.business_category,
+          );
+        }
         await this.tasksRepository.save(task);
       }
     }
@@ -919,7 +956,7 @@ export class RequirementsService implements OnModuleInit {
 
   private async createRequirementTaskBundle(input: {
     projectId: string;
-    customerId: string;
+    customerCode: string;
     title: string;
     rawContent?: string;
     priority?: string;
@@ -955,7 +992,7 @@ export class RequirementsService implements OnModuleInit {
         id: randomUUID(),
         requirement_code: code,
         project_id: input.projectId,
-        customer_id: input.customerId,
+        customer_code: input.customerCode,
         title: input.title,
         source_type: input.sourceType,
         source_ref_id: input.contactContextId ?? null,
@@ -1039,13 +1076,101 @@ export class RequirementsService implements OnModuleInit {
   }
 
   private async resolveContactContext(id: string) {
-    const config = await this.contactContextsRepository.findOne({
-      where: { id, status: 'active' },
-    });
+    const groupMappingRows = await this.dataSource.query(
+      `
+        SELECT
+          mapping.id,
+          mapping.contact_name,
+          NULL AS contact_mobile,
+          NULL AS contact_email,
+          mapping.customer_code,
+          mapping.business_platform,
+          mapping.status,
+          mapping.remark
+        FROM group_contact_mappings mapping
+        WHERE mapping.id = ?
+          AND mapping.status = 'active'
+          AND mapping.deleted_at IS NULL
+        LIMIT 1
+      `,
+      [id],
+    );
+    let config = groupMappingRows?.[0] ?? null;
+    if (!config && (await this.tableExists('contact_context_configs'))) {
+      const legacyRows = await this.dataSource.query(
+        `
+          SELECT
+            context.id,
+            context.contact_name,
+            context.contact_mobile,
+            context.contact_email,
+            customer.customer_code,
+            context.business_platform,
+            context.status,
+            context.remark
+          FROM contact_context_configs context
+          JOIN customers customer
+            ON customer.id = context.customer_id
+           AND customer.deleted_at IS NULL
+          WHERE context.id = ?
+            AND context.status = 'active'
+            AND context.deleted_at IS NULL
+          LIMIT 1
+        `,
+        [id],
+      );
+      config = legacyRows?.[0] ?? null;
+    }
     if (!config) {
       throw new BadRequestException('Contact context config not found');
     }
     return config;
+  }
+
+  private async tableExists(tableName: string) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.tables
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+      `,
+      [tableName],
+    );
+    return Number(rows?.[0]?.count || 0) > 0;
+  }
+
+  private async resolveCustomerCodeInput(
+    customerCode?: string,
+    legacyCustomerId?: string,
+  ) {
+    const code = String(customerCode ?? '').trim();
+    if (code) {
+      await this.ensureCustomerCode(code);
+      return code;
+    }
+    const legacy = String(legacyCustomerId ?? '').trim();
+    if (!legacy) {
+      throw new BadRequestException('Customer code is required');
+    }
+    const byCode = await this.customersRepository.findOne({
+      where: { customer_code: legacy },
+    });
+    if (byCode) return legacy;
+    const byId = await this.customersRepository.findOne({ where: { id: legacy } });
+    if (!byId?.customer_code) {
+      throw new BadRequestException('Customer not found');
+    }
+    return byId.customer_code;
+  }
+
+  private async ensureCustomerCode(customerCode: string) {
+    const customer = await this.customersRepository.findOne({
+      where: { customer_code: customerCode },
+    });
+    if (!customer) {
+      throw new BadRequestException('Customer code not found');
+    }
   }
 
   private async nextRequirementCode() {
@@ -1089,12 +1214,12 @@ export class RequirementsService implements OnModuleInit {
   }
 
   private async ensureProjectForAiRequirement(input: {
-    customerId: string;
+    customerCode: string;
     projectType: string;
   }) {
     const existing = await this.projectsRepository.findOne({
       where: {
-        customer_id: input.customerId,
+        customer_code: input.customerCode,
         project_type: input.projectType,
       },
       order: { created_at: 'DESC' },
@@ -1104,11 +1229,16 @@ export class RequirementsService implements OnModuleInit {
     }
 
     const [customer, owner] = await Promise.all([
-      this.customersRepository.findOne({ where: { id: input.customerId } }),
+      this.customersRepository.findOne({
+        where: { customer_code: input.customerCode },
+      }),
       this.usersRepository.findOne({ where: { username: 'demo.pm.v2' } }),
     ]);
     if (!customer) {
       throw new BadRequestException('AI matched customer not found');
+    }
+    if (!customer.customer_code) {
+      throw new BadRequestException('AI matched customer has no code');
     }
     const ownerUser =
       owner ??
@@ -1129,7 +1259,7 @@ export class RequirementsService implements OnModuleInit {
         id: randomUUID(),
         project_code: `PRJ-AI-${String(count + 1).padStart(4, '0')}`,
         project_name: `${customer.customer_name}${typeLabel}项目`,
-        customer_id: customer.id,
+        customer_code: customer.customer_code,
         owner_user_id: ownerUser.id,
         project_type: input.projectType,
         status: 'pending',
@@ -1333,7 +1463,8 @@ export class RequirementsService implements OnModuleInit {
 
     return {
       mode: 'rule_fallback',
-      customerId: bestScore > 0 ? (bestCustomer?.id ?? null) : null,
+      customerId:
+        bestScore > 0 ? (bestCustomer?.customer_code ?? null) : null,
       customerName:
         bestScore > 0 ? (bestCustomer?.customer_name ?? null) : null,
       projectType,
@@ -1356,7 +1487,9 @@ export class RequirementsService implements OnModuleInit {
     },
     customers: CustomerEntity[],
   ) {
-    const customer = customers.find((item) => item.id === input.customerId);
+    const customer = customers.find(
+      (item) => item.customer_code === input.customerId,
+    );
     const projectType = this.projectTypes.some(
       (type) => type.value === input.projectType,
     )
@@ -1364,7 +1497,7 @@ export class RequirementsService implements OnModuleInit {
       : this.projectTypes[0].value;
 
     return {
-      customerId: customer?.id ?? null,
+      customerId: customer?.customer_code ?? null,
       customerName: customer?.customer_name ?? null,
       projectType,
       projectTypeLabel: this.projectTypeLabel(projectType),
@@ -1750,12 +1883,6 @@ export class RequirementsService implements OnModuleInit {
   private async resolveRequirementReporterUserId(
     businessCategory?: string | null,
   ) {
-    return this.resolveBusinessCategoryOwnerUserId(businessCategory);
-  }
-
-  private async resolveBusinessCategoryOwnerUserId(
-    businessCategory?: string | null,
-  ) {
     const categoryCode = this.normalizeBusinessCategoryCode(businessCategory);
     if (!categoryCode) {
       return null;
@@ -1777,10 +1904,56 @@ export class RequirementsService implements OnModuleInit {
       return null;
     }
 
-    const owner = await this.usersRepository.findOne({
-      where: { id: ownerUserId, status: 'active' },
+    return this.resolveBusinessCategoryOwnerReference(ownerUserId, true);
+  }
+
+  private async resolveBusinessCategoryOwnerReference(
+    ownerReference?: string | null,
+    createIfMissing = false,
+  ) {
+    const reference = String(ownerReference ?? '').trim();
+    if (!reference) {
+      return null;
+    }
+
+    const existing = await this.usersRepository.findOne({
+      where: [
+        { id: reference, status: 'active' },
+        { username: reference, status: 'active' },
+        { display_name: reference, status: 'active' },
+        { feishu_open_id: reference, status: 'active' },
+      ],
     });
-    return owner?.id ?? null;
+    if (existing) {
+      return existing.id;
+    }
+    if (!createIfMissing) {
+      return null;
+    }
+
+    const username = `owner-${createHash('sha1')
+      .update(reference, 'utf8')
+      .digest('hex')
+      .slice(0, 16)}`;
+    const byUsername = await this.usersRepository.findOne({
+      where: { username, status: 'active' },
+    });
+    if (byUsername) {
+      return byUsername.id;
+    }
+
+    const user = this.usersRepository.create({
+      id: randomUUID(),
+      username,
+      display_name: reference,
+      email: null,
+      mobile: null,
+      avatar_url: null,
+      status: 'active',
+      source: 'business_category_owner_config',
+      feishu_open_id: null,
+    });
+    return (await this.usersRepository.save(user)).id;
   }
 
   private normalizeUrgencyLevel(value?: string | null) {
@@ -1795,6 +1968,18 @@ export class RequirementsService implements OnModuleInit {
   }
 
   private async ensureRequirementsSchema() {
+    await this.ensureCustomerCodeColumn(
+      'projects',
+      'idx_projects_customer_id',
+      'fk_projects_customer',
+      true,
+    );
+    await this.ensureCustomerCodeColumn(
+      'requirements',
+      'idx_requirements_customer_id',
+      'fk_requirements_customer',
+      true,
+    );
     await this.addColumnIfMissing(
       'requirements',
       'urgency_level',
@@ -1815,7 +2000,7 @@ export class RequirementsService implements OnModuleInit {
       this.dataSource,
       'requirements',
       'idx_requirements_customer_created',
-      ['customer_id', 'created_at'],
+      ['customer_code', 'created_at'],
     );
     await ensureIndex(
       this.dataSource,
@@ -1883,6 +2068,35 @@ export class RequirementsService implements OnModuleInit {
     }
   }
 
+  private async normalizeBusinessCategoryOwnerConfigUsers() {
+    const rows = await this.dataSource.query(
+      `
+        SELECT id, owner_user_id AS ownerUserId
+        FROM business_category_owner_configs
+        WHERE status = 'active'
+          AND deleted_at IS NULL
+          AND owner_user_id IS NOT NULL
+          AND owner_user_id <> ''
+      `,
+    );
+    for (const row of rows) {
+      const ownerUserId = await this.resolveBusinessCategoryOwnerReference(
+        row.ownerUserId,
+        true,
+      );
+      if (ownerUserId && ownerUserId !== row.ownerUserId) {
+        await this.dataSource.query(
+          `
+            UPDATE business_category_owner_configs
+            SET owner_user_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `,
+          [ownerUserId, row.id],
+        );
+      }
+    }
+  }
+
   private async backfillTaskReportersFromBusinessCategoryOwners() {
     await this.dataSource.query(`
       UPDATE tasks task
@@ -1896,8 +2110,7 @@ export class RequirementsService implements OnModuleInit {
         ON owner_user.id = owner_config.owner_user_id
        AND owner_user.status = 'active'
       SET task.reporter_user_id = owner_config.owner_user_id
-      WHERE task.reporter_user_id IS NULL
-        AND task.deleted_at IS NULL
+      WHERE task.deleted_at IS NULL
         AND item.deleted_at IS NULL
         AND requirement.deleted_at IS NULL
     `);
@@ -1952,6 +2165,7 @@ export class RequirementsService implements OnModuleInit {
         confidence DECIMAL(8,4) NULL,
         status VARCHAR(32) NOT NULL DEFAULT 'pending',
         match_suggestion TEXT NULL,
+        matched_customer_code VARCHAR(32) NULL,
         matched_customer_id CHAR(36) NULL,
         matched_contact_context_id CHAR(36) NULL,
         matched_business_platform VARCHAR(64) NULL,
@@ -1989,6 +2203,24 @@ export class RequirementsService implements OnModuleInit {
       'external_source_key',
       'external_source_key CHAR(64) NULL',
     );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'matched_customer_code',
+      'matched_customer_code VARCHAR(32) NULL AFTER matched_customer_id',
+    );
+    if (await this.columnExists('demand_intake_candidates', 'matched_customer_id')) {
+      await this.dataSource.query(`
+        UPDATE demand_intake_candidates candidate
+        JOIN customers customer
+          ON customer.id = candidate.matched_customer_id
+         AND customer.deleted_at IS NULL
+        SET candidate.matched_customer_code = customer.customer_code
+        WHERE (candidate.matched_customer_code IS NULL OR candidate.matched_customer_code = '')
+          AND candidate.matched_customer_id IS NOT NULL
+          AND customer.customer_code IS NOT NULL
+          AND customer.customer_code <> ''
+      `);
+    }
     await ensureIndex(this.dataSource, 'demand_intake_candidates', 'idx_demand_intake_capture', [
       'source_app',
       'external_capture_run_id',
@@ -2040,6 +2272,101 @@ export class RequirementsService implements OnModuleInit {
     }
     await this.dataSource.query(
       `ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`,
+    );
+  }
+
+  private async ensureCustomerCodeColumn(
+    tableName: string,
+    legacyIndexName: string,
+    legacyForeignKeyName: string,
+    required: boolean,
+  ) {
+    await this.addColumnIfMissing(
+      tableName,
+      'customer_code',
+      `customer_code VARCHAR(32) NULL AFTER customer_id`,
+    );
+    if (await this.columnExists(tableName, 'customer_id')) {
+      await this.dataSource.query(`
+        UPDATE ${tableName} target
+        JOIN customers customer
+          ON customer.id = target.customer_id
+         AND customer.deleted_at IS NULL
+        SET target.customer_code = customer.customer_code
+        WHERE (target.customer_code IS NULL OR target.customer_code = '')
+          AND customer.customer_code IS NOT NULL
+          AND customer.customer_code <> ''
+      `);
+      await this.dropForeignKeyIfExists(tableName, legacyForeignKeyName);
+      await this.dropIndexIfExists(tableName, legacyIndexName);
+      await this.dropIndexIfExists(tableName, `${legacyIndexName}_created`);
+      await this.dropIndexIfExists(tableName, `idx_${tableName}_customer_created`);
+      await this.dropColumnIfExists(tableName, 'customer_id');
+    }
+    if (required) {
+      await this.dataSource.query(
+        `ALTER TABLE ${tableName} MODIFY customer_code VARCHAR(32) NOT NULL`,
+      );
+    }
+    await ensureIndex(this.dataSource, tableName, `${legacyIndexName}_code`, [
+      'customer_code',
+    ]);
+  }
+
+  private async columnExists(tableName: string, columnName: string) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND column_name = ?
+      `,
+      [tableName, columnName],
+    );
+    return Number(rows?.[0]?.count ?? 0) > 0;
+  }
+
+  private async dropColumnIfExists(tableName: string, columnName: string) {
+    if (!(await this.columnExists(tableName, columnName))) return;
+    await this.dataSource.query(
+      `ALTER TABLE ${tableName} DROP COLUMN ${columnName}`,
+    );
+  }
+
+  private async dropIndexIfExists(tableName: string, indexName: string) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND index_name = ?
+      `,
+      [tableName, indexName],
+    );
+    if (Number(rows?.[0]?.count ?? 0) === 0) return;
+    await this.dataSource.query(`ALTER TABLE ${tableName} DROP INDEX ${indexName}`);
+  }
+
+  private async dropForeignKeyIfExists(
+    tableName: string,
+    constraintName: string,
+  ) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.table_constraints
+        WHERE constraint_schema = DATABASE()
+          AND table_name = ?
+          AND constraint_name = ?
+          AND constraint_type = 'FOREIGN KEY'
+      `,
+      [tableName, constraintName],
+    );
+    if (Number(rows?.[0]?.count ?? 0) === 0) return;
+    await this.dataSource.query(
+      `ALTER TABLE ${tableName} DROP FOREIGN KEY ${constraintName}`,
     );
   }
 

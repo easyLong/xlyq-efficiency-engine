@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'node:crypto';
+import { CustomerEntity } from '../customers/entities/customer.entity';
 import { RequirementEntity } from '../requirements/entities/requirement.entity';
 import { RiskAlertEntity } from '../common/entities/risk-alert.entity';
 import { QuotationEntity } from '../quotations/entities/quotation.entity';
@@ -15,6 +16,8 @@ export class ProjectsService {
   constructor(
     @InjectRepository(ProjectEntity)
     private readonly projectsRepository: Repository<ProjectEntity>,
+    @InjectRepository(CustomerEntity)
+    private readonly customersRepository: Repository<CustomerEntity>,
     @InjectRepository(RequirementEntity)
     private readonly requirementsRepository: Repository<RequirementEntity>,
     @InjectRepository(TaskEntity)
@@ -42,6 +45,10 @@ export class ProjectsService {
   }
 
   async create(dto: CreateProjectDto) {
+    const customerCode = await this.resolveCustomerCodeInput(
+      dto.customerCode,
+      dto.customerId,
+    );
     const code = `PRJ-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 1000)
       .toString()
       .padStart(3, '0')}`;
@@ -50,7 +57,7 @@ export class ProjectsService {
       id: randomUUID(),
       project_code: code,
       project_name: dto.projectName,
-      customer_id: dto.customerId,
+      customer_code: customerCode,
       owner_user_id: dto.ownerUserId,
       project_type: dto.projectType ?? null,
       status: 'pending',
@@ -65,10 +72,14 @@ export class ProjectsService {
 
   async update(id: string, dto: UpdateProjectDto) {
     const project = await this.findOne(id);
+    const customerCode =
+      dto.customerCode || dto.customerId
+        ? await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId)
+        : project.customer_code;
 
     Object.assign(project, {
       project_name: dto.projectName ?? project.project_name,
-      customer_id: dto.customerId ?? project.customer_id,
+      customer_code: customerCode,
       owner_user_id: dto.ownerUserId ?? project.owner_user_id,
       project_type: dto.projectType ?? project.project_type,
       status: dto.status ?? project.status,
@@ -121,5 +132,38 @@ export class ProjectsService {
         count: Number(row.count),
       })),
     };
+  }
+
+  private async resolveCustomerCodeInput(
+    customerCode?: string,
+    legacyCustomerId?: string,
+  ) {
+    const code = String(customerCode ?? '').trim();
+    if (code) {
+      await this.ensureCustomerCode(code);
+      return code;
+    }
+    const legacy = String(legacyCustomerId ?? '').trim();
+    if (!legacy) {
+      throw new NotFoundException('Customer code is required');
+    }
+    const byCode = await this.customersRepository.findOne({
+      where: { customer_code: legacy },
+    });
+    if (byCode) return legacy;
+    const byId = await this.customersRepository.findOne({ where: { id: legacy } });
+    if (!byId?.customer_code) {
+      throw new NotFoundException('Customer not found');
+    }
+    return byId.customer_code;
+  }
+
+  private async ensureCustomerCode(customerCode: string) {
+    const customer = await this.customersRepository.findOne({
+      where: { customer_code: customerCode },
+    });
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
   }
 }

@@ -1,6 +1,14 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateContactContextConfigDto {
+  @IsOptional()
+  @IsString()
+  groupKey?: string;
+
+  @IsOptional()
+  @IsString()
+  groupName?: string;
+
   @IsString()
   @IsNotEmpty()
   contactName!: string;
@@ -13,8 +21,13 @@ export class CreateContactContextConfigDto {
   @IsString()
   contactEmail?: string;
 
-  @IsUUID()
-  customerId!: string;
+  @IsString()
+  @IsNotEmpty()
+  customerCode!: string;
+
+  @IsOptional()
+  @IsString()
+  customerId?: string;
 
   @IsOptional()
   @IsString()

@@ -18,7 +18,11 @@ export class UpdateRequirementDto {
   urgencyLevel?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  customerCode?: string;
+
+  @IsOptional()
+  @IsString()
   customerId?: string;
 
   @IsOptional()

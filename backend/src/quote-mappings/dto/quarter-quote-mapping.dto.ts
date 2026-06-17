@@ -1,8 +1,12 @@
 import { IsArray, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class QuarterQuoteMappingDto {
-  @IsUUID()
-  customerId!: string;
+  @IsString()
+  customerCode!: string;
+
+  @IsOptional()
+  @IsString()
+  customerId?: string;
 
   @IsString()
   quarter!: string;

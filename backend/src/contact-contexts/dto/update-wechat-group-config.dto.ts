@@ -3,7 +3,6 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUUID,
   Min,
 } from 'class-validator';
 
@@ -17,11 +16,19 @@ export class UpdateWechatGroupConfigDto {
   groupName?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  customerCode?: string;
+
+  @IsOptional()
+  @IsString()
   customerId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  contactName?: string;
+
+  @IsOptional()
+  @IsString()
   contactContextConfigId?: string;
 
   @IsOptional()

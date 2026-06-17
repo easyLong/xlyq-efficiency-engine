@@ -9,8 +9,8 @@ export class ProjectEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 128 })
   project_name!: string;
 
-  @Column({ type: 'char', length: 36 })
-  customer_id!: string;
+  @Column({ type: 'varchar', length: 32 })
+  customer_code!: string;
 
   @Column({ type: 'char', length: 36 })
   owner_user_id!: string;

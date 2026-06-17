@@ -4,7 +4,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUUID,
   Min,
 } from 'class-validator';
 
@@ -17,11 +16,20 @@ export class CreateWechatGroupConfigDto {
   @IsNotEmpty()
   groupName!: string;
 
-  @IsUUID()
-  customerId!: string;
+  @IsString()
+  @IsNotEmpty()
+  customerCode!: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  customerId?: string;
+
+  @IsOptional()
+  @IsString()
+  contactName?: string;
+
+  @IsOptional()
+  @IsString()
   contactContextConfigId?: string;
 
   @IsOptional()

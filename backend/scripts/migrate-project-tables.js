@@ -9,7 +9,7 @@ const TABLES = [
   'roles',
   'user_roles',
   'customers',
-  'contact_context_configs',
+  'group_contact_mappings',
   'projects',
   'ai_execution_logs',
   'project_members',

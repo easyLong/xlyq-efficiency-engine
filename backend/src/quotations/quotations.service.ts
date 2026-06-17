@@ -77,7 +77,7 @@ export class QuotationsService implements OnModuleInit {
       id: randomUUID(),
       quotation_no: dto.quotationNo ?? (await this.nextQuotationNo()),
       project_id: dto.projectId,
-      customer_id: dto.customerId,
+      customer_code: dto.customerCode ?? dto.customerId,
       status: dto.status ?? 'draft',
       pricing_basis: dto.pricingBasis ?? 'manual',
       total_amount: '0.00',
@@ -141,7 +141,7 @@ export class QuotationsService implements OnModuleInit {
 
     const quotation = await this.create({
       projectId: dto.projectId,
-      customerId: dto.customerId,
+      customerCode: dto.customerCode ?? dto.customerId,
       pricingBasis: dto.pricingBasis ?? 'uploaded_text',
       status: 'draft',
       remark:
@@ -929,6 +929,18 @@ export class QuotationsService implements OnModuleInit {
   }
 
   private async ensureQuotationsSchema() {
+    await this.ensureCustomerCodeColumn(
+      'quotations',
+      'idx_quotations_customer_id',
+      'fk_quotations_customer',
+      true,
+    );
+    await this.ensureCustomerCodeColumn(
+      'quotation_item_dimension_rules',
+      'idx_qidr_customer_id',
+      'fk_qidr_customer',
+      false,
+    );
     const rows = await this.dataSource.query(
       `
       SELECT CHARACTER_MAXIMUM_LENGTH AS maxLength
@@ -949,7 +961,7 @@ export class QuotationsService implements OnModuleInit {
       this.dataSource,
       'quotations',
       'idx_quotations_customer_created',
-      ['customer_id', 'created_at'],
+      ['customer_code', 'created_at'],
     );
     await ensureIndex(
       this.dataSource,
@@ -971,6 +983,112 @@ export class QuotationsService implements OnModuleInit {
       'quotation_items',
       'idx_quotation_items_match_status',
       ['match_status', 'created_at'],
+    );
+  }
+
+  private async ensureCustomerCodeColumn(
+    tableName: string,
+    legacyIndexName: string,
+    legacyForeignKeyName: string,
+    required: boolean,
+  ) {
+    await this.addColumnIfMissing(
+      tableName,
+      'customer_code',
+      `customer_code VARCHAR(32) NULL AFTER customer_id`,
+    );
+    if (await this.columnExists(tableName, 'customer_id')) {
+      await this.dataSource.query(`
+        UPDATE ${tableName} target
+        JOIN customers customer
+          ON customer.id = target.customer_id
+         AND customer.deleted_at IS NULL
+        SET target.customer_code = customer.customer_code
+        WHERE (target.customer_code IS NULL OR target.customer_code = '')
+          AND customer.customer_code IS NOT NULL
+          AND customer.customer_code <> ''
+      `);
+      await this.dropForeignKeyIfExists(tableName, legacyForeignKeyName);
+      await this.dropIndexIfExists(tableName, legacyIndexName);
+      await this.dropIndexIfExists(tableName, `${legacyIndexName}_created`);
+      await this.dropIndexIfExists(tableName, `idx_${tableName}_customer_created`);
+      await this.dropColumnIfExists(tableName, 'customer_id');
+    }
+    if (required) {
+      await this.dataSource.query(
+        `ALTER TABLE ${tableName} MODIFY customer_code VARCHAR(32) NOT NULL`,
+      );
+    }
+    await ensureIndex(this.dataSource, tableName, `${legacyIndexName}_code`, [
+      'customer_code',
+    ]);
+  }
+
+  private async addColumnIfMissing(
+    tableName: string,
+    columnName: string,
+    columnDefinition: string,
+  ) {
+    if (await this.columnExists(tableName, columnName)) return;
+    await this.dataSource.query(
+      `ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`,
+    );
+  }
+
+  private async columnExists(tableName: string, columnName: string) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND column_name = ?
+      `,
+      [tableName, columnName],
+    );
+    return Number(rows?.[0]?.count ?? 0) > 0;
+  }
+
+  private async dropColumnIfExists(tableName: string, columnName: string) {
+    if (!(await this.columnExists(tableName, columnName))) return;
+    await this.dataSource.query(
+      `ALTER TABLE ${tableName} DROP COLUMN ${columnName}`,
+    );
+  }
+
+  private async dropIndexIfExists(tableName: string, indexName: string) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND index_name = ?
+      `,
+      [tableName, indexName],
+    );
+    if (Number(rows?.[0]?.count ?? 0) === 0) return;
+    await this.dataSource.query(`ALTER TABLE ${tableName} DROP INDEX ${indexName}`);
+  }
+
+  private async dropForeignKeyIfExists(
+    tableName: string,
+    constraintName: string,
+  ) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.table_constraints
+        WHERE constraint_schema = DATABASE()
+          AND table_name = ?
+          AND constraint_name = ?
+          AND constraint_type = 'FOREIGN KEY'
+      `,
+      [tableName, constraintName],
+    );
+    if (Number(rows?.[0]?.count ?? 0) === 0) return;
+    await this.dataSource.query(
+      `ALTER TABLE ${tableName} DROP FOREIGN KEY ${constraintName}`,
     );
   }
 

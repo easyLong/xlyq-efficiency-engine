@@ -9,8 +9,8 @@ export class RequirementEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'char', length: 36 })
   project_id!: string;
 
-  @Column({ type: 'char', length: 36 })
-  customer_id!: string;
+  @Column({ type: 'varchar', length: 32 })
+  customer_code!: string;
 
   @Column({ type: 'varchar', length: 256 })
   title!: string;

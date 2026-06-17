@@ -22,6 +22,7 @@
 - `PATCH /api/v1/requirements/business-category-owners/{categoryCode}`：更新某个业务大类的负责人；更新后会回填该业务大类历史任务的 `reporter_user_id`。
 - `GET /api/v1/requirements/ai-preview-candidates?limit=12`：读取 AI 已识别但未确认的候选需求，并返回证据链。
 - `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/confirm`：将候选需求标记为已确认，避免正式录入后重复展示。
+- `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/reject`：将候选需求标记为伪需求，状态置为 `rejected`，AI 预览区不再展示。
 - `POST /api/v1/requirements/ai-match-context`：根据文件内容匹配客户和业务大类。
 - `POST /api/v1/requirements/ai-split-with-tasks`：使用 OpenAI 兼容模型拆分需求，并为每条需求生成任务。
 - `PATCH /api/v1/requirements/{id}`：人工编辑历史需求任务，自动同步需求项和任务标题/描述/优先级。
@@ -31,12 +32,15 @@
 - `POST /api/v1/tasks/{id}/asset-sheet/upload-image?token=<token>`：上传本地图片，返回可保存的图片 URL。
 - `POST /api/v1/tasks/{id}/asset-sheet/local-assets?token=<token>`：保存图片资产 URL 和单个最终交付链接，图片资产去重统计，并将任务推进到待验收。
 - `POST /api/v1/tasks/{id}/asset-sheet/sync`：读取飞书在线表资产 URL 并同步统计。
-- `GET /api/v1/tasks/board?liveAssetCount=true&customerId=<customerId>`：任务看板，支持实时资产数和基金客户筛选。
+- `GET /api/v1/tasks/board?liveAssetCount=true&customerCode=<customerCode>`：任务看板，支持实时资产数和基金客户筛选；`customerId` 仅保留兼容。
 - `GET /api/v1/tasks/{id}/workflow`：返回任务、资产数、工作目录、最近状态历史和统一 workflow 快照。
 - `GET /api/v1/tasks/{id}/status-history`：返回任务状态流转审计记录。
 
 ### 维度字典
 
+- `GET /api/v1/contact-contexts`：查询群内对接人映射，底层按 `customer_code` 存储基金简称；兼容字段 `customer_id` 也返回基金简称。
+- `POST /api/v1/contact-contexts`：新增群内对接人映射。
+- `PATCH /api/v1/contact-contexts/{id}`：更新群内对接人映射。
 - `GET /api/v1/dimensions`：查询维度字典，支持按 `dimensionType`、`parentValue`、`status` 过滤。
 - `GET /api/v1/dimensions/grouped`：按类型分组返回业务平台、业务大类、二级分类等字典。
 - `GET /api/v1/dimensions/business-category-relations`：返回业务大类与二级分类关系，用于需求录入二级分类联动。
@@ -60,8 +64,8 @@
 - `PATCH /api/v1/quotations/items/{itemId}`：编辑报价子项。
 - `DELETE /api/v1/quotations/items/{itemId}`：删除报价子项，并清理关联映射和维度规则。
 - `DELETE /api/v1/quotations/{id}`：软删除报价单及其子项，并清理关联映射和维度规则。
-- `GET /api/v1/quote-mappings/quarter-workbench?customerId=<id>&quarter=YYYY-Qn`：按基金和季度加载需求报价子项映射工作台。
-- `GET /api/v1/quote-mappings/quarter-workbenches?customerIds=<id1,id2>&quarter=YYYY-Qn`：批量加载多基金季度适配工作台，用于需求面板和结算统计减少多次请求。
+- `GET /api/v1/quote-mappings/quarter-workbench?customerCode=<code>&quarter=YYYY-Qn`：按基金和季度加载需求报价子项映射工作台；`customerId` 仅保留兼容。
+- `GET /api/v1/quote-mappings/quarter-workbenches?customerCodes=<code1,code2>&quarter=YYYY-Qn`：批量加载多基金季度适配工作台，用于需求面板和结算统计减少多次请求。
 - `POST /api/v1/quote-mappings/quarter-suggest`：按基金、季度和报价单生成需求项到报价子项的自动适配建议。
 - `POST /api/v1/quote-mappings`：手工保存需求任务与报价子项映射，后端校验基金客户和报价子项归属；同一需求项重复保存会复用当前映射并将旧有效映射标记为 `obsolete`。
 - `PATCH /api/v1/quote-mappings/{mappingId}`：保存或确认单条需求报价映射。
@@ -479,9 +483,9 @@
 
 ### `GET /quote-mappings/quarter-workbenches`
 - 说明：批量加载多个基金客户的季度适配工作台，避免需求面板/结算统计按基金逐个请求
-- 查询：`customerIds` 逗号分隔、`quarter`
+- 查询：`customerCodes` 逗号分隔、`quarter`
 - 返回：`workbenches[]`、跨基金 `summary`
-- 校验：`customerIds` 不能为空，`quarter` 必须是 `YYYY-Qn`，例如 `2026-Q2`
+- 校验：`customerCodes` 不能为空，`quarter` 必须是 `YYYY-Qn`，例如 `2026-Q2`
 
 ### `POST /quote-mappings/quarter-suggest`
 - 说明：按基金、季度和报价单自动建议需求项与报价子项的映射

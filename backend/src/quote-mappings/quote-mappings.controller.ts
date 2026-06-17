@@ -32,12 +32,13 @@ export class QuoteMappingsController {
 
   @Get('quarter-workbench')
   quarterWorkbench(
+    @Query('customerCode') customerCode: string,
     @Query('customerId') customerId: string,
     @Query('quarter') quarter: string,
     @Query('quotationId') quotationId?: string,
   ) {
     return this.quoteMappingsService.quarterWorkbench(
-      customerId,
+      customerCode ?? customerId,
       quarter,
       quotationId,
     );
@@ -45,11 +46,12 @@ export class QuoteMappingsController {
 
   @Get('quarter-workbenches')
   quarterWorkbenches(
+    @Query('customerCodes') customerCodes: string,
     @Query('customerIds') customerIds: string,
     @Query('quarter') quarter: string,
   ) {
     return this.quoteMappingsService.quarterWorkbenches(
-      (customerIds || '').split(','),
+      (customerCodes || customerIds || '').split(','),
       quarter,
     );
   }

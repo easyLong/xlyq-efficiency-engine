@@ -4,6 +4,7 @@ import { RequirementEntity } from '../requirements/entities/requirement.entity';
 import { RiskAlertEntity } from '../common/entities/risk-alert.entity';
 import { QuotationEntity } from '../quotations/entities/quotation.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
+import { CustomerEntity } from '../customers/entities/customer.entity';
 import { ProjectEntity } from './entities/project.entity';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
@@ -16,6 +17,7 @@ import { ProjectsService } from './projects.service';
       TaskEntity,
       QuotationEntity,
       RiskAlertEntity,
+      CustomerEntity,
     ]),
   ],
   controllers: [ProjectsController],
