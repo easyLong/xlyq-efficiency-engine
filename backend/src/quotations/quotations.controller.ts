@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { AdminOnly } from '../common/decorators/admin-only.decorator';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
 import { CreateQuotationItemDto } from './dto/create-quotation-item.dto';
 import { ImportQuotationTextDto } from './dto/import-quotation-text.dto';
@@ -9,6 +10,7 @@ import { UpdateQuotationItemDto } from './dto/update-quotation-item.dto';
 import { QuotationsService } from './quotations.service';
 
 @Controller('quotations')
+@AdminOnly()
 export class QuotationsController {
   constructor(private readonly quotationsService: QuotationsService) {}
 

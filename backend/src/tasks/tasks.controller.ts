@@ -6,8 +6,12 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
+import { Permission } from '../common/decorators/permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { UserEntity } from '../users/entities/user.entity';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
@@ -28,8 +32,9 @@ export class TasksController {
   findAll(
     @Query('projectId') projectId?: string,
     @Query('assigneeUserId') assigneeUserId?: string,
+    @Req() request?: Request & { user?: UserEntity },
   ) {
-    return this.tasksService.findAll(projectId, assigneeUserId);
+    return this.tasksService.findAll(projectId, assigneeUserId, request?.user);
   }
 
   @Get('board')
@@ -38,11 +43,13 @@ export class TasksController {
     @Query('liveAssetCount') liveAssetCount?: string,
     @Query('customerCode') customerCode?: string,
     @Query('customerId') customerId?: string,
+    @Req() request?: Request & { user?: UserEntity },
   ) {
     return this.tasksService.board(
       projectId,
       liveAssetCount === 'true',
       customerCode ?? customerId,
+      request?.user,
     );
   }
 
@@ -62,21 +69,25 @@ export class TasksController {
   }
 
   @Post()
+  @Permission('requirement.create')
   create(@Body() dto: CreateTaskDto) {
     return this.tasksService.create(dto);
   }
 
   @Post('from-requirement-item/:itemId')
+  @Permission('requirement.create')
   createFromRequirementItem(@Param('itemId') itemId: string) {
     return this.tasksService.createFromRequirementItem(itemId);
   }
 
   @Patch(':id')
+  @Permission('task.assign_owned')
   update(@Param('id') id: string, @Body() dto: UpdateTaskDto) {
     return this.tasksService.update(id, dto);
   }
 
   @Post(':id/assign')
+  @Permission('task.assign_owned')
   assign(@Param('id') id: string, @Body() dto: AssignTaskDto) {
     return this.tasksService.assign(id, dto);
   }
@@ -97,6 +108,7 @@ export class TasksController {
   }
 
   @Post(':id/workspace/provision')
+  @Permission('task.assign_owned')
   provisionWorkspace(
     @Param('id') id: string,
     @Body() dto: ProvisionTaskWorkspaceDto,
@@ -110,6 +122,7 @@ export class TasksController {
   }
 
   @Post(':id/asset-sheet/sync')
+  @Permission('task.accept_owned')
   syncAssetSheet(@Param('id') id: string) {
     return this.tasksService.syncAssetSheet(id);
   }
@@ -162,16 +175,19 @@ export class TasksController {
   }
 
   @Post(':id/status')
+  @Permission('task.accept_owned')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateTaskStatusDto) {
     return this.tasksService.updateStatus(id, dto);
   }
 
   @Post(':id/return-revision')
+  @Permission('task.return_owned')
   returnRevision(@Param('id') id: string, @Body() dto: ReturnTaskRevisionDto) {
     return this.tasksService.returnRevision(id, dto);
   }
 
   @Post(':id/ai-assignment-suggestion')
+  @Permission('task.assign_owned')
   aiAssignmentSuggestion(@Param('id') id: string) {
     return this.tasksService.aiAssignmentSuggestion(id);
   }

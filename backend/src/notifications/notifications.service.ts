@@ -184,7 +184,9 @@ export class NotificationsService {
         `**截止时间**：${this.formatDate(task.planned_end_at)}`,
         `**优先级**：${this.priorityLabel(task.priority)}`,
         `**任务执行人**：${assignee?.display_name ?? '-'}`,
-        directoryUrl ? '请点击下方按钮填写项目资产。' : '请在任务详情中填写项目资产。',
+        directoryUrl
+          ? '请点击下方按钮填写项目资产。'
+          : '请在任务详情中填写项目资产。',
       ].join('\n'),
       objectType: 'task',
       objectId: task.id,
@@ -205,18 +207,41 @@ export class NotificationsService {
       in_progress: '任务进行中',
       blocked: '任务阻塞',
       pending_review: '任务待验收',
-      completed: '任务已完成',
+      completed: '任务已验收',
     };
-    const statusLabel =
+    const statusTitle =
       statusTitleMap[task.status] ?? `任务状态更新为 ${task.status}`;
+    const statusLabel = taskStatusLabel(task.status);
+    const assetCount =
+      task.status === TaskStatus.Completed ||
+      task.status === TaskStatus.PendingReview
+        ? await this.taskResultFilesRepository.count({
+            where: { task_id: task.id },
+          })
+        : null;
+    const completedContent =
+      task.status === TaskStatus.Completed
+        ? [
+            `任务名称：${task.task_name}`,
+            '验收结果：已通过',
+            `交付资产：${assetCount ?? 0} 项`,
+            '交付内容已归档，可在需求面板查看统计与历史记录。',
+          ]
+        : null;
 
     return this.sendToUsers(recipients, {
-      title: `${statusLabel}：${task.task_name}`,
-      content: [
-        `任务 ${task.task_no} 当前状态：${statusLabel}。`,
-        '当前 MVP 以在线资产表中的资产地址数量作为统计口径。',
-        task.blocked_reason ? `补充说明：${task.blocked_reason}` : '',
-      ]
+      title:
+        task.status === TaskStatus.Completed
+          ? `验收通过：${task.task_name}`
+          : `${statusTitle}：${task.task_name}`,
+      content: (
+        completedContent ?? [
+          `任务编号：${task.task_no}`,
+          `当前状态：${statusLabel}`,
+          assetCount === null ? '' : `已登记资产：${assetCount} 项`,
+          task.blocked_reason ? `补充说明：${task.blocked_reason}` : '',
+        ]
+      )
         .filter(Boolean)
         .join('\n'),
       objectType: 'task',
@@ -326,7 +351,12 @@ export class NotificationsService {
       const recipients = await this.getTaskStakeholders(task);
       const messages = await this.sendToUsers(recipients, {
         title: `${overdue ? '任务已逾期' : '任务即将逾期'}：${task.task_name}`,
-        content: `任务 ${task.task_no} 计划截止时间为 ${task.planned_end_at?.toISOString() ?? ''}，当前状态 ${task.status}，请及时处理。`,
+        content: [
+          `任务编号：${task.task_no}`,
+          `计划截止：${this.formatDate(task.planned_end_at)}`,
+          `当前状态：${taskStatusLabel(task.status)}`,
+          '请及时处理，避免影响交付验收。',
+        ].join('\n'),
         objectType: 'task',
         objectId: task.id,
         channels: ['in_app', 'feishu_app'],
@@ -344,7 +374,8 @@ export class NotificationsService {
     void dto;
     return {
       disabled: true,
-      reason: 'Worklog reminders are excluded from MVP notification v1.',
+      reason:
+        'Worklog reminders are not enabled for the current notification flow.',
       scannedTaskCount: 0,
       reminderCount: 0,
     };
@@ -446,10 +477,11 @@ export class NotificationsService {
 
       missingTaskCount += 1;
       const messages = await this.sendToUsers([task.assignee_user_id!], {
-        title: `资产地址待填写：${task.task_name}`,
+        title: `交付资产待登记：${task.task_name}`,
         content: [
-          `任务 ${task.task_no} 当前状态为 ${task.status}，但系统还没有同步到资产地址。`,
-          '请进入在线资产表填写资产地址，方便项目验收和结算挂靠。',
+          `任务编号：${task.task_no}`,
+          `当前状态：${taskStatusLabel(task.status)}`,
+          '系统尚未同步到交付资产，请进入在线资产表补充登记，便于验收和统计。',
         ].join('\n'),
         objectType: 'task',
         objectId: task.id,
@@ -554,7 +586,7 @@ export class NotificationsService {
     const customerName =
       rows?.[0]?.customerName ?? project?.project_name ?? '未关联基金';
     const businessPlatform = rows?.[0]?.businessPlatform ?? '未关联平台';
-    return `基金${customerName}-平台${businessPlatform}`;
+    return `${customerName}-${businessPlatform}`;
   }
 
   private buildTaskProgressFeedbackUrl(task: TaskEntity) {

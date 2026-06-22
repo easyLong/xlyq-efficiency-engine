@@ -1,10 +1,11 @@
 # 飞书联调说明
 
-更新时间：2026-06-15
+更新时间：2026-06-22
 
 ## 当前联调结论
 
 - 飞书企业自建应用的个人消息投递已跑通，任务指派后可以向员工 `open_id` 发送卡片消息。
+- 通讯录同步已切换为正式企业应用配置，支持从指定部门递归同步子部门员工。
 - 指派并创建资产入口时，系统只发送一条飞书消息，消息内包含“填写项目资产”按钮。
 - 飞书在线表格创建需要应用权限：`drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create`。权限未开通时，飞书接口会返回 `Access denied`，系统会自动降级为本地交付登记页。
 - 本地交付登记 URL 由 `APP_PUBLIC_BASE_URL` 生成，并附带任务访问 token。若配置为 `http://localhost:3000`，只有本机浏览器可访问，飞书移动端员工无法打开；生产或真实联调请配置公网 HTTPS 地址。
@@ -77,7 +78,7 @@ Invoke-RestMethod `
   -Uri http://localhost:3000/api/v1/integrations/feishu/contacts/sync-users `
   -Method Post `
   -ContentType 'application/json' `
-  -Body '{"departmentId":"0","pageSize":50}'
+  -Body '{"departmentId":"0","pageSize":50,"recursive":true}'
 ```
 
 3. 查看本地用户，确认要测试的接收人：
@@ -151,11 +152,12 @@ Invoke-RestMethod `
 
 - 新任务通知：提示被指派任务，并展示基金与平台信息。
 - 交付登记通知：飞书卡片里包含 `填写项目资产` 按钮。
+- 验收通过通知：展示任务名称、验收结果、交付资产数量，并提示可在需求面板查看归档数据。
 
 ## 当前环境验证记录
 
 - 配置状态：`appMessageAvailable=true`。
-- 通讯录同步：已成功同步 3 个飞书 `open_id`。
+- 通讯录同步：正式企业应用支持递归拉取子部门员工；如看到旧测试员工，先清理本地测试数据后重新同步。
 - 后端健康检查：`GET /api/v1/health` 正常。
 
 ## 下一步
@@ -182,7 +184,7 @@ Invoke-RestMethod `
 2. 系统优先尝试创建飞书在线资产表；失败时降级为本地 `asset-sheet.html`。
 3. 飞书消息中展示“填写项目资产”按钮。
 4. 员工打开资产页后，任务自动进入 `in_progress`。
-5. 员工上传多张图片和一个最终交付链接，提交后任务进入 `pending_review`。
+5. 员工上传多张图片并填写一个合作链接，提交后任务进入 `pending_review`。
 6. 管理者在后台验收，通过后进入 `completed`，退回则回到 `in_progress`。
 
 后台历史需求任务中，已指派任务默认收起负责人；点击“改派”后再展开员工下拉框并确认，减少误操作和页面占用。

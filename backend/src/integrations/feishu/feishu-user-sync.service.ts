@@ -30,6 +30,15 @@ type FeishuUserItem = {
   };
 };
 
+type FeishuDepartmentItem = {
+  department_id?: string;
+  open_department_id?: string;
+  name?: string;
+  status?: {
+    is_deleted?: boolean;
+  };
+};
+
 @Injectable()
 export class FeishuUserSyncService {
   constructor(
@@ -47,8 +56,9 @@ export class FeishuUserSyncService {
       this.configService.get<string>('FEISHU_DEFAULT_DEPARTMENT_ID') ??
       '0';
     const pageSize = Number(dto.pageSize ?? 50);
+    const includeSubDepartments = dto.includeSubDepartments !== false;
     const synced: UserEntity[] = [];
-    let pageToken = '';
+    const syncedOpenIds = new Set<string>();
 
     const log = await this.createSyncLog({
       objectType: 'user',
@@ -56,30 +66,45 @@ export class FeishuUserSyncService {
       actionType: 'sync_contacts',
       feishuObjectType: 'department',
       feishuObjectId: departmentId,
-      requestPayload: { departmentId, pageSize },
+      requestPayload: { departmentId, pageSize, includeSubDepartments },
     });
 
     try {
-      do {
-        const body = await this.fetchUserPage({
-          departmentId,
-          pageSize,
-          pageToken,
-        });
+      const departments = await this.resolveDepartmentsToSync({
+        departmentId,
+        pageSize,
+        includeSubDepartments,
+      });
 
-        for (const item of body.data?.items ?? []) {
-          const user = await this.upsertFeishuUser(item);
-          if (user) {
-            synced.push(user);
+      for (const department of departments) {
+        let pageToken = '';
+        do {
+          const body = await this.fetchUserPage({
+            departmentId: department.id,
+            pageSize,
+            pageToken,
+          });
+
+          for (const item of body.data?.items ?? []) {
+            if (!item.open_id || syncedOpenIds.has(item.open_id)) {
+              continue;
+            }
+            syncedOpenIds.add(item.open_id);
+            const user = await this.upsertFeishuUser(item);
+            if (user) {
+              synced.push(user);
+            }
           }
-        }
-        pageToken = body.data?.has_more ? (body.data.page_token ?? '') : '';
-      } while (pageToken);
+          pageToken = body.data?.has_more ? (body.data.page_token ?? '') : '';
+        } while (pageToken);
+      }
 
       log.status = 'success';
       log.response_payload_json = {
         syncedCount: synced.length,
         departmentId,
+        departmentCount: departments.length,
+        departments,
       };
     } catch (error) {
       await this.failLog(log, error);
@@ -95,6 +120,80 @@ export class FeishuUserSyncService {
       syncedCount: synced.length,
       users: synced,
     };
+  }
+
+  private async resolveDepartmentsToSync(input: {
+    departmentId: string;
+    pageSize: number;
+    includeSubDepartments: boolean;
+  }) {
+    const departments = new Map<string, { id: string; name: string | null }>();
+    departments.set(input.departmentId, {
+      id: input.departmentId,
+      name: input.departmentId === '0' ? 'root' : null,
+    });
+
+    if (!input.includeSubDepartments) {
+      return Array.from(departments.values());
+    }
+
+    let pageToken = '';
+    do {
+      const body = await this.fetchDepartmentChildrenPage({
+        departmentId: input.departmentId,
+        pageSize: input.pageSize,
+        pageToken,
+      });
+
+      for (const item of body.data?.items ?? []) {
+        if (item.status?.is_deleted) {
+          continue;
+        }
+        const id = item.open_department_id ?? item.department_id;
+        if (id) {
+          departments.set(id, { id, name: item.name ?? null });
+        }
+      }
+      pageToken = body.data?.has_more ? (body.data.page_token ?? '') : '';
+    } while (pageToken);
+
+    return Array.from(departments.values());
+  }
+
+  private async fetchDepartmentChildrenPage(input: {
+    departmentId: string;
+    pageSize: number;
+    pageToken: string;
+  }) {
+    const url = new URL(
+      `https://open.feishu.cn/open-apis/contact/v3/departments/${encodeURIComponent(input.departmentId)}/children`,
+    );
+    url.searchParams.set('department_id_type', 'open_department_id');
+    url.searchParams.set('user_id_type', 'open_id');
+    url.searchParams.set('fetch_child', 'true');
+    url.searchParams.set('page_size', String(input.pageSize));
+    if (input.pageToken) {
+      url.searchParams.set('page_token', input.pageToken);
+    }
+
+    const response = await this.openApiClient.request(url);
+    const body = (await response.json()) as {
+      code?: number;
+      msg?: string;
+      data?: {
+        items?: FeishuDepartmentItem[];
+        has_more?: boolean;
+        page_token?: string;
+      };
+    };
+
+    if (!response.ok || body.code !== 0) {
+      throw new Error(
+        `Feishu department sync failed: ${response.status} ${body.msg ?? ''}`,
+      );
+    }
+
+    return body;
   }
 
   private async fetchUserPage(input: {
@@ -217,9 +316,7 @@ export class FeishuUserSyncService {
 
   private shouldUpdateDisplayName(current: string | null | undefined) {
     return (
-      !current ||
-      current === '未同步昵称' ||
-      this.isTechnicalFeishuId(current)
+      !current || current === '未同步昵称' || this.isTechnicalFeishuId(current)
     );
   }
 
@@ -228,7 +325,11 @@ export class FeishuUserSyncService {
     candidate: string,
     fromFeishuNameField: boolean,
   ) {
-    if (!fromFeishuNameField && current && !this.shouldUpdateDisplayName(current)) {
+    if (
+      !fromFeishuNameField &&
+      current &&
+      !this.shouldUpdateDisplayName(current)
+    ) {
       return current;
     }
     if (!this.isPlaceholderDisplayName(candidate)) {

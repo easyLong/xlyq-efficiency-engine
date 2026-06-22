@@ -7,7 +7,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
+import { Permission } from '../common/decorators/permission.decorator';
 import { AiMatchRequirementContextDto } from './dto/ai-match-requirement-context.dto';
 import { AiSplitRequirementsDto } from './dto/ai-split-requirements.dto';
 import { CreateRequirementDto } from './dto/create-requirement.dto';
@@ -16,6 +19,7 @@ import { CreateRequirementItemDto } from './dto/create-requirement-item.dto';
 import { UpdateRequirementDto } from './dto/update-requirement.dto';
 import { UpdateRequirementItemDto } from './dto/update-requirement-item.dto';
 import { RequirementsService } from './requirements.service';
+import { UserEntity } from '../users/entities/user.entity';
 
 @Controller('requirements')
 export class RequirementsController {
@@ -27,14 +31,20 @@ export class RequirementsController {
   }
 
   @Get('history-board')
-  historyBoard() {
-    return this.requirementsService.historyBoard();
+  historyBoard(@Req() request?: Request & { user?: UserEntity }) {
+    return this.requirementsService.historyBoard(request?.user ?? null);
   }
 
   @Get('ai-preview-candidates')
-  aiPreviewCandidates(@Query('limit') limit?: string) {
+  aiPreviewCandidates(
+    @Query('limit') limit?: string,
+    @Query('scope') scope?: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
     return this.requirementsService.listAiPreviewCandidates(
       limit ? Number(limit) : 12,
+      scope,
+      request?.user ?? null,
     );
   }
 
@@ -55,13 +65,27 @@ export class RequirementsController {
   }
 
   @Post('ai-preview-candidates/:candidateId/confirm')
-  confirmAiPreviewCandidate(@Param('candidateId') candidateId: string) {
-    return this.requirementsService.confirmAiPreviewCandidate(candidateId);
+  @Permission('ai_preview.confirm_owned')
+  confirmAiPreviewCandidate(
+    @Param('candidateId') candidateId: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.requirementsService.confirmAiPreviewCandidate(
+      candidateId,
+      request?.user?.id ?? null,
+    );
   }
 
   @Post('ai-preview-candidates/:candidateId/reject')
-  rejectAiPreviewCandidate(@Param('candidateId') candidateId: string) {
-    return this.requirementsService.rejectAiPreviewCandidate(candidateId);
+  @Permission('ai_preview.confirm_owned')
+  rejectAiPreviewCandidate(
+    @Param('candidateId') candidateId: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.requirementsService.rejectAiPreviewCandidate(
+      candidateId,
+      request?.user?.id ?? null,
+    );
   }
 
   @Get(':id')
@@ -75,16 +99,19 @@ export class RequirementsController {
   }
 
   @Post()
+  @Permission('requirement.create')
   create(@Body() dto: CreateRequirementDto) {
     return this.requirementsService.create(dto);
   }
 
   @Post('with-task')
+  @Permission('requirement.create')
   createWithTask(@Body() dto: CreateRequirementWithTaskDto) {
     return this.requirementsService.createWithTask(dto);
   }
 
   @Post('ai-split-with-tasks')
+  @Permission('requirement.create')
   aiSplitWithTasks(@Body() dto: AiSplitRequirementsDto) {
     return this.requirementsService.aiSplitWithTasks(dto);
   }
@@ -95,11 +122,13 @@ export class RequirementsController {
   }
 
   @Patch(':id')
+  @Permission('requirement.edit_owned')
   update(@Param('id') id: string, @Body() dto: UpdateRequirementDto) {
     return this.requirementsService.update(id, dto);
   }
 
   @Delete(':id/bundle')
+  @Permission('requirement.delete_all')
   removeBundle(@Param('id') id: string) {
     return this.requirementsService.removeBundle(id);
   }

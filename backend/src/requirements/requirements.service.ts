@@ -1,17 +1,24 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { createHash, randomUUID } from 'node:crypto';
 import { getAiPrompt } from '../ai-prompts/prompt-registry';
+import {
+  buildAccessProfile,
+  normalizeAccessBusinessCategory,
+} from '../common/access-control';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { ensureIndex } from '../common/schema-maintenance';
 import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
 import { CustomerEntity } from '../customers/entities/customer.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectEntity } from '../projects/entities/project.entity';
 import { QuotationItemEntity } from '../quotations/entities/quotation-item.entity';
 import { RequirementQuotationMappingEntity } from '../quotations/entities/requirement-quotation-mapping.entity';
@@ -30,8 +37,11 @@ import { RequirementItemEntity } from './entities/requirement-item.entity';
 import { RequirementEntity } from './entities/requirement.entity';
 
 @Injectable()
-export class RequirementsService implements OnModuleInit {
+export class RequirementsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(RequirementsService.name);
   private readonly defaultListLimit = 500;
+  private aiPreviewNotificationTimer: NodeJS.Timeout | null = null;
+  private aiPreviewNotificationRunning = false;
 
   private readonly projectTypes = [
     {
@@ -116,6 +126,7 @@ export class RequirementsService implements OnModuleInit {
     @InjectRepository(QuotationItemEntity)
     private readonly quotationItemsRepository: Repository<QuotationItemEntity>,
     private readonly dataSource: DataSource,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async onModuleInit() {
@@ -124,6 +135,14 @@ export class RequirementsService implements OnModuleInit {
     await this.normalizeBusinessCategoryOwnerConfigUsers();
     await this.ensureDemandIntakeTables();
     await this.backfillTaskReportersFromBusinessCategoryOwners();
+    this.startAiPreviewNotificationScanner();
+  }
+
+  onModuleDestroy() {
+    if (this.aiPreviewNotificationTimer) {
+      clearInterval(this.aiPreviewNotificationTimer);
+      this.aiPreviewNotificationTimer = null;
+    }
   }
 
   async findAll(projectId?: string) {
@@ -134,8 +153,12 @@ export class RequirementsService implements OnModuleInit {
     });
   }
 
-  async historyBoard() {
-    const requirements = await this.findAll();
+  async historyBoard(currentUser: UserEntity | null = null) {
+    const profile = currentUser
+      ? await buildAccessProfile(this.dataSource, currentUser)
+      : null;
+    const quoteVisible = profile?.dataScope.quotes === 'all';
+    let requirements = await this.findAll();
     const requirementIds = requirements.map((requirement) => requirement.id);
     if (requirementIds.length === 0) {
       return {
@@ -165,32 +188,118 @@ export class RequirementsService implements OnModuleInit {
         where: { requirement_item_id: In(requirementItemIds) },
         order: { created_at: 'DESC' },
       }),
-      this.mappingsRepository.find({
-        where: { requirement_item_id: In(requirementItemIds) },
-        order: { created_at: 'DESC' },
-      }),
+      quoteVisible
+        ? this.mappingsRepository.find({
+            where: { requirement_item_id: In(requirementItemIds) },
+            order: { created_at: 'DESC' },
+          })
+        : Promise.resolve([]),
     ]);
+    const scoped = this.scopeHistoryBoardRows(
+      requirements,
+      requirementItems,
+      tasks,
+      profile,
+      currentUser,
+    );
+    requirements = scoped.requirements;
+    const scopedRequirementItems = scoped.requirementItems;
+    const scopedTasks = scoped.tasks;
+    const scopedItemIds = new Set(scopedRequirementItems.map((item) => item.id));
+    const scopedQuoteMappings = quoteVisible
+      ? quoteMappings.filter((mapping) =>
+          scopedItemIds.has(mapping.requirement_item_id),
+        )
+      : [];
     const mappingsByRequirementItemId = new Map<
       string,
       RequirementQuotationMappingEntity[]
     >();
-    for (const mapping of quoteMappings) {
+    for (const mapping of scopedQuoteMappings) {
       const rows =
         mappingsByRequirementItemId.get(mapping.requirement_item_id) ?? [];
       rows.push(mapping);
       mappingsByRequirementItemId.set(mapping.requirement_item_id, rows);
     }
-    for (const item of requirementItems) {
-      item.quote_scope_status = this.resolveQuoteScopeStatus(
-        mappingsByRequirementItemId.get(item.id) ?? [],
-      );
+    for (const item of scopedRequirementItems) {
+      item.quote_scope_status = quoteVisible
+        ? this.resolveQuoteScopeStatus(
+            mappingsByRequirementItemId.get(item.id) ?? [],
+          )
+        : 'hidden';
     }
 
     return {
       requirements,
-      requirementItems,
-      tasks,
-      quoteMappings,
+      requirementItems: scopedRequirementItems,
+      tasks: scopedTasks,
+      quoteMappings: scopedQuoteMappings,
+    };
+  }
+
+  private scopeHistoryBoardRows(
+    requirements: RequirementEntity[],
+    requirementItems: RequirementItemEntity[],
+    tasks: TaskEntity[],
+    profile: Awaited<ReturnType<typeof buildAccessProfile>> | null,
+    currentUser: UserEntity | null,
+  ) {
+    if (!profile || profile.dataScope.requirements === 'all') {
+      return { requirements, requirementItems, tasks };
+    }
+
+    const taskByItemId = new Map(
+      tasks.map((task) => [task.requirement_item_id, task]),
+    );
+    const itemByRequirementId = new Map(
+      requirementItems.map((item) => [item.requirement_id, item]),
+    );
+
+    const visibleRequirementIds = new Set<string>();
+    if (profile.dataScope.requirements === 'owned') {
+      const ownedCategories = new Set(profile.ownedBusinessCategoryCodes);
+      for (const requirement of requirements) {
+        const item = itemByRequirementId.get(requirement.id);
+        const task = item ? taskByItemId.get(item.id) : null;
+        const requirementCategory = normalizeAccessBusinessCategory(
+          requirement.business_category,
+        );
+        if (
+          ownedCategories.has(requirementCategory) ||
+          task?.reporter_user_id === currentUser?.id
+        ) {
+          visibleRequirementIds.add(requirement.id);
+        }
+      }
+    } else {
+      for (const item of requirementItems) {
+        const task = taskByItemId.get(item.id);
+        if (task?.assignee_user_id === currentUser?.id) {
+          visibleRequirementIds.add(item.requirement_id);
+        }
+      }
+    }
+
+    const visibleRequirements = requirements.filter((requirement) =>
+      visibleRequirementIds.has(requirement.id),
+    );
+    const visibleItemIds = new Set<string>();
+    const visibleItems = requirementItems.filter((item) => {
+      const visible = visibleRequirementIds.has(item.requirement_id);
+      if (visible) {
+        visibleItemIds.add(item.id);
+      }
+      return visible;
+    });
+    const visibleTasks = tasks.filter(
+      (task) =>
+        Boolean(task.requirement_item_id) &&
+        visibleItemIds.has(task.requirement_item_id!),
+    );
+    return {
+      requirements: visibleRequirements,
+      requirementItems: visibleItems,
+      tasks: visibleTasks,
     };
   }
 
@@ -261,19 +370,44 @@ export class RequirementsService implements OnModuleInit {
     return this.listBusinessCategoryOwners();
   }
 
-  async listAiPreviewCandidates(limit = 12) {
+  async listAiPreviewCandidates(
+    limit = 12,
+    scope = 'mine',
+    currentUser: UserEntity | null = null,
+  ) {
     const normalizedLimit = Math.max(1, Math.min(100, Number(limit) || 12));
-    return this.listOpsAiPreviewCandidates(normalizedLimit);
+    await this.assignAiPreviewReviewOwners();
+    await this.notifyAiPreviewReviewOwners();
+    const profile = currentUser
+      ? await buildAccessProfile(this.dataSource, currentUser)
+      : null;
+    const normalizedScope =
+      profile?.dataScope.requirements === 'all'
+        ? this.normalizeAiPreviewScope(scope)
+        : 'mine';
+    return this.listOpsAiPreviewCandidates(
+      normalizedLimit,
+      normalizedScope,
+      currentUser?.id ?? null,
+    );
   }
 
-  async confirmAiPreviewCandidate(candidateId: string) {
+  async confirmAiPreviewCandidate(
+    candidateId: string,
+    reviewedByUserId: string | null = null,
+  ) {
     const result = await this.dataSource.query(
       `
         UPDATE demand_intake_candidates
-        SET status = 'confirmed', confirmed_at = COALESCE(confirmed_at, NOW())
+        SET status = 'confirmed',
+            review_status = 'confirmed',
+            reviewed_by_user_id = ?,
+            reviewed_at = NOW(),
+            confirmed_at = COALESCE(confirmed_at, NOW()),
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ? OR external_candidate_id = ?
       `,
-      [candidateId, candidateId],
+      [reviewedByUserId, candidateId, candidateId],
     );
     return {
       updated: result?.affectedRows ?? result?.[0]?.affectedRows ?? 0,
@@ -281,16 +415,22 @@ export class RequirementsService implements OnModuleInit {
     };
   }
 
-  async rejectAiPreviewCandidate(candidateId: string) {
+  async rejectAiPreviewCandidate(
+    candidateId: string,
+    reviewedByUserId: string | null = null,
+  ) {
     const result = await this.dataSource.query(
       `
         UPDATE demand_intake_candidates
         SET status = 'rejected',
+            review_status = 'rejected',
+            reviewed_by_user_id = ?,
+            reviewed_at = NOW(),
             match_reason = COALESCE(match_reason, '人工标记伪需求'),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ? OR external_candidate_id = ?
       `,
-      [candidateId, candidateId],
+      [reviewedByUserId, candidateId, candidateId],
     );
     return {
       updated: result?.affectedRows ?? result?.[0]?.affectedRows ?? 0,
@@ -298,7 +438,34 @@ export class RequirementsService implements OnModuleInit {
     };
   }
 
-  private async listOpsAiPreviewCandidates(limit: number) {
+  private normalizeAiPreviewScope(scope?: string | null) {
+    return ['mine', 'all', 'processed'].includes(String(scope ?? ''))
+      ? String(scope)
+      : 'mine';
+  }
+
+  private async listOpsAiPreviewCandidates(
+    limit: number,
+    scope: string,
+    currentUserId: string | null,
+  ) {
+    const whereParts = ['c.deleted_at IS NULL'];
+    const params: Array<string | number> = [];
+    if (scope === 'processed') {
+      whereParts.push(
+        "COALESCE(c.review_status, c.status, 'pending_owner_review') IN ('confirmed', 'rejected')",
+      );
+    } else {
+      whereParts.push(
+        "COALESCE(c.status, 'pending') NOT IN ('confirmed', 'rejected')",
+      );
+      if (scope === 'mine' && currentUserId) {
+        whereParts.push('c.review_owner_user_id = ?');
+        params.push(currentUserId);
+      }
+    }
+    params.push(limit);
+
     const rows = await this.dataSource.query(
       `
         SELECT
@@ -321,6 +488,13 @@ export class RequirementsService implements OnModuleInit {
           c.demand_content,
           c.confidence,
           c.status,
+          COALESCE(c.review_status, 'pending_owner_review') AS review_status,
+          c.review_owner_user_id,
+          review_owner.display_name AS review_owner_name,
+          c.reviewed_by_user_id,
+          reviewed_by.display_name AS reviewed_by_name,
+          c.reviewed_at,
+          c.review_note,
           c.match_suggestion,
           COALESCE(c.matched_customer_code, matched_customer.customer_code) AS matched_customer_code,
           c.matched_customer_id,
@@ -331,14 +505,179 @@ export class RequirementsService implements OnModuleInit {
         LEFT JOIN customers matched_customer
           ON matched_customer.id = c.matched_customer_id
          AND matched_customer.deleted_at IS NULL
-        WHERE c.deleted_at IS NULL
-          AND COALESCE(c.status, 'pending') NOT IN ('confirmed', 'rejected')
+        LEFT JOIN users review_owner
+          ON review_owner.id = c.review_owner_user_id
+        LEFT JOIN users reviewed_by
+          ON reviewed_by.id = c.reviewed_by_user_id
+        WHERE ${whereParts.join('\n          AND ')}
         ORDER BY c.created_at DESC
         LIMIT ?
       `,
-      [limit],
+      params,
     );
     return this.attachAiPreviewEvidences(rows);
+  }
+
+  private startAiPreviewNotificationScanner() {
+    if (process.env.AI_PREVIEW_NOTIFICATION_SCAN_DISABLED === 'true') {
+      return;
+    }
+    const intervalMs = Math.max(
+      10000,
+      Number(process.env.AI_PREVIEW_NOTIFICATION_SCAN_INTERVAL_MS ?? 60000),
+    );
+    void this.runAiPreviewNotificationScan();
+    this.aiPreviewNotificationTimer = setInterval(() => {
+      void this.runAiPreviewNotificationScan();
+    }, intervalMs);
+    this.aiPreviewNotificationTimer.unref?.();
+  }
+
+  private async runAiPreviewNotificationScan() {
+    if (this.aiPreviewNotificationRunning) {
+      return;
+    }
+    this.aiPreviewNotificationRunning = true;
+    try {
+      await this.assignAiPreviewReviewOwners();
+      await this.notifyAiPreviewReviewOwners();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`AI preview notification scan failed: ${message}`);
+    } finally {
+      this.aiPreviewNotificationRunning = false;
+    }
+  }
+
+  private async assignAiPreviewReviewOwners() {
+    await this.dataSource.query(`
+      UPDATE demand_intake_candidates
+      SET review_status = status,
+          reviewed_at = COALESCE(reviewed_at, confirmed_at),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE deleted_at IS NULL
+        AND status IN ('confirmed', 'rejected')
+        AND COALESCE(review_status, '') <> status
+    `);
+
+    await this.dataSource.query(`
+      UPDATE demand_intake_candidates candidate
+      JOIN business_category_owner_configs owner_config
+        ON owner_config.business_category_code =
+          CASE candidate.business_category
+            WHEN '设计' THEN 'design'
+            WHEN '文案' THEN 'copywriting'
+            WHEN '运营' THEN 'operation'
+            WHEN '社区' THEN 'community'
+            ELSE candidate.business_category
+          END
+       AND owner_config.status = 'active'
+       AND owner_config.owner_user_id IS NOT NULL
+      JOIN users owner_user
+        ON owner_user.id = owner_config.owner_user_id
+       AND owner_user.status = 'active'
+       AND owner_user.deleted_at IS NULL
+      SET candidate.review_owner_user_id = owner_config.owner_user_id,
+          candidate.review_status =
+            CASE
+              WHEN COALESCE(candidate.review_status, '') IN ('', 'unassigned') THEN 'pending_owner_review'
+              ELSE candidate.review_status
+            END,
+          candidate.updated_at = CURRENT_TIMESTAMP
+      WHERE candidate.deleted_at IS NULL
+        AND COALESCE(candidate.status, 'pending') NOT IN ('confirmed', 'rejected')
+        AND (candidate.review_owner_user_id IS NULL OR candidate.review_owner_user_id = '')
+    `);
+
+    await this.dataSource.query(`
+      UPDATE demand_intake_candidates candidate
+      LEFT JOIN business_category_owner_configs owner_config
+        ON owner_config.business_category_code =
+          CASE candidate.business_category
+            WHEN '设计' THEN 'design'
+            WHEN '文案' THEN 'copywriting'
+            WHEN '运营' THEN 'operation'
+            WHEN '社区' THEN 'community'
+            ELSE candidate.business_category
+          END
+       AND owner_config.status = 'active'
+       AND owner_config.owner_user_id IS NOT NULL
+      SET candidate.review_status = 'unassigned',
+          candidate.updated_at = CURRENT_TIMESTAMP
+      WHERE candidate.deleted_at IS NULL
+        AND COALESCE(candidate.status, 'pending') NOT IN ('confirmed', 'rejected')
+        AND (candidate.review_owner_user_id IS NULL OR candidate.review_owner_user_id = '')
+        AND owner_config.owner_user_id IS NULL
+        AND COALESCE(candidate.review_status, '') <> 'unassigned'
+    `);
+  }
+
+  private async notifyAiPreviewReviewOwners() {
+    const rows = await this.dataSource.query(
+      `
+        SELECT
+          candidate.id,
+          candidate.demand_title AS demandTitle,
+          candidate.business_name AS businessName,
+          candidate.raw_customer_name AS customerName,
+          candidate.raw_business_platform AS businessPlatform,
+          candidate.business_category AS businessCategory,
+          candidate.confidence,
+          candidate.review_owner_user_id AS reviewOwnerUserId
+        FROM demand_intake_candidates candidate
+        JOIN users owner_user
+          ON owner_user.id = candidate.review_owner_user_id
+         AND owner_user.status = 'active'
+         AND owner_user.deleted_at IS NULL
+        LEFT JOIN notification_messages message
+          ON message.object_type = 'ai_preview_candidate'
+         AND message.object_id = candidate.id
+         AND message.recipient_user_id = candidate.review_owner_user_id
+         AND message.deleted_at IS NULL
+        WHERE candidate.deleted_at IS NULL
+          AND COALESCE(candidate.status, 'pending') NOT IN ('confirmed', 'rejected')
+          AND candidate.review_owner_user_id IS NOT NULL
+          AND COALESCE(candidate.review_status, 'pending_owner_review') = 'pending_owner_review'
+          AND message.id IS NULL
+        ORDER BY candidate.created_at DESC
+        LIMIT 20
+      `,
+    );
+
+    for (const row of rows) {
+      await this.notificationsService.send({
+        recipientUserId: row.reviewOwnerUserId,
+        title: `AI需求待确认：${row.demandTitle ?? row.businessName ?? '未命名需求'}`,
+        content: [
+          `需求名称：${row.demandTitle ?? row.businessName ?? '-'}`,
+          `客户平台：${[row.customerName, row.businessPlatform].filter(Boolean).join('-') || '-'}`,
+          `业务类型：${row.businessCategory ?? '-'}`,
+          `识别置信度：${this.previewConfidenceText(row.confidence)}`,
+          '请进入工作台确认是否转为正式需求。',
+        ].join('\n'),
+        objectType: 'ai_preview_candidate',
+        objectId: row.id,
+        channels: ['in_app', 'feishu_app'],
+        actionUrl: this.buildWorkbenchUrl(),
+        actionText: '查看并确认',
+      });
+    }
+  }
+
+  private previewConfidenceText(value: unknown) {
+    if (value === null || value === undefined || value === '') {
+      return '-';
+    }
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+      return String(value);
+    }
+    return `${Math.round((numeric > 1 ? numeric / 100 : numeric) * 100)}%`;
+  }
+
+  private buildWorkbenchUrl() {
+    const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
+    return baseUrl.replace(/\/$/, '/');
   }
 
   private async attachAiPreviewEvidences(rows: Array<Record<string, unknown>>) {
@@ -1019,7 +1358,7 @@ export class RequirementsService implements OnModuleInit {
         item_description: input.rawContent ?? null,
         business_goal: null,
         acceptance_criteria:
-          '员工收到飞书任务消息；点击后进入在线资产表；只填写资产地址；系统可同步资产表并进入统计。',
+          '执行人收到飞书任务通知后登记交付资产；管理者完成验收；系统同步交付记录并纳入统计。',
         priority,
         urgency_level: urgencyLevel,
         estimated_hours: input.estimatedHours ?? '6',
@@ -1930,6 +2269,9 @@ export class RequirementsService implements OnModuleInit {
     if (!createIfMissing) {
       return null;
     }
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reference)) {
+      return null;
+    }
 
     const username = `owner-${createHash('sha1')
       .update(reference, 'utf8')
@@ -2171,6 +2513,11 @@ export class RequirementsService implements OnModuleInit {
         matched_business_platform VARCHAR(64) NULL,
         match_confidence DECIMAL(8,4) NULL,
         match_reason VARCHAR(500) NULL,
+        review_owner_user_id CHAR(36) NULL,
+        review_status VARCHAR(32) NOT NULL DEFAULT 'pending_owner_review',
+        reviewed_by_user_id CHAR(36) NULL,
+        reviewed_at DATETIME NULL,
+        review_note TEXT NULL,
         confirmed_requirement_id CHAR(36) NULL,
         confirmed_task_id CHAR(36) NULL,
         confirmed_at DATETIME NULL,
@@ -2184,6 +2531,7 @@ export class RequirementsService implements OnModuleInit {
         KEY idx_demand_intake_source_key (source_app, external_source_key),
         KEY idx_demand_intake_external_chat (source_app, external_chat_id),
         KEY idx_demand_intake_matched_contact (matched_contact_context_id),
+        KEY idx_demand_intake_review_owner (review_owner_user_id, review_status, created_at),
         KEY idx_demand_intake_confirmed_requirement (confirmed_requirement_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='候选需求接入表'
     `);
@@ -2208,6 +2556,31 @@ export class RequirementsService implements OnModuleInit {
       'matched_customer_code',
       'matched_customer_code VARCHAR(32) NULL AFTER matched_customer_id',
     );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'review_owner_user_id',
+      'review_owner_user_id CHAR(36) NULL AFTER match_reason',
+    );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'review_status',
+      "review_status VARCHAR(32) NOT NULL DEFAULT 'pending_owner_review' AFTER review_owner_user_id",
+    );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'reviewed_by_user_id',
+      'reviewed_by_user_id CHAR(36) NULL AFTER review_status',
+    );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'reviewed_at',
+      'reviewed_at DATETIME NULL AFTER reviewed_by_user_id',
+    );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'review_note',
+      'review_note TEXT NULL AFTER reviewed_at',
+    );
     if (await this.columnExists('demand_intake_candidates', 'matched_customer_id')) {
       await this.dataSource.query(`
         UPDATE demand_intake_candidates candidate
@@ -2229,6 +2602,12 @@ export class RequirementsService implements OnModuleInit {
       'source_app',
       'external_source_key',
     ]);
+    await ensureIndex(this.dataSource, 'demand_intake_candidates', 'idx_demand_intake_review_owner', [
+      'review_owner_user_id',
+      'review_status',
+      'created_at',
+    ]);
+    await this.assignAiPreviewReviewOwners();
 
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS demand_candidate_evidence (

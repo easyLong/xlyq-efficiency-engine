@@ -5,7 +5,7 @@
     return value ? [value] : [];
   }
 
-  function create({ apiBase, getAccessToken }) {
+  function create({ apiBase, getAccessToken, canAccess }) {
     async function request(path, options = {}) {
       return window.XlyqAppShell.request({
         apiBase,
@@ -28,6 +28,10 @@
     }
 
     async function loadAppData() {
+      const quoteVisible = Boolean(canAccess?.("quote.view_all"));
+      const aiPreviewVisible = Boolean(
+        canAccess?.("ai_preview.view_all") || canAccess?.("ai_preview.view_owned"),
+      );
       const [
         projects,
         customers,
@@ -44,8 +48,10 @@
         request("/contact-contexts?status=active").catch(() => []),
         request("/users"),
         request("/requirements/history-board"),
-        request("/requirements/ai-preview-candidates?limit=12").catch(() => []),
-        request("/quotations"),
+        aiPreviewVisible
+          ? request("/requirements/ai-preview-candidates?limit=12&scope=mine").catch(() => [])
+          : Promise.resolve([]),
+        quoteVisible ? request("/quotations") : Promise.resolve([]),
         request("/dimensions/business-category-relations").catch(() => []),
         request("/health"),
       ]);

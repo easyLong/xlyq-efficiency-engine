@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { DataSource, IsNull, Not, Repository } from 'typeorm';
+import { buildAccessProfile } from '../common/access-control';
 import { ProjectEntity } from '../projects/entities/project.entity';
 import { QuotationEntity } from '../quotations/entities/quotation.entity';
 import { RequirementQuotationMappingEntity } from '../quotations/entities/requirement-quotation-mapping.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
+import { UserEntity } from '../users/entities/user.entity';
 
 @Injectable()
 export class DashboardService {
@@ -17,9 +19,14 @@ export class DashboardService {
     private readonly quotationsRepository: Repository<QuotationEntity>,
     @InjectRepository(RequirementQuotationMappingEntity)
     private readonly mappingsRepository: Repository<RequirementQuotationMappingEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
-  async overview() {
+  async overview(currentUser: UserEntity | null = null) {
+    const profile = currentUser
+      ? await buildAccessProfile(this.dataSource, currentUser)
+      : null;
+    const quoteVisible = profile?.dataScope.quotes === 'all';
     const now = new Date();
     const [
       inProgressProjects,
@@ -32,19 +39,25 @@ export class DashboardService {
       this.tasksRepository.count({
         where: { status: Not('completed') },
       }),
-      this.mappingsRepository.count({
-        where: { mapping_status: 'pending_confirm' },
-      }),
-      this.quotationsRepository.count({
-        where: { status: 'pending_review' },
-      }),
-      this.quotationsRepository
-        .createQueryBuilder('q')
-        .select('COALESCE(SUM(q.total_amount), 0)', 'total')
-        .where('q.status IN (:...statuses)', {
-          statuses: ['confirmed', 'settled', 'pending_customer_confirm'],
-        })
-        .getRawOne(),
+      quoteVisible
+        ? this.mappingsRepository.count({
+            where: { mapping_status: 'pending_confirm' },
+          })
+        : Promise.resolve(null),
+      quoteVisible
+        ? this.quotationsRepository.count({
+            where: { status: 'pending_review' },
+          })
+        : Promise.resolve(null),
+      quoteVisible
+        ? this.quotationsRepository
+            .createQueryBuilder('q')
+            .select('COALESCE(SUM(q.total_amount), 0)', 'total')
+            .where('q.status IN (:...statuses)', {
+              statuses: ['confirmed', 'settled', 'pending_customer_confirm'],
+            })
+            .getRawOne()
+        : Promise.resolve(null),
     ]);
     const trueOverdueTasks = await this.tasksRepository
       .createQueryBuilder('task')
@@ -59,7 +72,7 @@ export class DashboardService {
       overdueTasks: trueOverdueTasks,
       pendingMappings,
       pendingQuotations,
-      totalQuotationAmount: Number(quotationAmount?.total ?? 0),
+      totalQuotationAmount: quoteVisible ? Number(quotationAmount?.total ?? 0) : null,
     };
   }
 }

@@ -8,6 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { AdminOnly } from '../common/decorators/admin-only.decorator';
 import { BatchConfirmQuoteMappingsDto } from './dto/batch-confirm-quote-mappings.dto';
 import { CreateQuotationItemDimensionRuleDto } from './dto/create-quotation-item-dimension-rule.dto';
 import { CreateQuoteMappingDto } from './dto/create-quote-mapping.dto';
@@ -17,6 +18,7 @@ import { UpdateQuoteMappingDto } from './dto/update-quote-mapping.dto';
 import { QuoteMappingsService } from './quote-mappings.service';
 
 @Controller('quote-mappings')
+@AdminOnly()
 export class QuoteMappingsController {
   constructor(private readonly quoteMappingsService: QuoteMappingsService) {}
 

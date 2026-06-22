@@ -297,7 +297,7 @@
           <div>
             <div class="delivery-kicker">项目资产</div>
             <h2>交付内容登记</h2>
-            <p>上传图片资产，填写最终交付链接后提交。</p>
+            <p>上传图片资产，填写合作链接后提交。</p>
           </div>
           <button class="secondary" onclick="reloadContext()">刷新</button>
         </div>
@@ -352,18 +352,18 @@
               <div class="section-title">
                 <span class="step-pill">3</span>
                 <div>
-                  <h3>最终交付链接</h3>
-                  <p>填写最终飞书文档、文件夹、压缩包或交付页面。</p>
+                  <h3>合作链接</h3>
+                  <p>填写最终的合作交付页面地址。</p>
                 </div>
               </div>
             </div>
             <div class="link-section">
-              <input id="linkUrl" placeholder="粘贴最终交付链接" oninput="saveDraft()" />
+              <input id="linkUrl" placeholder="粘贴合作链接" oninput="saveDraft()" />
             </div>
           </div>
 
           <div class="save-bar">
-            <div id="saveStatus" class="status">添加图片或交付链接后提交交付，提交后进入管理者验收。</div>
+            <div id="saveStatus" class="status">添加图片或合作链接后提交交付，提交后进入管理者验收。</div>
             <div class="save-actions">
               <button id="saveButton" onclick="saveDelivery()">提交交付</button>
             </div>
@@ -498,7 +498,7 @@
       const draft = loadDraft();
       draft.linkUrl = document.getElementById("linkUrl").value.trim();
       if (draft.linkUrl.length > maxUrlLength) {
-        setStatus("最终交付链接不能超过 500 个字符。", "error");
+        setStatus("合作链接不能超过 500 个字符。", "error");
         return;
       }
       localStorage.setItem(storageKey, JSON.stringify(draft));
@@ -746,7 +746,7 @@
       const imageUrls = unique(draft.imageUrls.map(url => url.trim()).filter(Boolean));
       const linkUrl = draft.linkUrl.trim();
       if (!imageUrls.length && !linkUrl) {
-        setStatus("请至少上传一张图片或填写一个交付链接后再提交交付。", "error");
+        setStatus("请至少上传一张图片或填写一个合作链接后再提交交付。", "error");
         return;
       }
       const tooLongImageUrl = imageUrls.find(url => url.length > maxUrlLength);
@@ -759,7 +759,7 @@
         return;
       }
       if (linkUrl.length > maxUrlLength) {
-        setStatus(`最终交付链接不能超过 ${maxUrlLength} 个字符。`, "error");
+        setStatus(`合作链接不能超过 ${maxUrlLength} 个字符。`, "error");
         return;
       }
       const button = document.getElementById("saveButton");

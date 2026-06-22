@@ -10,6 +10,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { extname, join } from 'node:path';
 import { DataSource, In, Repository } from 'typeorm';
+import {
+  buildAccessProfile,
+  normalizeAccessBusinessCategory,
+} from '../common/access-control';
 import { ensureIndex } from '../common/schema-maintenance';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
 import { FeishuService } from '../integrations/feishu/feishu.service';
@@ -76,17 +80,22 @@ export class TasksService implements OnModuleInit {
     await this.ensureTaskStatusHistoryTable();
   }
 
-  async findAll(projectId?: string, assigneeUserId?: string) {
+  async findAll(
+    projectId?: string,
+    assigneeUserId?: string,
+    currentUser?: UserEntity | null,
+  ) {
     const where = {
       ...(projectId ? { project_id: projectId } : {}),
       ...(assigneeUserId ? { assignee_user_id: assigneeUserId } : {}),
     };
 
-    return this.tasksRepository.find({
+    const tasks = await this.tasksRepository.find({
       where,
       order: { created_at: 'DESC' },
       take: this.defaultListLimit,
     });
+    return this.scopeTasksForUser(tasks, currentUser ?? null);
   }
 
   async findOne(id: string) {
@@ -135,8 +144,13 @@ export class TasksService implements OnModuleInit {
     };
   }
 
-  async board(projectId?: string, liveAssetCount = false, customerId?: string) {
-    const tasks = await this.findBoardTasks(projectId, customerId);
+  async board(
+    projectId?: string,
+    liveAssetCount = false,
+    customerId?: string,
+    currentUser?: UserEntity | null,
+  ) {
+    const tasks = await this.findBoardTasks(projectId, customerId, currentUser);
     const assetCountByTaskId = await this.countAssetsByTaskIds(
       tasks.map((task) => task.id),
     );
@@ -164,9 +178,13 @@ export class TasksService implements OnModuleInit {
     };
   }
 
-  private async findBoardTasks(projectId?: string, customerId?: string) {
+  private async findBoardTasks(
+    projectId?: string,
+    customerId?: string,
+    currentUser?: UserEntity | null,
+  ) {
     if (!customerId) {
-      return this.findAll(projectId);
+      return this.findAll(projectId, undefined, currentUser);
     }
 
     const projects = await this.projectsRepository.find({
@@ -181,10 +199,64 @@ export class TasksService implements OnModuleInit {
       return [];
     }
 
-    return this.tasksRepository.find({
+    const tasks = await this.tasksRepository.find({
       where: { project_id: In(projectIds) },
       order: { created_at: 'DESC' },
       take: this.defaultListLimit,
+    });
+    return this.scopeTasksForUser(tasks, currentUser ?? null);
+  }
+
+  private async scopeTasksForUser(
+    tasks: TaskEntity[],
+    currentUser: UserEntity | null,
+  ) {
+    if (!currentUser || tasks.length === 0) {
+      return tasks;
+    }
+    const profile = await buildAccessProfile(this.dataSource, currentUser);
+    if (profile.dataScope.tasks === 'all') {
+      return tasks;
+    }
+    if (profile.dataScope.tasks === 'assigned') {
+      return tasks.filter((task) => task.assignee_user_id === currentUser.id);
+    }
+
+    const itemIds = tasks
+      .map((task) => task.requirement_item_id)
+      .filter(Boolean);
+    if (!itemIds.length) {
+      return tasks.filter((task) => task.reporter_user_id === currentUser.id);
+    }
+    const items = await this.requirementItemsRepository.find({
+      where: { id: In(itemIds) },
+    });
+    const requirementIds = items
+      .map((item) => item.requirement_id)
+      .filter(Boolean);
+    const requirements = requirementIds.length
+      ? await this.requirementsRepository.find({
+          where: { id: In(requirementIds) },
+        })
+      : [];
+    const itemById = new Map(items.map((item) => [item.id, item]));
+    const requirementById = new Map(
+      requirements.map((requirement) => [requirement.id, requirement]),
+    );
+    const ownedCategories = new Set(profile.ownedBusinessCategoryCodes);
+    return tasks.filter((task) => {
+      if (task.reporter_user_id === currentUser.id) {
+        return true;
+      }
+      const item = task.requirement_item_id
+        ? itemById.get(task.requirement_item_id)
+        : null;
+      const requirement = item
+        ? requirementById.get(item.requirement_id)
+        : null;
+      return ownedCategories.has(
+        normalizeAccessBusinessCategory(requirement?.business_category),
+      );
     });
   }
 
@@ -1264,7 +1336,7 @@ export class TasksService implements OnModuleInit {
     const customerName =
       rows?.[0]?.customerName ?? project?.project_name ?? '未关联基金';
     const businessPlatform = rows?.[0]?.businessPlatform ?? '未关联平台';
-    return `基金${customerName}-平台${businessPlatform}`;
+    return `${customerName}-${businessPlatform}`;
   }
 
   private async recordTaskStatusHistory(

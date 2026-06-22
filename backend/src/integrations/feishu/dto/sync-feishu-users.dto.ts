@@ -7,4 +7,7 @@ export class SyncFeishuUsersDto {
 
   @IsOptional()
   pageSize?: string | number;
+
+  @IsOptional()
+  includeSubDepartments?: boolean;
 }

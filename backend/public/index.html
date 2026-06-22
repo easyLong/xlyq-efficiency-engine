@@ -96,6 +96,10 @@
       position: sticky;
       top: 16px;
       padding: 16px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
     }
     .requirements-compose .section-title {
       padding-bottom: 14px;
@@ -985,7 +989,11 @@
       .edit-panel { grid-template-columns: 1fr; }
       .quotation-import-actions { flex-wrap: wrap; }
       .side { position: static; flex-wrap: wrap; }
-      .side-stack, .requirements-compose { position: static; }
+      .side-stack, .requirements-compose {
+        position: static;
+        max-height: none;
+        overflow: visible;
+      }
       .top { flex-direction: column; }
     }
   </style>
@@ -995,8 +1003,8 @@
     <div class="panel login-card">
       <div class="login-hero">
         <h1>向量引擎管理工作台</h1>
-        <p>从登录开始，走完“需求录入 -> 一个需求生成一个任务 -> 指派员工 -> 飞书通知 -> 在线资产表填写 -> 需求面板”的 MVP 全链路。</p>
-        <p class="muted">当前是 MVP 登录：使用系统已有用户进入，不做密码校验，后续可替换为正式账号密码或飞书登录。</p>
+        <p>从需求录入、任务指派、飞书通知到交付验收与统计分析，统一管理业务执行过程。</p>
+        <p class="muted">请选择已同步的企业员工账号进入工作台。</p>
       </div>
       <div class="login-form">
         <h2>登录工作台</h2>
@@ -1142,9 +1150,9 @@
                 <div class="kicker">AI Preview</div>
                 <h3>AI预览需求</h3>
               </div>
-              <span class="tag">等待管理者确认</span>
+              <span class="tag">等待负责人确认</span>
             </div>
-            <div class="panel-note" id="aiPreviewNote">自动读取AI识别到的预览候选，需人工确认后进入真实需求库。</div>
+            <div class="panel-note" id="aiPreviewNote">自动读取AI识别到的预览候选，按业务大类分配给负责人确认。</div>
             <div id="aiPreviewBoard"></div>
           </div>
           <div id="requirementMetrics" class="summary-strip requirement-metrics"></div>
@@ -1440,6 +1448,7 @@
       requirementItems: [],
       tasks: [],
       aiPreviewCandidates: [],
+      aiPreviewScope: "mine",
       quotations: [],
       quoteMappings: [],
       quotationItemsById: {},
@@ -1497,6 +1506,7 @@
     const api = window.XlyqApiClient.create({
       apiBase,
       getAccessToken: () => state.accessToken,
+      canAccess: permission => can(permission),
     });
     const stepDefs = [
       ["requirement", "需求已录入", "手动保存客户需求"],
@@ -1506,6 +1516,47 @@
     ];
 
     function qs(id) { return document.getElementById(id); }
+    function roleCodes(user = state.user) {
+      const codes = user?.role_codes ?? user?.roles ?? [];
+      if (Array.isArray(codes)) return codes;
+      return String(codes || "").split(",").map(item => item.trim()).filter(Boolean);
+    }
+    function permissions(user = state.user) {
+      const codes = user?.permissions ?? [];
+      if (Array.isArray(codes)) return codes;
+      return String(codes || "").split(",").map(item => item.trim()).filter(Boolean);
+    }
+    function can(permission, user = state.user) {
+      const codes = permissions(user);
+      return codes.includes("*") || codes.includes(permission);
+    }
+    function isAdminUser(user = state.user) {
+      return Boolean(user?.is_admin || can("permission.manage", user) || roleCodes(user).includes("admin"));
+    }
+    function viewPermission(view) {
+      return {
+        requirements: "page.requirements",
+        quotations: "page.quotations",
+        mappings: "page.quotations",
+        settlement: "page.settlement",
+        dashboard: "page.dashboard",
+        messages: "page.messages",
+      }[view] || null;
+    }
+    function canView(view) {
+      const permission = viewPermission(view);
+      return !permission || can(permission);
+    }
+    function applyRoleVisibility() {
+      document.querySelectorAll("[data-view]").forEach(element => {
+        element.classList.toggle("hidden", !canView(element.dataset.view));
+      });
+      qs("manualIntakePanel")?.classList.toggle("hidden", !can("requirement.create"));
+      qs("aiPreviewPanel")?.classList.toggle("hidden", !(can("ai_preview.view_all") || can("ai_preview.view_owned")));
+      if (["quotations", "mappings", "settlement", "dashboard", "messages"].some(view => isViewActive(view) && !canView(view))) {
+        switchView("requirements");
+      }
+    }
     function isViewActive(view) {
       return !qs(`view-${view}`)?.classList.contains("hidden");
     }
@@ -1598,6 +1649,12 @@
       state.contactContexts = appData.contactContexts;
       state.businessCategoryRelations = appData.businessCategoryRelations || [];
       state.users = appData.users;
+      const refreshedUser = state.users.find(user => user.id === state.user?.id || user.username === state.user?.username);
+      if (refreshedUser) {
+        state.user = { ...state.user, ...refreshedUser };
+        window.XlyqAppShell.session.write({ user: state.user, accessToken: state.accessToken });
+        qs("currentUserMeta").textContent = userMetaLabel(state.user);
+      }
       state.requirements = appData.requirements;
       state.requirementItems = appData.requirementItems;
       state.tasks = appData.tasks;
@@ -1607,6 +1664,7 @@
       invalidateLookupMaps();
       qs("healthPill").textContent = `后端 ${appData.health.status} / 数据库 ${appData.health.database}`;
       renderBootstrap();
+      applyRoleVisibility();
     }
     function unwrap(value) {
       return api.unwrap(value);
@@ -1635,13 +1693,15 @@
       syncProjectSelection(false);
       syncQuoteProjectSelection(false);
       const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
-      qs("requirementTitle").value ||= `MVP全链路测试需求-${stamp}`;
-      qs("requirementContent").value ||= "客户希望在向量引擎中录入需求后，项目经理可以自动生成任务并指派给员工。员工收到飞书消息后进入在线资产表，只填写资产地址，管理者可以查看需求面板。";
+      qs("requirementTitle").value ||= `客户需求-${stamp}`;
+      qs("requirementContent").value ||= "客户提交业务需求后，负责人可生成任务并指派执行人。执行人收到飞书通知后登记交付资产，管理者在需求面板完成验收与跟踪。";
       qs("aiRequirementTitle").value ||= `AI需求文件-${stamp}`;
       renderAiPreviewBoard();
       renderRequirementBoard();
-      renderQuotationsBoard();
-      renderQuotationMetrics([]);
+      if (can("quote.view_all")) {
+        renderQuotationsBoard();
+        renderQuotationMetrics([]);
+      }
     }
     function renderLoginUsers() {
       qs("loginUser").innerHTML = state.users.map(u => `<option value="${escapeAttr(u.username)}">${escapeHtml(userLoginLabel(u))}</option>`).join("");
@@ -1714,6 +1774,7 @@
       qs("appView").classList.remove("hidden");
       qs("currentUser").textContent = state.user.display_name || state.user.username;
       qs("currentUserMeta").textContent = userMetaLabel(state.user);
+      applyRoleVisibility();
     }
     async function initializeAppAfterLogin() {
       await loadAppData();
@@ -1752,6 +1813,10 @@
       }, 30000);
     }
     function switchView(view) {
+      if (!canView(view)) {
+        toast("当前账号没有该页面权限。");
+        view = "requirements";
+      }
       document.querySelectorAll(".nav button").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
       ["requirements", "quotations", "mappings", "settlement", "dashboard", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
       const titles = {
@@ -1769,6 +1834,7 @@
       if (view === "mappings") loadQuarterMappingWorkbench(false);
       if (view === "settlement") loadSettlementStatement(false);
       if (view === "messages") refreshMessages();
+      applyRoleVisibility();
     }
     function selectedCustomer() {
       return state.customers.find(c => c.customer_code === qs("customerSelect").value);
@@ -2490,7 +2556,7 @@
           request("/requirements"),
           request("/requirement-items"),
           request("/tasks"),
-          request("/quote-mappings").catch(() => []),
+          can("quote.view_all") ? request("/quote-mappings").catch(() => []) : Promise.resolve([]),
         ]);
         historyBoard = { requirements, requirementItems, tasks, quoteMappings };
       }
@@ -2506,8 +2572,13 @@
       }
     }
     async function refreshAiPreviewBoard() {
+      if (!can("ai_preview.view_all") && !can("ai_preview.view_owned")) {
+        state.aiPreviewCandidates = [];
+        renderAiPreviewBoard();
+        return;
+      }
       try {
-        state.aiPreviewCandidates = unwrap(await request("/requirements/ai-preview-candidates?limit=12"));
+        state.aiPreviewCandidates = unwrap(await request(`/requirements/ai-preview-candidates?limit=12&scope=${encodeURIComponent(state.aiPreviewScope || "mine")}`));
       } catch (error) {
         console.warn("AI preview refresh failed", error);
         state.aiPreviewCandidates = state.aiPreviewCandidates || [];
@@ -2530,13 +2601,40 @@
       const panel = qs("aiPreviewPanel");
       const board = qs("aiPreviewBoard");
       if (!panel || !board) return;
-      const rows = state.aiPreviewCandidates || [];
-      panel.classList.toggle("hidden", rows.length === 0);
-      if (!rows.length) {
+      if (!can("ai_preview.view_all") && !can("ai_preview.view_owned")) {
+        panel.classList.add("hidden");
         board.innerHTML = "";
         return;
       }
-      board.innerHTML = `<div class="ai-preview-list">${
+      const rows = state.aiPreviewCandidates || [];
+      panel.classList.remove("hidden");
+      const scope = state.aiPreviewScope || "mine";
+      const scopeLabels = can("ai_preview.view_all") ? {
+        mine: "我的待确认",
+        all: "全部待确认",
+        processed: "已处理",
+      } : { mine: "我的待确认" };
+      const scopeNote = {
+        mine: "只显示分配给当前登录负责人的候选需求。",
+        all: "显示所有仍待确认的候选需求，可用于管理员兜底和转派前排查。",
+        processed: "显示已确认或已标记伪需求的候选记录。",
+      }[scope] || "自动读取AI识别到的预览候选，需人工确认后进入真实需求库。";
+      if (!rows.length) {
+        board.innerHTML = `
+          <div class="status-filter ai-preview-tabs">
+            ${Object.entries(scopeLabels).map(([key, label]) => `<button class="${scope === key ? "active" : ""}" onclick="setAiPreviewScope('${key}')">${label}</button>`).join("")}
+          </div>
+          <div class="panel-note">${safeText(scopeNote)}</div>
+          <div class="ai-preview-empty">暂无${safeText(scopeLabels[scope] || "候选需求")}</div>
+        `;
+        return;
+      }
+      board.innerHTML = `
+        <div class="status-filter ai-preview-tabs">
+          ${Object.entries(scopeLabels).map(([key, label]) => `<button class="${scope === key ? "active" : ""}" onclick="setAiPreviewScope('${key}')">${label}</button>`).join("")}
+        </div>
+        <div class="panel-note">${safeText(scopeNote)}</div>
+        <div class="ai-preview-list">${
         rows.map(row => {
           const evidences = row.evidences || [];
           const dimensions = [
@@ -2556,8 +2654,9 @@
                   <span>${safeText(row.chat_name || row.customer_name || "-")}</span>
                   ${row.owner_name ? `<span>对接人 ${safeText(row.owner_name)}</span>` : ""}
                   <span>${safeText(row.business_platform || "-")}</span>
+                  <span>负责人 ${safeText(row.review_owner_name || "未分配")}</span>
                   <span>置信度 ${safeText(previewConfidenceText(row.confidence))}</span>
-                  <span>${safeText(row.status || "pending")}</span>
+                  <span>${safeText(row.review_status || row.status || "pending")}</span>
                 </div>
                 <div class="ai-preview-dims">
                   <span>${safeText(dimensions)}</span>
@@ -2583,6 +2682,15 @@
         }).join("")
       }</div>`;
     }
+    async function setAiPreviewScope(scope) {
+      if (scope !== "mine" && !can("ai_preview.view_all")) {
+        scope = "mine";
+      }
+      state.aiPreviewScope = scope || "mine";
+      state.selectedAiPreviewCandidateId = null;
+      updateCreateRequirementButtonLabel();
+      await refreshAiPreviewBoard();
+    }
     async function rejectAiPreviewCandidate(event, candidateId) {
       event?.stopPropagation();
       if (!candidateId) return;
@@ -2599,7 +2707,7 @@
           state.selectedAiPreviewCandidateId = null;
           updateCreateRequirementButtonLabel();
         }
-        renderAiPreviewBoard();
+        await refreshAiPreviewBoard();
         toast("已标记为伪需求");
       } catch (error) {
         toast(error.message);
@@ -2700,16 +2808,7 @@
       return `${date.getFullYear()}-${month}-${day}`;
     }
     function aiPreviewContent(candidate) {
-      const evidenceText = (candidate.evidences || [])
-        .map(item => `${item.display_time_text || ""} ${item.sender_name || ""}: ${item.message_text || item.evidence_reason || ""}`.trim())
-        .filter(Boolean)
-        .join("\n");
-      return [
-        candidate.demand_content,
-        candidate.demand_title || candidate.business_name,
-        candidate.match_suggestion ? `匹配建议：${candidate.match_suggestion}` : "",
-        evidenceText ? `证据链：\n${evidenceText}` : "",
-      ].filter(Boolean).join("\n\n");
+      return candidate.demand_content || "";
     }
     async function applyAiPreviewCandidate(candidateId) {
       const candidate = (state.aiPreviewCandidates || []).find(item => String(item.candidate_id) === String(candidateId));
@@ -2748,6 +2847,11 @@
     }
     function renderRequirementBoard() {
       const rows = activeDimensionRows();
+      const quoteVisible = can("quote.view_all");
+      const canManageAssignment = can("task.assign_owned");
+      if (!canManageAssignment && state.requirementFilter === "pending") {
+        state.requirementFilter = "all";
+      }
       const metrics = {
         total: rows.length,
         pending: rows.filter(row => !row.task || row.taskStatus === "待指派").length,
@@ -2759,23 +2863,35 @@
       const metricsEl = qs("requirementMetrics");
       if (metricsEl) {
         metricsEl.innerHTML = [
-          ["全部需求", metrics.total],
-          ["待指派", metrics.pending],
-          ["处理中", metrics.assigned],
-          ["待验收", metrics.pendingReview],
-          ["报价已确认", metrics.quoteReady],
-          ["报价待处理", metrics.quotePending],
-        ].map(([label, value]) => `<div class="mini-metric"><span>${label}</span><strong>${value}</strong></div>`).join("");
+          ["total", "全部需求", metrics.total],
+          canManageAssignment ? ["pending", "待指派", metrics.pending] : null,
+          ["assigned", "处理中", metrics.assigned],
+          ["pending_review", "待验收", metrics.pendingReview],
+          ["quote_ready", "报价已确认", metrics.quoteReady],
+          ["quote_pending", "报价待处理", metrics.quotePending],
+        ].filter(Boolean)
+          .filter(([key]) => quoteVisible || !key.startsWith("quote_"))
+          .map(([, label, value]) => `<div class="mini-metric"><span>${label}</span><strong>${value}</strong></div>`).join("");
       }
 
       const filters = [
         ["all", "全部"],
-        ["pending", "待指派"],
+        canManageAssignment ? ["pending", "待指派"] : null,
         ["assigned", "处理中"],
         ["pending_review", "待验收"],
         ["completed", "已验收"],
         ["quote_pending", "待报价"],
-      ];
+      ].filter(Boolean);
+      const visibleFilters = filters.filter(([key]) => {
+        if (!quoteVisible && key === "quote_pending") return false;
+        return true;
+      });
+      if (!quoteVisible && state.requirementFilter === "quote_pending") {
+        state.requirementFilter = "all";
+      }
+      if (!visibleFilters.some(([key]) => key === state.requirementFilter)) {
+        state.requirementFilter = "all";
+      }
       const filtersEl = qs("requirementFilters");
       const filterUiKey = JSON.stringify({
         filter: state.requirementFilter,
@@ -2783,12 +2899,14 @@
         dimensions: state.dimensionFilters,
         users: state.users.length,
         contacts: state.contactContexts.length,
+        quoteVisible,
+        canManageAssignment,
       });
       if (filtersEl && state.requirementFilterUiKey !== filterUiKey) {
         state.requirementFilterUiKey = filterUiKey;
         filtersEl.innerHTML = `
           <div class="quick-filter-row">
-            ${filters.map(([key, label]) => `<button class="${state.requirementFilter === key ? "active" : ""}" onclick="setRequirementFilter('${key}')">${label}</button>`).join("")}
+            ${visibleFilters.map(([key, label]) => `<button class="${state.requirementFilter === key ? "active" : ""}" onclick="setRequirementFilter('${key}')">${label}</button>`).join("")}
             <input class="filter-search" value="${escapeAttr(state.requirementKeyword)}" placeholder="搜索需求名称"
               oncompositionstart="this.dataset.composing='1'"
               oncompositionend="this.dataset.composing='0'; setRequirementKeyword(this.value, true)"
@@ -2861,7 +2979,7 @@
                   <div class="status-stack">
                     <span class="tag">需求：${safeText(row.requirement.status)}</span>
                     <span class="tag">任务：${safeText(row.taskStatus)}</span>
-                    <span class="tag">报价：${safeText(row.quoteStatus)}</span>
+                    ${quoteVisible ? `<span class="tag">报价：${safeText(row.quoteStatus)}</span>` : ""}
                   </div>
                   <div class="row-sub">负责人：${safeText(taskReporterName(row.task))} · 执行人：${safeText(assigneeName(row.task?.assignee_user_id))}</div>
                 </div>
@@ -2876,7 +2994,7 @@
                   `负责人：${safeText(taskReporterName(row.task))}`,
                   `执行人：${safeText(assigneeName(row.task?.assignee_user_id))}`,
                 ].filter(Boolean).join(" · ")}</div>
-                ${renderRequirementQuoteAction(row)}
+                ${quoteVisible ? renderRequirementQuoteAction(row) : ""}
                 ${renderAssignAction(row)}
               </div>
               ${state.editingRequirementId === row.requirement.id ? renderRequirementEditRow(row) : ""}
@@ -2907,15 +3025,17 @@
       renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
     }
     function renderRequirementEditAction(row) {
+      if (!can("requirement.edit_owned") && !can("requirement.delete_all")) return "";
       const isBusy = state.busyActionId === row.requirement.id;
       return `
         <div class="card-edit-actions" onclick="event.stopPropagation()">
-          <button class="btn" ${isBusy ? "disabled" : ""} onclick="startEditRequirement('${row.requirement.id}')">编辑</button>
-          <button class="btn danger" ${isBusy ? "disabled" : ""} onclick="deleteRequirementBundle('${row.requirement.id}')">${isBusy ? "处理中..." : "删除"}</button>
+          ${can("requirement.edit_owned") ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="startEditRequirement('${row.requirement.id}')">编辑</button>` : ""}
+          ${can("requirement.delete_all") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="deleteRequirementBundle('${row.requirement.id}')">${isBusy ? "处理中..." : "删除"}</button>` : ""}
         </div>
       `;
     }
     function renderRequirementQuoteAction(row) {
+      if (!can("quote.view_all")) return "";
       if (!row.item) return `<span class="muted">需求项生成中</span>`;
       const selectedItem = row.quotationItem || quotationItemById(row.mapping?.quotation_item_id);
       const isBusy = state.busyActionId === `quote-${row.item.id}`;
@@ -2967,6 +3087,7 @@
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     }
     async function loadRequirementQuoteOptions(requirementId) {
+      if (!can("quote.manage_all")) return toast("当前账号没有报价操作权限。");
       const row = requirementRows().find(item => item.requirement.id === requirementId);
       if (!row?.item) return toast("需求项还未生成，暂不能适配报价");
       if (state.busyActionId) return;
@@ -2997,6 +3118,7 @@
       }
     }
     async function saveRequirementQuoteMapping(requirementId) {
+      if (!can("quote.manage_all")) return toast("当前账号没有报价操作权限。");
       const row = requirementRows().find(item => item.requirement.id === requirementId);
       if (!row?.item) return toast("需求项还未生成，暂不能适配报价");
       const quotationItemId = qs(`requirement-quote-item-${row.item.id}`)?.value;
@@ -3130,6 +3252,12 @@
     }
     function renderAssignAction(row) {
       if (!row.task) return `<span class="muted">任务生成中</span>`;
+      if (row.task.status === "pending_review" && !(can("task.accept_owned") || can("task.return_owned"))) {
+        return `<span class="done-text">待管理者验收</span>`;
+      }
+      if (!can("task.assign_owned") && !["pending_review", "completed"].includes(row.task.status)) {
+        return `<span class="done-text">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>`;
+      }
       if (row.taskStatus === "待验收") return renderReviewAction(row);
       if (row.taskStatus === "已验收") return `<span class="done-text">已验收</span>`;
       const isBusy = state.busyActionId === row.task.id;
@@ -3158,10 +3286,13 @@
     }
     function renderReviewAction(row) {
       const isBusy = state.busyActionId === row.task.id;
+      if (!can("task.accept_owned") && !can("task.return_owned")) {
+        return `<span class="done-text">待管理者验收</span>`;
+      }
       return `
         <div class="assign-action" onclick="event.stopPropagation()">
-          <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "通过验收"}</button>
-          <button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>
+          ${can("task.accept_owned") ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "通过验收"}</button>` : ""}
+          ${can("task.return_owned") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>` : ""}
         </div>
       `;
     }
@@ -4221,6 +4352,11 @@
       await saveQuarterMapping(requirementItemId, true);
     }
     async function loadSettlementStatement(showToast = true) {
+      if (!can("settlement.view_all")) {
+        state.settlementStatement = null;
+        if (showToast) toast("仅管理员可以查看结算统计。");
+        return;
+      }
       const requestSeq = ++state.settlementRequestSeq;
       state.dimensionFilters.contactContextId = "all";
       const customerId = qs("settlementCustomerSelect")?.value || state.settlementCustomerId || "all";
@@ -4549,7 +4685,7 @@
             await request(`/requirements/ai-preview-candidates/${selectedCandidateId}/confirm`, { method: "POST" });
             state.aiPreviewCandidates = state.aiPreviewCandidates.filter(item => String(item.candidate_id) !== String(selectedCandidateId));
             state.selectedAiPreviewCandidateId = null;
-            renderAiPreviewBoard();
+            await refreshAiPreviewBoard();
           } catch (error) {
             console.warn("AI preview confirm failed", error);
           }
@@ -5386,10 +5522,8 @@
             window.XlyqAppShell.session.clear();
           }
           if (session?.user?.username) {
-            if (!session.accessToken) {
-              const result = await request("/auth/login", { method: "POST", body: { username: session.user.username } });
-              session = { user: result.user, accessToken: result.accessToken };
-            }
+            const result = await request("/auth/login", { method: "POST", body: { username: session.user.username } });
+            session = { user: result.user, accessToken: result.accessToken };
             enterApp(session.user, session.accessToken);
             await initializeAppAfterLogin();
           } else {

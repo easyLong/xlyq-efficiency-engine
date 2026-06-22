@@ -88,7 +88,7 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
       ],
       assetSheetPermissionHint:
         '若在线资产表创建失败，请在飞书开放平台为应用开通 drive:drive 或 sheets:spreadsheet/sheets:spreadsheet:create，并发布/启用权限变更。',
-      mvpMode: 'feishu-contact-sync-and-notification-ready',
+      integrationMode: 'feishu-contact-sync-and-notification-ready',
     };
   }
 

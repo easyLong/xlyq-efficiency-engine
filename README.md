@@ -1,6 +1,6 @@
 # 向量引擎管理工作台
 
-更新时间：2026-06-16
+更新时间：2026-06-22
 
 向量引擎管理工作台是一套面向基金客户服务团队的项目效能系统，用来把“需求录入、任务指派、资产登记、合同报价录入、报价子项选择、结算统计、需求面板”串成一条可追踪的数据链路。
 
@@ -13,7 +13,7 @@
 - 健康检查：`GET /api/v1/health`
 - 员工本地交付登记页：`GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`
 - 当前默认数据库：`ops_platform`
-- 登录与接口：当前为 MVP 用户选择登录，受保护接口使用 `Authorization: Bearer <accessToken>`
+- 登录与接口：当前为 MVP 用户选择登录，受保护接口使用 `Authorization: Bearer <accessToken>`；登录结果会返回角色、权限点和数据范围。
 
 核心闭环：
 
@@ -102,6 +102,7 @@ npm run migrate:project-tables -- --execute
 | [PROJECT_STATUS.md](PROJECT_STATUS.md) | 当前实现状态、验证结果、已知限制 |
 | [DATA_FLOW.md](DATA_FLOW.md) | 需求、任务、报价、结算的数据链路和一致性规则 |
 | [AI_INTAKE_PREVIEW.md](AI_INTAKE_PREVIEW.md) | AI 候选需求预览、证据链、人工确认入库流程 |
+| [ACCESS_CONTROL.md](ACCESS_CONTROL.md) | 页面可见性、角色权限、数据范围和接口控制 |
 | [MVP_SCOPE.md](MVP_SCOPE.md) | MVP 范围和验收闭环 |
 | [API_SPEC.md](API_SPEC.md) | 当前主要 API 清单和联调说明 |
 | [DB_SCHEMA.md](DB_SCHEMA.md) | 数据库表结构设计说明 |
@@ -115,7 +116,7 @@ npm run migrate:project-tables -- --execute
 
 ## 当前已知限制
 
-- 登录仍是 MVP 用户选择登录，没有账号密码校验、RBAC 和项目级数据权限；管理端接口已接入 MVP Token 鉴权。
+- 登录仍是 MVP 用户选择登录，没有账号密码校验；角色权限和数据范围已接入 MVP Token 鉴权，后续可替换为正式账号体系。
 - 管理端前端仍是单个静态 HTML，后续应工程化为 Vue/React 项目。
 - 飞书在线表格依赖企业应用权限；权限不足时自动降级到本地交付登记页。
 - 结算单目前是实时预览，还没有正式结算单持久化、审批和导出流程。
@@ -159,3 +160,12 @@ cd backend
 npm test -- --runInBand
 npm run build
 ```
+
+## 2026-06-22 权限控制更新
+
+- 新增管理员、业务负责人、执行人三类有效角色。
+- 管理员可访问合同报价录入、结算统计、报价信息和全部历史任务。
+- 业务负责人按业务大类查看需求与任务，可创建需求、指派执行人、验收和退回，但看不到报价和结算信息。
+- 执行人只看分配给自己的任务，看不到待指派、待报价、报价信息、合同报价录入、结算统计和需求面板。
+- 历史需求任务状态已按权限隐藏待指派、待报价、报价操作、指派、验收等入口。
+- 当前管理员：雷声、韦莉香、廖丽婷。

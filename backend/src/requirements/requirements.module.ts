@@ -4,6 +4,7 @@ import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity
 import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
 import { CustomerEntity } from '../customers/entities/customer.entity';
 import { ProjectEntity } from '../projects/entities/project.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { QuotationItemEntity } from '../quotations/entities/quotation-item.entity';
 import { RequirementQuotationMappingEntity } from '../quotations/entities/requirement-quotation-mapping.entity';
 import { TaskDirectoryEntity } from '../tasks/entities/task-directory.entity';
@@ -20,6 +21,7 @@ import { RequirementsService } from './requirements.service';
 
 @Module({
   imports: [
+    NotificationsModule,
     TypeOrmModule.forFeature([
       RequirementEntity,
       RequirementItemEntity,

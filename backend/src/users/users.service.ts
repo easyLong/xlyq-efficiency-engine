@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { NotFoundException, ConflictException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { buildAccessProfile } from '../common/access-control';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -16,13 +17,15 @@ export class UsersService {
     private readonly usersRepository: Repository<UserEntity>,
     @InjectRepository(RoleEntity)
     private readonly rolesRepository: Repository<RoleEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findAll() {
-    return this.usersRepository.find({
+    const users = await this.usersRepository.find({
       order: { created_at: 'DESC' },
       take: 50,
     });
+    return this.attachRoleCodes(users);
   }
 
   async findLoginUsers() {
@@ -49,7 +52,7 @@ export class UsersService {
     return {
       accessToken: `mvp-${user.id}`,
       tokenType: 'MVP',
-      user,
+      user: await this.attachRoleCodesToUser(user),
     };
   }
 
@@ -64,7 +67,7 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    return user;
+    return this.attachRoleCodesToUser(user);
   }
 
   async create(dto: CreateUserDto) {
@@ -100,5 +103,25 @@ export class UsersService {
       feishu_open_id: dto.feishuOpenId ?? user.feishu_open_id,
     });
     return this.usersRepository.save(user);
+  }
+
+  private async attachRoleCodes(users: UserEntity[]) {
+    if (!users.length) {
+      return [];
+    }
+    return Promise.all(users.map((user) => this.attachRoleCodesToUser(user)));
+  }
+
+  private async attachRoleCodesToUser(user: UserEntity) {
+    const profile = await buildAccessProfile(this.dataSource, user);
+    return {
+      ...user,
+      role_codes: profile.roleCodes,
+      effective_roles: profile.effectiveRoles,
+      permissions: profile.permissions,
+      data_scope: profile.dataScope,
+      owned_business_category_codes: profile.ownedBusinessCategoryCodes,
+      is_admin: profile.isAdmin,
+    };
   }
 }
