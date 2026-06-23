@@ -11,13 +11,16 @@ ENABLE_ON_BOOT="${ENABLE_ON_BOOT:-1}"
 ensure_backend_dir
 
 cd "${BACKEND_DIR}"
+load_node_env
+require_command node
 
 if [ "${NPM_INSTALL_ON_START}" = "1" ]; then
   echo "Installing backend dependencies..."
-  npm ci
+  install_backend_dependencies
 fi
 
 if [ "${BUILD_ON_START}" = "1" ] || [ ! -f "${BACKEND_DIR}/dist/main.js" ]; then
+  ensure_build_dependencies
   echo "Building backend..."
   npm run build
 fi

@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 
 ensure_backend_dir
+load_node_env
+require_command node
 
 if systemd_service_exists; then
   echo "Restarting ${SERVICE_NAME} with systemd..."
@@ -15,6 +17,7 @@ else
   stop_direct
   if [ ! -f "${BACKEND_DIR}/dist/main.js" ]; then
     cd "${BACKEND_DIR}"
+    ensure_build_dependencies
     echo "Building backend..."
     npm run build
   fi

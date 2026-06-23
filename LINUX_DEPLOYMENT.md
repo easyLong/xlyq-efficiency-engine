@@ -49,6 +49,24 @@ node -v
 npm -v
 ```
 
+如果执行脚本时提示 `npm: command not found`，先确认当前 shell 能找到 Node.js：
+
+```bash
+which node
+which npm
+node -v
+npm -v
+```
+
+如果使用 nvm 安装 Node.js，脚本会尝试自动加载 `~/.nvm/nvm.sh`。如果仍无法识别，先执行：
+
+```bash
+source ~/.nvm/nvm.sh
+nvm install 20
+nvm use 20
+npm -v
+```
+
 ## 3. 拉取代码
 
 建议统一部署到 `/opt`：
@@ -145,6 +163,16 @@ npm ci
 npm run build
 ```
 
+如果构建时报 `sh: nest: command not found`，说明服务器没有安装构建依赖。执行：
+
+```bash
+cd /opt/xlyq-efficiency-engine/backend
+npm ci --include=dev
+npm run build
+```
+
+运维脚本在需要构建时也会自动检查 `node_modules/.bin/nest`，缺失时会自动安装包含 `devDependencies` 的依赖。
+
 验证启动：
 
 ```bash
@@ -230,7 +258,13 @@ cd /opt/xlyq-efficiency-engine
 ./scripts/linux/status.sh
 ```
 
-脚本默认把当前目录 `pwd` 当作项目根目录，因此建议先 `cd` 到 `xlyq-efficiency-engine` 仓库根目录再执行。脚本会自动读取 `backend/.env` 中的 `PORT` 和 `HOST` 来生成健康检查地址。`HOST=0.0.0.0` 或 `HOST=::` 会自动转换为 `127.0.0.1` 进行服务器本机健康检查；如果 `HOST` 配的是服务器内网 IP，则会使用该 IP 检查。
+脚本默认把当前目录 `pwd` 当作项目根目录，因此建议先 `cd` 到 `xlyq-efficiency-engine` 仓库根目录再执行。健康检查地址按以下优先级生成：
+
+1. 显式传入的 `HEALTH_URL`
+2. `backend/.env` 中的 `APP_PUBLIC_BASE_URL`，自动拼接 `/api/v1/health`
+3. `backend/.env` 中的 `HOST` + `PORT`
+
+如果没有配置 `APP_PUBLIC_BASE_URL`，且 `HOST=0.0.0.0` 或 `HOST=::`，脚本会自动转换为 `127.0.0.1` 做服务器本机健康检查。
 
 直接后台模式会使用：
 
@@ -241,6 +275,26 @@ ERR_LOG=$(pwd)/logs/xlyq-efficiency-engine.err.log
 ```
 
 生产长期运行仍建议配置 systemd，因为它支持开机自启、异常自动拉起和统一日志；临时上线或内网试运行可以直接使用脚本后台模式。
+
+健康检查默认会请求 `/api/v1/health`，每次连接最多等待 2 秒、单次请求最多 5 秒。如果服务尚未完全启动，脚本会重试。可以按需调整：
+
+```bash
+HEALTH_CONNECT_TIMEOUT=2 HEALTH_MAX_TIME=5 HEALTH_CHECK_ATTEMPTS=20 ./scripts/linux/start.sh
+```
+
+如果只想先把后台进程拉起来，暂时跳过健康检查：
+
+```bash
+SKIP_HEALTH_CHECK=1 ./scripts/linux/start.sh
+```
+
+如果服务器上已经存在 systemd 服务，但希望临时绕过 systemd、强制使用直接后台模式：
+
+```bash
+SERVICE_MODE=direct ./scripts/linux/start.sh
+SERVICE_MODE=direct ./scripts/linux/status.sh
+SERVICE_MODE=direct ./scripts/linux/stop.sh
+```
 
 脚本默认参数：
 
@@ -261,6 +315,18 @@ APP_DIR=/data/xlyq-efficiency-engine PORT=9001 ./scripts/linux/start.sh
 SERVICE_NAME=xlyq-efficiency-engine-prod ./scripts/linux/restart.sh
 HEALTH_HOST=192.168.1.20 ./scripts/linux/status.sh
 HEALTH_URL=https://your-domain.example.com/api/v1/health ./scripts/linux/status.sh
+```
+
+如果希望脚本默认走外网地址，在 `backend/.env` 配置：
+
+```env
+APP_PUBLIC_BASE_URL=https://your-domain.example.com
+```
+
+或公网 IP：
+
+```env
+APP_PUBLIC_BASE_URL=http://your-public-ip:9000
 ```
 
 启动脚本默认不执行 `npm ci`，避免生产环境每次启动都重新安装依赖。发布更新时如需安装依赖或强制重新构建，可执行：

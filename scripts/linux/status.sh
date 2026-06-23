@@ -13,7 +13,7 @@ fi
 HEALTH_URL="$(resolve_health_url)"
 echo
 echo "Health check: ${HEALTH_URL}"
-if curl -fsS "${HEALTH_URL}"; then
+if curl -fsS --connect-timeout "${HEALTH_CONNECT_TIMEOUT:-2}" --max-time "${HEALTH_MAX_TIME:-5}" "${HEALTH_URL}"; then
   echo
   echo "Health check passed."
 else
