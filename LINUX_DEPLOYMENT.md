@@ -210,6 +210,50 @@ sudo systemctl status xlyq-efficiency-engine
 sudo journalctl -u xlyq-efficiency-engine -f
 ```
 
+### 运维脚本
+
+仓库内提供了 systemd 模式的启动、关闭、重启和状态检查脚本：
+
+```bash
+cd /opt/xlyq-efficiency-engine
+
+# 启动服务；如果 backend/dist/main.js 不存在，会自动 npm run build
+./scripts/linux/start.sh
+
+# 关闭服务
+./scripts/linux/stop.sh
+
+# 重启服务并检查健康状态
+./scripts/linux/restart.sh
+
+# 查看 systemd 状态并请求健康检查接口
+./scripts/linux/status.sh
+```
+
+脚本默认参数：
+
+```bash
+SERVICE_NAME=xlyq-efficiency-engine
+APP_DIR=/opt/xlyq-efficiency-engine
+BACKEND_DIR=/opt/xlyq-efficiency-engine/backend
+PORT=9000
+HEALTH_URL=http://127.0.0.1:9000/api/v1/health
+```
+
+如果服务器部署目录、服务名或端口不同，可以临时覆盖：
+
+```bash
+APP_DIR=/data/xlyq-efficiency-engine PORT=9001 ./scripts/linux/start.sh
+SERVICE_NAME=xlyq-efficiency-engine-prod ./scripts/linux/restart.sh
+HEALTH_URL=https://your-domain.example.com/api/v1/health ./scripts/linux/status.sh
+```
+
+启动脚本默认不执行 `npm ci`，避免生产环境每次启动都重新安装依赖。发布更新时如需安装依赖或强制重新构建，可执行：
+
+```bash
+NPM_INSTALL_ON_START=1 BUILD_ON_START=1 ./scripts/linux/start.sh
+```
+
 ## 8. Nginx 反向代理
 
 创建站点配置：
