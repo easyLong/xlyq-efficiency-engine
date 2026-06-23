@@ -1,22 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SERVICE_NAME="${SERVICE_NAME:-xlyq-efficiency-engine}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/common.sh"
 
-run_sudo() {
-  if [ "$(id -u)" -eq 0 ]; then
-    "$@"
-  else
-    sudo "$@"
-  fi
-}
-
-if ! run_sudo systemctl cat "${SERVICE_NAME}" >/dev/null 2>&1; then
-  echo "systemd service not found: ${SERVICE_NAME}" >&2
-  exit 1
+if systemd_service_exists; then
+  echo "Stopping ${SERVICE_NAME} with systemd..."
+  run_sudo systemctl stop "${SERVICE_NAME}"
+  run_sudo systemctl status "${SERVICE_NAME}" --no-pager || true
+  echo "Service stopped."
+else
+  stop_direct
 fi
-
-echo "Stopping ${SERVICE_NAME}..."
-run_sudo systemctl stop "${SERVICE_NAME}"
-run_sudo systemctl status "${SERVICE_NAME}" --no-pager || true
-echo "Service stopped."

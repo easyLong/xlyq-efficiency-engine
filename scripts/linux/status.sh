@@ -4,7 +4,11 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 
-run_sudo systemctl status "${SERVICE_NAME}" --no-pager || true
+if systemd_service_exists; then
+  run_sudo systemctl status "${SERVICE_NAME}" --no-pager || true
+else
+  status_direct
+fi
 
 HEALTH_URL="$(resolve_health_url)"
 echo

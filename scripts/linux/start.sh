@@ -9,7 +9,6 @@ NPM_INSTALL_ON_START="${NPM_INSTALL_ON_START:-0}"
 ENABLE_ON_BOOT="${ENABLE_ON_BOOT:-1}"
 
 ensure_backend_dir
-ensure_service_exists
 
 cd "${BACKEND_DIR}"
 
@@ -23,16 +22,21 @@ if [ "${BUILD_ON_START}" = "1" ] || [ ! -f "${BACKEND_DIR}/dist/main.js" ]; then
   npm run build
 fi
 
-echo "Reloading systemd..."
-run_sudo systemctl daemon-reload
+if systemd_service_exists; then
+  echo "Starting with systemd: ${SERVICE_NAME}"
+  echo "Reloading systemd..."
+  run_sudo systemctl daemon-reload
 
-if [ "${ENABLE_ON_BOOT}" = "1" ]; then
-  echo "Enabling ${SERVICE_NAME} on boot..."
-  run_sudo systemctl enable "${SERVICE_NAME}" >/dev/null
+  if [ "${ENABLE_ON_BOOT}" = "1" ]; then
+    echo "Enabling ${SERVICE_NAME} on boot..."
+    run_sudo systemctl enable "${SERVICE_NAME}" >/dev/null
+  fi
+
+  run_sudo systemctl start "${SERVICE_NAME}"
+  run_sudo systemctl status "${SERVICE_NAME}" --no-pager
+else
+  echo "systemd service not found. Falling back to direct background mode."
+  start_direct
 fi
-
-echo "Starting ${SERVICE_NAME}..."
-run_sudo systemctl start "${SERVICE_NAME}"
-run_sudo systemctl status "${SERVICE_NAME}" --no-pager
 
 wait_for_health

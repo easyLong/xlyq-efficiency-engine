@@ -11,6 +11,11 @@ SERVICE_NAME="${SERVICE_NAME:-xlyq-efficiency-engine}"
 APP_DIR="${APP_DIR:-${DEFAULT_APP_DIR}}"
 BACKEND_DIR="${BACKEND_DIR:-${APP_DIR}/backend}"
 ENV_FILE="${ENV_FILE:-${BACKEND_DIR}/.env}"
+RUN_DIR="${RUN_DIR:-${APP_DIR}/.runtime}"
+LOG_DIR="${LOG_DIR:-${APP_DIR}/logs}"
+PID_FILE="${PID_FILE:-${RUN_DIR}/${SERVICE_NAME}.pid}"
+OUT_LOG="${OUT_LOG:-${LOG_DIR}/${SERVICE_NAME}.out.log}"
+ERR_LOG="${ERR_LOG:-${LOG_DIR}/${SERVICE_NAME}.err.log}"
 
 run_sudo() {
   if [ "$(id -u)" -eq 0 ]; then
@@ -75,6 +80,72 @@ ensure_service_exists() {
     echo "systemd service not found: ${SERVICE_NAME}" >&2
     echo "Create /etc/systemd/system/${SERVICE_NAME}.service first, then run this script again." >&2
     exit 1
+  fi
+}
+
+systemd_service_exists() {
+  run_sudo systemctl cat "${SERVICE_NAME}" >/dev/null 2>&1
+}
+
+direct_pid() {
+  if [ -f "${PID_FILE}" ]; then
+    cat "${PID_FILE}"
+  fi
+}
+
+direct_is_running() {
+  local pid
+  pid="$(direct_pid || true)"
+  [ -n "${pid}" ] && kill -0 "${pid}" >/dev/null 2>&1
+}
+
+start_direct() {
+  mkdir -p "${RUN_DIR}" "${LOG_DIR}"
+  if direct_is_running; then
+    echo "${SERVICE_NAME} is already running in direct mode. PID: $(direct_pid)"
+    return 0
+  fi
+
+  cd "${BACKEND_DIR}"
+  echo "Starting ${SERVICE_NAME} directly..."
+  echo "Logs: ${OUT_LOG}, ${ERR_LOG}"
+  nohup node dist/main.js >"${OUT_LOG}" 2>"${ERR_LOG}" &
+  echo "$!" >"${PID_FILE}"
+  echo "PID: $(direct_pid)"
+}
+
+stop_direct() {
+  if ! direct_is_running; then
+    echo "${SERVICE_NAME} is not running in direct mode."
+    rm -f "${PID_FILE}"
+    return 0
+  fi
+
+  local pid
+  pid="$(direct_pid)"
+  echo "Stopping ${SERVICE_NAME} direct process. PID: ${pid}"
+  kill "${pid}"
+  for _ in $(seq 1 20); do
+    if ! kill -0 "${pid}" >/dev/null 2>&1; then
+      rm -f "${PID_FILE}"
+      echo "Service stopped."
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "Process did not stop gracefully, killing PID ${pid}."
+  kill -9 "${pid}" >/dev/null 2>&1 || true
+  rm -f "${PID_FILE}"
+}
+
+status_direct() {
+  if direct_is_running; then
+    echo "${SERVICE_NAME} direct mode: running. PID: $(direct_pid)"
+    echo "Logs: ${OUT_LOG}, ${ERR_LOG}"
+  else
+    echo "${SERVICE_NAME} direct mode: not running."
+    [ -f "${PID_FILE}" ] && echo "Stale PID file: ${PID_FILE}"
   fi
 }
 

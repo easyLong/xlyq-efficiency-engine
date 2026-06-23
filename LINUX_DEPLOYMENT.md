@@ -212,7 +212,7 @@ sudo journalctl -u xlyq-efficiency-engine -f
 
 ### 运维脚本
 
-仓库内提供了 systemd 模式的启动、关闭、重启和状态检查脚本：
+仓库内提供了启动、关闭、重启和状态检查脚本。脚本会优先使用 systemd；如果服务器没有创建 `/etc/systemd/system/xlyq-efficiency-engine.service`，会自动使用直接后台模式启动 `node dist/main.js`，并写入 PID 和日志文件。
 
 ```bash
 cd /opt/xlyq-efficiency-engine
@@ -231,6 +231,16 @@ cd /opt/xlyq-efficiency-engine
 ```
 
 脚本默认把当前目录 `pwd` 当作项目根目录，因此建议先 `cd` 到 `xlyq-efficiency-engine` 仓库根目录再执行。脚本会自动读取 `backend/.env` 中的 `PORT` 和 `HOST` 来生成健康检查地址。`HOST=0.0.0.0` 或 `HOST=::` 会自动转换为 `127.0.0.1` 进行服务器本机健康检查；如果 `HOST` 配的是服务器内网 IP，则会使用该 IP 检查。
+
+直接后台模式会使用：
+
+```bash
+PID_FILE=$(pwd)/.runtime/xlyq-efficiency-engine.pid
+OUT_LOG=$(pwd)/logs/xlyq-efficiency-engine.out.log
+ERR_LOG=$(pwd)/logs/xlyq-efficiency-engine.err.log
+```
+
+生产长期运行仍建议配置 systemd，因为它支持开机自启、异常自动拉起和统一日志；临时上线或内网试运行可以直接使用脚本后台模式。
 
 脚本默认参数：
 
