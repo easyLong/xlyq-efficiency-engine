@@ -100,6 +100,7 @@ npm run migrate:project-tables -- --execute
 | 文档 | 用途 |
 | --- | --- |
 | [PROJECT_STATUS.md](PROJECT_STATUS.md) | 当前实现状态、验证结果、已知限制 |
+| [LINUX_DEPLOYMENT.md](LINUX_DEPLOYMENT.md) | Linux 服务器部署、systemd、Nginx、HTTPS、更新和回滚 |
 | [DATA_FLOW.md](DATA_FLOW.md) | 需求、任务、报价、结算的数据链路和一致性规则 |
 | [AI_INTAKE_PREVIEW.md](AI_INTAKE_PREVIEW.md) | AI 候选需求预览、证据链、人工确认入库流程 |
 | [ACCESS_CONTROL.md](ACCESS_CONTROL.md) | 页面可见性、角色权限、数据范围和接口控制 |
@@ -121,6 +122,18 @@ npm run migrate:project-tables -- --execute
 - 飞书在线表格依赖企业应用权限；权限不足时自动降级到本地交付登记页。
 - 结算单目前是实时预览，还没有正式结算单持久化、审批和导出流程。
 - 定时扫描类通知当前保留手动触发接口，尚未接入调度器。
+
+## Linux 部署
+
+生产部署建议使用：
+
+- Node.js 20 LTS 或 22 LTS
+- MySQL 8.0 或云数据库
+- `systemd` 托管后端进程
+- Nginx 反向代理到后端端口
+- 公网 HTTPS 域名作为 `APP_PUBLIC_BASE_URL`
+
+完整部署步骤见 [LINUX_DEPLOYMENT.md](LINUX_DEPLOYMENT.md)。
 
 ## 2026-06-16 AI 候选需求预览更新
 
