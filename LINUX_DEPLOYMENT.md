@@ -230,14 +230,18 @@ cd /opt/xlyq-efficiency-engine
 ./scripts/linux/status.sh
 ```
 
+脚本默认把当前目录 `pwd` 当作项目根目录，因此建议先 `cd` 到 `xlyq-efficiency-engine` 仓库根目录再执行。脚本会自动读取 `backend/.env` 中的 `PORT` 和 `HOST` 来生成健康检查地址。`HOST=0.0.0.0` 或 `HOST=::` 会自动转换为 `127.0.0.1` 进行服务器本机健康检查；如果 `HOST` 配的是服务器内网 IP，则会使用该 IP 检查。
+
 脚本默认参数：
 
 ```bash
 SERVICE_NAME=xlyq-efficiency-engine
-APP_DIR=/opt/xlyq-efficiency-engine
-BACKEND_DIR=/opt/xlyq-efficiency-engine/backend
-PORT=9000
-HEALTH_URL=http://127.0.0.1:9000/api/v1/health
+APP_DIR=$(pwd)
+BACKEND_DIR=$(pwd)/backend
+ENV_FILE=$(pwd)/backend/.env
+PORT=<读取 backend/.env，缺省为 9000>
+HOST=<读取 backend/.env，缺省为 0.0.0.0>
+HEALTH_URL=<按 HOST 和 PORT 自动生成>
 ```
 
 如果服务器部署目录、服务名或端口不同，可以临时覆盖：
@@ -245,6 +249,7 @@ HEALTH_URL=http://127.0.0.1:9000/api/v1/health
 ```bash
 APP_DIR=/data/xlyq-efficiency-engine PORT=9001 ./scripts/linux/start.sh
 SERVICE_NAME=xlyq-efficiency-engine-prod ./scripts/linux/restart.sh
+HEALTH_HOST=192.168.1.20 ./scripts/linux/status.sh
 HEALTH_URL=https://your-domain.example.com/api/v1/health ./scripts/linux/status.sh
 ```
 

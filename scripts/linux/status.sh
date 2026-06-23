@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SERVICE_NAME="${SERVICE_NAME:-xlyq-efficiency-engine}"
-PORT="${PORT:-9000}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${PORT}/api/v1/health}"
-
-run_sudo() {
-  if [ "$(id -u)" -eq 0 ]; then
-    "$@"
-  else
-    sudo "$@"
-  fi
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/common.sh"
 
 run_sudo systemctl status "${SERVICE_NAME}" --no-pager || true
 
+HEALTH_URL="$(resolve_health_url)"
 echo
 echo "Health check: ${HEALTH_URL}"
 if curl -fsS "${HEALTH_URL}"; then
