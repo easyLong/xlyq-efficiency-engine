@@ -625,6 +625,7 @@ export class TasksService implements OnModuleInit {
       workspace,
       files,
       workflow: buildTaskWorkflowSnapshot(task),
+      assigneeSession: await this.publicAssigneeSession(task),
       delivery: {
         imageUrls: (localImages.length ? localImages : legacyLocalAssets).map(
           (file) => file.file_url,
@@ -667,6 +668,7 @@ export class TasksService implements OnModuleInit {
       workspace,
       statusLabel: this.publicTaskStatusLabel(task.status),
       workflow: buildTaskWorkflowSnapshot(task),
+      assigneeSession: await this.publicAssigneeSession(task),
       assetSheetUrl:
         workspace?.directory_url ?? this.buildLocalAssetSheetUrl(task),
     };
@@ -701,6 +703,7 @@ export class TasksService implements OnModuleInit {
       task: saved,
       statusLabel: this.publicTaskStatusLabel(saved.status),
       workflow: buildTaskWorkflowSnapshot(saved),
+      assigneeSession: await this.publicAssigneeSession(saved),
       assetSheetUrl: this.buildLocalAssetSheetUrl(saved),
     };
   }
@@ -1046,6 +1049,7 @@ export class TasksService implements OnModuleInit {
     return {
       task: savedTask,
       workflow: buildTaskWorkflowSnapshot(savedTask),
+      assigneeSession: await this.publicAssigneeSession(savedTask),
       assetCount: this.billableAssetCount(created),
       syncedCount: created.length,
       created,
@@ -1224,6 +1228,58 @@ export class TasksService implements OnModuleInit {
 
   private publicTaskStatusLabel(status: string | null) {
     return taskStatusLabel(status);
+  }
+
+  private async publicAssigneeSession(task: TaskEntity) {
+    if (!task.assignee_user_id) {
+      return null;
+    }
+    const assignee = await this.usersRepository.findOne({
+      where: { id: task.assignee_user_id, status: 'active' },
+    });
+    if (!assignee) {
+      return null;
+    }
+    let profile: Awaited<ReturnType<typeof buildAccessProfile>> | null = null;
+    try {
+      profile = await buildAccessProfile(this.dataSource, assignee);
+    } catch {
+      profile = null;
+    }
+    const memberPermissions = [
+      'page.requirements',
+      'page.messages',
+      'task.view_assigned',
+      'task.submit_assigned',
+    ];
+    return {
+      accessToken: `mvp-${assignee.id}`,
+      tokenType: 'MVP',
+      user: {
+        id: assignee.id,
+        username: assignee.username,
+        display_name: assignee.display_name,
+        email: assignee.email,
+        mobile: assignee.mobile,
+        avatar_url: assignee.avatar_url,
+        status: assignee.status,
+        source: assignee.source,
+        feishu_open_id: assignee.feishu_open_id,
+        role_codes: profile?.roleCodes ?? [],
+        effective_roles: profile?.effectiveRoles ?? ['member'],
+        permissions: profile?.permissions ?? memberPermissions,
+        data_scope:
+          profile?.dataScope ?? {
+            requirements: 'assigned',
+            tasks: 'assigned',
+            quotes: 'none',
+            settlement: 'none',
+          },
+        owned_business_category_codes:
+          profile?.ownedBusinessCategoryCodes ?? [],
+        is_admin: profile?.isAdmin ?? false,
+      },
+    };
   }
 
   private assertAssetSheetAccess(task: TaskEntity, token?: string) {

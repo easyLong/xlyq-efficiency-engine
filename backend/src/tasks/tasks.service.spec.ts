@@ -43,6 +43,19 @@ describe('TasksService delivery flow', () => {
       create: jest.fn((value) => value),
       save: jest.fn(async (value) => value),
     };
+    const usersRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'user-1',
+        username: 'member.user',
+        display_name: '执行人',
+        email: null,
+        mobile: null,
+        avatar_url: null,
+        status: 'active',
+        source: 'local',
+        feishu_open_id: null,
+      }),
+    };
     const dataSource = {
       transaction: jest.fn((callback) =>
         callback({
@@ -68,7 +81,7 @@ describe('TasksService delivery flow', () => {
       taskStatusHistoriesRepository as never,
       noopRepository as never,
       noopRepository as never,
-      noopRepository as never,
+      usersRepository as never,
       dataSource as never,
       {} as never,
       {} as never,
@@ -79,6 +92,7 @@ describe('TasksService delivery flow', () => {
       taskRepositoryInTx,
       taskStatusHistoriesRepository,
       fileRepositoryInTx,
+      usersRepository,
       savedFiles,
     };
   }
@@ -126,6 +140,16 @@ describe('TasksService delivery flow', () => {
     expect(result.task.status).toBe(TaskStatus.PendingReview);
     expect(result.assetCount).toBe(1);
     expect(result.syncedCount).toBe(2);
+    expect(result.assigneeSession).toEqual(
+      expect.objectContaining({
+        accessToken: 'mvp-user-1',
+        user: expect.objectContaining({
+          id: 'user-1',
+          username: 'member.user',
+          permissions: expect.arrayContaining(['task.view_assigned']),
+        }),
+      }),
+    );
     expect(taskStatusHistoriesRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         from_status: TaskStatus.Assigned,

@@ -777,8 +777,8 @@
         renderAssets();
         context = { ...(context || {}), task: result.task || context?.task, workflow: result.workflow || context?.workflow };
         renderTaskDetails();
-        setStatus(`已提交 ${imageUrls.length} 张图片${linkUrl ? "和 1 个链接" : ""}，任务已进入待验收。页面即将自动关闭。`, "ok");
-        closeAfterSubmit();
+        setStatus(`已提交 ${imageUrls.length} 张图片${linkUrl ? "和 1 个链接" : ""}，任务已进入待验收。正在返回执行人工作台...`, "ok");
+        returnToAssigneeWorkspace(result.assigneeSession || context?.assigneeSession);
       } catch (error) {
         setStatus(`提交失败：${error.message}`, "error");
       } finally {
@@ -799,6 +799,26 @@
         window.close();
         setStatus("已提交成功，可以关闭当前页面。", "ok");
       }, 900);
+    }
+
+    function returnToAssigneeWorkspace(session) {
+      const switched = applyAssigneeSession(session);
+      setTimeout(() => {
+        if (switched) {
+          location.replace("/");
+          return;
+        }
+        window.close();
+        setStatus("已提交成功，可以关闭当前页面。", "ok");
+      }, 900);
+    }
+
+    function applyAssigneeSession(session) {
+      const user = session?.user;
+      const accessToken = session?.accessToken;
+      if (!user?.username || !accessToken) return false;
+      sessionStorage.setItem("mvpSession", JSON.stringify({ user, accessToken }));
+      return true;
     }
 
     function setupUploadInteractions() {

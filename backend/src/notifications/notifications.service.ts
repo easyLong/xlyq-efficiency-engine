@@ -86,8 +86,6 @@ export class NotificationsService {
     const result: Record<string, unknown> = {
       in_app: channels.includes('in_app') ? 'saved' : 'skipped',
     };
-    const errors: string[] = [];
-
     if (channels.includes('feishu_app')) {
       try {
         result.feishu_app = await this.sendFeishuAppMessage(message, {
@@ -98,7 +96,6 @@ export class NotificationsService {
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown Feishu app error';
-        errors.push(errorMessage);
         result.feishu_app = { status: 'failed', errorMessage };
       }
     }
@@ -114,16 +111,45 @@ export class NotificationsService {
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown Feishu bot error';
-        errors.push(errorMessage);
         result.feishu_bot = { status: 'failed', errorMessage };
       }
     }
 
+    const deliveryErrors = this.collectDeliveryErrors(result);
     message.delivery_result_json = result;
-    message.status = errors.length ? 'partial_failed' : 'sent';
-    message.error_message = errors.length ? errors.join('; ') : null;
+    message.status = deliveryErrors.length ? 'partial_failed' : 'sent';
+    message.error_message = deliveryErrors.length
+      ? deliveryErrors.join('; ')
+      : null;
     message.sent_at = new Date();
     return this.notificationsRepository.save(message);
+  }
+
+  private collectDeliveryErrors(result: Record<string, unknown>) {
+    return Object.entries(result)
+      .map(([channel, value]) => {
+        if (!value || typeof value !== 'object') {
+          return null;
+        }
+        const delivery = value as {
+          status?: unknown;
+          errorMessage?: unknown;
+          error_message?: unknown;
+          message?: unknown;
+        };
+        if (
+          delivery.status !== 'failed' &&
+          delivery.status !== 'partial_failed'
+        ) {
+          return null;
+        }
+        const message =
+          delivery.errorMessage ?? delivery.error_message ?? delivery.message;
+        return typeof message === 'string' && message.trim()
+          ? `${channel}: ${message}`
+          : `${channel}: delivery failed`;
+      })
+      .filter((message): message is string => Boolean(message));
   }
 
   async notifyTaskAssignedById(taskId: string, message?: string) {

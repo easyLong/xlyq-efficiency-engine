@@ -5812,7 +5812,8 @@
     window.addEventListener("DOMContentLoaded", async () => {
       try {
         await loadBootstrap();
-        const savedSession = window.XlyqAppShell.session.read();
+        const tabSession = sessionStorage.getItem("mvpSession");
+        const savedSession = tabSession || window.XlyqAppShell.session.read();
         const legacyUser = window.XlyqAppShell.session.readLegacyUser();
         if (savedSession || legacyUser) {
           let session = null;
