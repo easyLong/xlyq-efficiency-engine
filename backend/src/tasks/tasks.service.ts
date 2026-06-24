@@ -6,9 +6,10 @@
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import { extname, join } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
+import pptxgen from 'pptxgenjs';
 import { DataSource, In, Repository } from 'typeorm';
 import {
   buildAccessProfile,
@@ -24,6 +25,7 @@ import { RequirementEntity } from '../requirements/entities/requirement.entity';
 import { UserEntity } from '../users/entities/user.entity';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { ExportTaskAssetsPptDto } from './dto/export-task-assets-ppt.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
 import { ReturnTaskRevisionDto } from './dto/return-task-revision.dto';
@@ -42,6 +44,21 @@ import {
   taskStatusLabel,
 } from './task-status';
 import { buildTaskWorkflowSnapshot } from './task-workflow';
+
+type ExportAssetImage = {
+  file: TaskResultFileEntity | null;
+  dataUri: string | null;
+  error?: string;
+};
+
+type ExportAssetTaskGroup = {
+  task: TaskEntity;
+  project: ProjectEntity | null;
+  requirement: RequirementEntity | null;
+  requirementItem: RequirementItemEntity | null;
+  assignee: UserEntity | null;
+  images: ExportAssetImage[];
+};
 
 @Injectable()
 export class TasksService implements OnModuleInit {
@@ -1268,13 +1285,12 @@ export class TasksService implements OnModuleInit {
         role_codes: profile?.roleCodes ?? [],
         effective_roles: profile?.effectiveRoles ?? ['member'],
         permissions: profile?.permissions ?? memberPermissions,
-        data_scope:
-          profile?.dataScope ?? {
-            requirements: 'assigned',
-            tasks: 'assigned',
-            quotes: 'none',
-            settlement: 'none',
-          },
+        data_scope: profile?.dataScope ?? {
+          requirements: 'assigned',
+          tasks: 'assigned',
+          quotes: 'none',
+          settlement: 'none',
+        },
         owned_business_category_codes:
           profile?.ownedBusinessCategoryCodes ?? [],
         is_admin: profile?.isAdmin ?? false,
@@ -1533,6 +1549,580 @@ export class TasksService implements OnModuleInit {
       }
       return uniqueUrls.length > 0;
     });
+  }
+
+  async exportAssetsPpt(dto: ExportTaskAssetsPptDto) {
+    const taskIds = this.parseExportTaskIds(dto.taskIds);
+    if (taskIds.length === 0) {
+      throw new BadRequestException('请至少选择一个任务后再导出');
+    }
+
+    const tasks = await this.tasksRepository.find({
+      where: { id: In(taskIds) },
+    });
+    if (tasks.length === 0) {
+      throw new NotFoundException('No tasks found for export');
+    }
+
+    const groups = (await this.buildAssetExportGroups(tasks)).filter(
+      (group) => group.images.length > 0,
+    );
+    if (groups.length === 0) {
+      throw new BadRequestException('当前筛选范围内没有可导出的图片资产');
+    }
+    const pptx = new pptxgen();
+    pptx.layout = 'LAYOUT_WIDE';
+    pptx.author = 'xlyq-efficiency-engine';
+    pptx.subject = 'Task delivery asset export';
+    pptx.title = '资产交付PPT';
+    pptx.company = 'xlyq-efficiency-engine';
+    pptx.theme = {
+      headFontFace: 'Microsoft YaHei',
+      bodyFontFace: 'Microsoft YaHei',
+    };
+
+    this.addAssetExportCoverSlide(pptx, groups);
+    this.addAssetDirectorySlides(pptx, groups);
+    for (const group of groups) {
+      this.addAssetTaskSlides(pptx, group);
+    }
+
+    const output = await pptx.write({ outputType: 'nodebuffer' });
+    const buffer = Buffer.isBuffer(output)
+      ? output
+      : Buffer.from(output as ArrayBuffer);
+    return {
+      fileName: `资产交付PPT_${this.dateStamp()}.pptx`,
+      buffer,
+    };
+  }
+
+  private parseExportTaskIds(raw?: string) {
+    return this.uniqueTextValues(
+      String(raw ?? '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ).slice(0, 200);
+  }
+
+  private async buildAssetExportGroups(tasks: TaskEntity[]) {
+    const taskIds = tasks.map((task) => task.id);
+    const projectIds = this.uniqueTextValues(
+      tasks.map((task) => task.project_id).filter(Boolean),
+    );
+    const requirementItemIds = this.uniqueTextValues(
+      tasks
+        .map((task) => task.requirement_item_id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const assigneeIds = this.uniqueTextValues(
+      tasks
+        .map((task) => task.assignee_user_id)
+        .filter((id): id is string => Boolean(id)),
+    );
+
+    const [projects, requirementItems, assignees, files] = await Promise.all([
+      projectIds.length
+        ? this.projectsRepository.find({ where: { id: In(projectIds) } })
+        : Promise.resolve([]),
+      requirementItemIds.length
+        ? this.requirementItemsRepository.find({
+            where: { id: In(requirementItemIds) },
+          })
+        : Promise.resolve([]),
+      assigneeIds.length
+        ? this.usersRepository.find({ where: { id: In(assigneeIds) } })
+        : Promise.resolve([]),
+      this.taskResultFilesRepository.find({
+        where: { task_id: In(taskIds) },
+        order: { created_at: 'ASC' },
+      }),
+    ]);
+    const requirementIds = this.uniqueTextValues(
+      requirementItems.map((item) => item.requirement_id),
+    );
+    const requirements = requirementIds.length
+      ? await this.requirementsRepository.find({
+          where: { id: In(requirementIds) },
+        })
+      : [];
+
+    const projectById = new Map(
+      projects.map((project) => [project.id, project]),
+    );
+    const itemById = new Map(requirementItems.map((item) => [item.id, item]));
+    const requirementById = new Map(
+      requirements.map((requirement) => [requirement.id, requirement]),
+    );
+    const assigneeById = new Map(assignees.map((user) => [user.id, user]));
+    const filesByTaskId = new Map<string, TaskResultFileEntity[]>();
+    for (const file of files.filter((file) => !file.deleted_at)) {
+      const current = filesByTaskId.get(file.task_id) ?? [];
+      current.push(file);
+      filesByTaskId.set(file.task_id, current);
+    }
+
+    const groups = await Promise.all(
+      tasks.map(async (task) => {
+        const requirementItem = task.requirement_item_id
+          ? (itemById.get(task.requirement_item_id) ?? null)
+          : null;
+        const requirement = requirementItem
+          ? (requirementById.get(requirementItem.requirement_id) ?? null)
+          : null;
+        const taskFiles = filesByTaskId.get(task.id) ?? [];
+        const imageFiles = taskFiles.filter((file) =>
+          this.isExportableImageFile(file),
+        );
+        const images = await Promise.all(
+          imageFiles.map(async (file) => ({
+            file,
+            ...(await this.loadExportImage(file.file_url)),
+          })),
+        );
+        return {
+          task,
+          project: projectById.get(task.project_id) ?? null,
+          requirement,
+          requirementItem,
+          assignee: task.assignee_user_id
+            ? (assigneeById.get(task.assignee_user_id) ?? null)
+            : null,
+          images,
+        };
+      }),
+    );
+
+    return groups.sort((a, b) =>
+      this.assetGroupSortKey(a).localeCompare(
+        this.assetGroupSortKey(b),
+        'zh-Hans-CN',
+      ),
+    );
+  }
+
+  private assetGroupSortKey(group: ExportAssetTaskGroup) {
+    return [
+      group.project?.customer_code ?? '',
+      group.requirement?.requirement_code ?? '',
+      group.requirementItem?.item_no ?? '',
+      group.task.task_no ?? '',
+      group.task.created_at?.toISOString?.() ?? '',
+    ].join('|');
+  }
+
+  private addAssetExportCoverSlide(
+    pptx: pptxgen,
+    groups: ExportAssetTaskGroup[],
+  ) {
+    const slide = pptx.addSlide();
+    slide.background = { color: 'F7FAF4' };
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 0,
+      y: 0,
+      w: 13.33,
+      h: 1.2,
+      fill: { color: '16221B' },
+      line: { color: '16221B' },
+    });
+    slide.addText('资产交付PPT', {
+      x: 0.55,
+      y: 0.32,
+      w: 7.5,
+      h: 0.5,
+      fontSize: 28,
+      bold: true,
+      color: 'F8F5E8',
+      margin: 0,
+    });
+    const imageCount = groups.reduce(
+      (sum, group) => sum + group.images.length,
+      0,
+    );
+    const loadedImageCount = groups.reduce(
+      (sum, group) =>
+        sum + group.images.filter((image) => image.dataUri).length,
+      0,
+    );
+    slide.addText(
+      [
+        `导出时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+        `任务数量：${groups.length}`,
+        `图片资产：${loadedImageCount}/${imageCount}`,
+        `目录层级：基金/项目 → 需求 → 需求项 → 任务 → 图片资产`,
+      ].join('\n'),
+      {
+        x: 0.72,
+        y: 1.72,
+        w: 4.2,
+        h: 1.5,
+        fontSize: 16,
+        color: '243329',
+        breakLine: false,
+        fit: 'shrink',
+      },
+    );
+    const rows = groups
+      .slice(0, 12)
+      .map((group, index) => [
+        `${index + 1}`,
+        group.project?.customer_code ?? '-',
+        group.requirement?.requirement_code ?? '-',
+        group.task.task_no,
+        group.task.task_name,
+        `${group.images.length}`,
+      ]);
+    const tableRows = [
+      ['#', '基金', '需求', '任务编号', '任务名称', '图片'],
+      ...rows,
+    ].map((row) => row.map((cell) => ({ text: String(cell) })));
+    slide.addTable(tableRows, {
+      x: 0.72,
+      y: 3.45,
+      w: 11.9,
+      h: 3.25,
+      border: { type: 'solid', color: 'DDE5D8', pt: 1 },
+      fill: { color: 'FFFFFF' },
+      color: '243329',
+      fontSize: 10,
+      margin: 0.06,
+      valign: 'middle',
+      colW: [0.45, 1.1, 1.15, 1.2, 6.8, 0.85],
+    });
+    if (groups.length > rows.length) {
+      slide.addText(
+        `另有 ${groups.length - rows.length} 个任务在后续页面展示`,
+        {
+          x: 0.72,
+          y: 6.92,
+          w: 8,
+          h: 0.25,
+          fontSize: 10,
+          color: '667163',
+        },
+      );
+    }
+  }
+
+  private addAssetDirectorySlides(
+    pptx: pptxgen,
+    groups: ExportAssetTaskGroup[],
+  ) {
+    const rows = groups.map((group, index) => [
+      `${index + 1}`,
+      this.assetProjectLabel(group),
+      this.assetRequirementLabel(group),
+      this.assetRequirementItemLabel(group),
+      `${group.task.task_no} ${group.task.task_name}`,
+      `${group.images.length}`,
+    ]);
+    const pages = this.chunkArray(rows, 14);
+    pages.forEach((pageRows, pageIndex) => {
+      const slide = pptx.addSlide();
+      slide.background = { color: 'FFFFFF' };
+      slide.addShape(pptx.ShapeType.rect, {
+        x: 0,
+        y: 0,
+        w: 13.33,
+        h: 0.92,
+        fill: { color: '16221B' },
+        line: { color: '16221B' },
+      });
+      slide.addText('资产层级目录', {
+        x: 0.55,
+        y: 0.24,
+        w: 4.4,
+        h: 0.38,
+        fontSize: 20,
+        bold: true,
+        color: 'F8F5E8',
+        margin: 0,
+      });
+      slide.addText(`第 ${pageIndex + 1}/${pages.length} 页`, {
+        x: 10.9,
+        y: 0.32,
+        w: 1.7,
+        h: 0.22,
+        fontSize: 10,
+        color: 'DCE6D7',
+        align: 'right',
+        margin: 0,
+      });
+      const tableRows = [
+        ['#', '基金/项目', '需求', '需求项', '任务', '图片数'],
+        ...pageRows,
+      ].map((row) => row.map((cell) => ({ text: String(cell) })));
+      slide.addTable(tableRows, {
+        x: 0.5,
+        y: 1.18,
+        w: 12.35,
+        h: 5.95,
+        border: { type: 'solid', color: 'DDE5D8', pt: 1 },
+        fill: { color: 'FFFFFF' },
+        color: '243329',
+        fontSize: 8.8,
+        margin: 0.05,
+        valign: 'middle',
+        colW: [0.42, 1.95, 1.9, 2.15, 5.05, 0.68],
+      });
+    });
+  }
+
+  private addAssetTaskSlides(pptx: pptxgen, group: ExportAssetTaskGroup) {
+    const images = group.images;
+    const pages = this.chunkArray(images, 4);
+    pages.forEach((pageImages, pageIndex) => {
+      const slide = pptx.addSlide();
+      slide.background = { color: 'FFFFFF' };
+      this.addAssetSlideHeader(pptx, slide, group, pageIndex + 1, pages.length);
+      const slots = [
+        { x: 0.58, y: 1.68, w: 5.85, h: 2.22 },
+        { x: 6.9, y: 1.68, w: 5.85, h: 2.22 },
+        { x: 0.58, y: 4.4, w: 5.85, h: 2.22 },
+        { x: 6.9, y: 4.4, w: 5.85, h: 2.22 },
+      ];
+      pageImages.forEach((image, index) => {
+        const slot = slots[index];
+        slide.addShape(pptx.ShapeType.rect, {
+          ...slot,
+          fill: { color: 'F7FAF4' },
+          line: { color: 'DDE5D8', pt: 1 },
+        });
+        if (image.dataUri) {
+          slide.addImage({
+            data: image.dataUri,
+            x: slot.x + 0.08,
+            y: slot.y + 0.08,
+            w: slot.w - 0.16,
+            h: slot.h - 0.45,
+            sizing: {
+              type: 'contain',
+              w: slot.w - 0.16,
+              h: slot.h - 0.45,
+            },
+          });
+        } else {
+          slide.addText(image.error ?? '图片读取失败', {
+            x: slot.x + 0.18,
+            y: slot.y + 0.78,
+            w: slot.w - 0.36,
+            h: 0.42,
+            fontSize: 13,
+            color: 'A15C20',
+            align: 'center',
+          });
+        }
+        slide.addText(this.assetCaption(image.file), {
+          x: slot.x + 0.12,
+          y: slot.y + slot.h - 0.3,
+          w: slot.w - 0.24,
+          h: 0.22,
+          fontSize: 8,
+          color: '596657',
+          fit: 'shrink',
+          margin: 0,
+        });
+      });
+    });
+  }
+
+  private addAssetSlideHeader(
+    pptx: pptxgen,
+    slide: pptxgen.Slide,
+    group: ExportAssetTaskGroup,
+    pageNo: number,
+    pageTotal: number,
+  ) {
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 0,
+      y: 0,
+      w: 13.33,
+      h: 1.16,
+      fill: { color: '16221B' },
+      line: { color: '16221B' },
+    });
+    slide.addText(group.task.task_name, {
+      x: 0.55,
+      y: 0.23,
+      w: 8.4,
+      h: 0.38,
+      fontSize: 20,
+      bold: true,
+      color: 'F8F5E8',
+      fit: 'shrink',
+      margin: 0,
+    });
+    slide.addText(
+      [
+        group.project?.customer_code ?? '-',
+        group.requirement?.requirement_code ?? '-',
+        group.task.task_no,
+        `第 ${pageNo}/${pageTotal} 页`,
+      ].join('  /  '),
+      {
+        x: 0.55,
+        y: 0.68,
+        w: 11.7,
+        h: 0.25,
+        fontSize: 10,
+        color: 'DCE6D7',
+        fit: 'shrink',
+        margin: 0,
+      },
+    );
+    slide.addText(
+      [
+        `需求：${group.requirement?.title ?? group.requirementItem?.item_title ?? '-'}`,
+        `需求项：${group.requirementItem?.item_title ?? '-'}`,
+        `执行人：${group.assignee?.display_name ?? group.assignee?.username ?? '-'}`,
+      ].join('\n'),
+      {
+        x: 0.58,
+        y: 1.23,
+        w: 12.1,
+        h: 0.35,
+        fontSize: 9,
+        color: '596657',
+        fit: 'shrink',
+        margin: 0,
+      },
+    );
+  }
+
+  private assetCaption(file: TaskResultFileEntity | null) {
+    if (!file) {
+      return '暂无图片资产';
+    }
+    const remark = file.remark ? ` · ${file.remark}` : '';
+    return `${file.file_name}${remark}`;
+  }
+
+  private assetProjectLabel(group: ExportAssetTaskGroup) {
+    const customer = group.project?.customer_code ?? '-';
+    const projectName = group.project?.project_name ?? '';
+    return projectName ? `${customer} / ${projectName}` : customer;
+  }
+
+  private assetRequirementLabel(group: ExportAssetTaskGroup) {
+    if (!group.requirement) {
+      return '-';
+    }
+    return `${group.requirement.requirement_code} ${group.requirement.title}`;
+  }
+
+  private assetRequirementItemLabel(group: ExportAssetTaskGroup) {
+    if (!group.requirementItem) {
+      return '-';
+    }
+    return `${group.requirementItem.item_no} ${group.requirementItem.item_title}`;
+  }
+
+  private isExportableImageFile(file: TaskResultFileEntity) {
+    const source = String(file.source ?? '').toLowerCase();
+    return (
+      source.includes('image') || this.imageMimeFromUrl(file.file_url) !== null
+    );
+  }
+
+  private async loadExportImage(fileUrl: string): Promise<{
+    dataUri: string | null;
+    error?: string;
+  }> {
+    try {
+      const buffer = await this.readExportImageBuffer(fileUrl);
+      if (!buffer) {
+        return { dataUri: null, error: '图片地址不可读取' };
+      }
+      const mime =
+        this.imageMimeFromUrl(fileUrl) ?? this.imageMimeFromBuffer(buffer);
+      if (!mime) {
+        return { dataUri: null, error: '图片格式不支持' };
+      }
+      return {
+        dataUri: `data:${mime};base64,${buffer.toString('base64')}`,
+      };
+    } catch (error) {
+      return {
+        dataUri: null,
+        error: error instanceof Error ? error.message : '图片读取失败',
+      };
+    }
+  }
+
+  private async readExportImageBuffer(fileUrl: string) {
+    if (fileUrl.startsWith('/uploads/')) {
+      const publicDir = resolve(process.cwd(), 'public');
+      const relativePath = fileUrl.split(/[?#]/)[0].replace(/^\/+/, '');
+      const filePath = resolve(publicDir, relativePath);
+      if (
+        filePath !== publicDir &&
+        !filePath.startsWith(`${publicDir}${sep}`)
+      ) {
+        throw new BadRequestException('Invalid local image path');
+      }
+      return readFile(filePath);
+    }
+    if (!/^https?:\/\//i.test(fileUrl)) {
+      return null;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(fileUrl, { signal: controller.signal });
+      if (!response.ok) {
+        return null;
+      }
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.toLowerCase().startsWith('image/')) {
+        return null;
+      }
+      const bytes = await response.arrayBuffer();
+      return Buffer.from(bytes);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private imageMimeFromUrl(fileUrl: string) {
+    const ext = extname(fileUrl.split(/[?#]/)[0]).toLowerCase();
+    const mimeByExt: Record<string, string> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+    };
+    return mimeByExt[ext] ?? null;
+  }
+
+  private imageMimeFromBuffer(buffer: Buffer) {
+    if (buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) {
+      return 'image/jpeg';
+    }
+    if (
+      buffer
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    ) {
+      return 'image/png';
+    }
+    if (buffer.subarray(0, 3).toString('ascii') === 'GIF') {
+      return 'image/gif';
+    }
+    if (
+      buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+    ) {
+      return 'image/webp';
+    }
+    return null;
+  }
+
+  private dateStamp() {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
   }
 
   async listResultFiles(id: string) {

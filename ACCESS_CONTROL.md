@@ -6,7 +6,7 @@
 
 权限系统用于把上线后的后台能力按职责拆开，避免执行员工看到管理、报价、结算和未指派任务信息。
 
-当前版本仍沿用 MVP 登录方式，但登录结果已经返回角色、权限点和数据范围；后端接口通过统一 Guard 校验，前端按权限控制页面和操作入口。
+当前版本已启用账号下拉 + 密码登录；登录结果返回角色、权限点和数据范围。后端接口通过统一 Guard 校验，前端按权限控制页面和操作入口。
 
 ## 角色
 
@@ -74,7 +74,7 @@
 核心文件：
 
 - `backend/src/common/access-control.ts`：构建用户权限画像。
-- `backend/src/common/guards/mvp-auth.guard.ts`：统一读取 MVP Token、识别用户、校验权限。
+- `backend/src/common/guards/mvp-auth.guard.ts`：统一读取访问 Token、识别用户、校验权限。
 - `backend/src/common/decorators/admin-only.decorator.ts`：管理员接口标记。
 - `backend/src/common/decorators/permission.decorator.ts`：普通权限点接口标记。
 

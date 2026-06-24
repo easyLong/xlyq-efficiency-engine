@@ -2,17 +2,18 @@
 
 更新时间：2026-06-17
 
-## 最新 MVP 重点接口
+## 当前重点接口
 
 ### 静态页面
 
-- `GET /`：MVP 登录、需求录入、任务指派、合同报价录入、报价子项选择、结算统计、需求面板页面。
+- `GET /`：登录、需求录入、任务指派、合同报价录入、报价子项选择、结算统计、需求面板页面。
 - `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`：本地交付登记页，员工上传/粘贴图片资产并填写一个最终交付链接。
 
 ### 认证
 
 - `GET /api/v1/auth/login-users`：登录页加载可登录用户的最小信息列表。
-- `POST /api/v1/auth/login`：MVP 用户选择登录，返回 `accessToken`。
+- `POST /api/v1/auth/password-login`：账号下拉 + 密码登录，返回 `accessToken`。
+- `POST /api/v1/auth/login`：开发/应急选择用户登录，生产默认关闭。
 - 受保护接口需携带 `Authorization: Bearer <accessToken>`。
 
 ### 需求与任务
@@ -84,7 +85,7 @@
 - 协议：HTTPS
 - 风格：RESTful + 少量动作型接口
 - Base Path：`/api/v1`
-- 鉴权：当前 MVP 已启用简化 Token 鉴权；正式上线前需要补齐账号密码/飞书登录、RBAC、项目可见范围和财务权限
+- 鉴权：管理后台使用账号下拉 + 密码登录；受保护接口统一校验访问 Token、角色权限和数据范围
 - 返回格式：JSON
 - 时间格式：ISO 8601
 - 主键类型：UUID 字符串
@@ -119,20 +120,15 @@
 
 ## 3.1 认证
 
-### `POST /auth/login`
-- 说明：MVP 用户选择登录；当前只校验用户是否存在且启用，不校验密码
-- 入参：`username`、`password`
+### `POST /auth/password-login`
+- 说明：管理后台账号密码登录；账号使用员工 `display_name`，密码读取 `users.passwd`
+- 入参：`account`、`password`
 - 出参：`accessToken`、`tokenType`、`user`
 
-### `POST /auth/feishu/login`
-- 说明：正式飞书登录接口占位，当前 MVP 管理端暂未使用
-- 入参：`code`
-- 出参：`accessToken`、`refreshToken`、`user`
-
-### `POST /auth/refresh`
-- 说明：正式刷新 Token 接口占位，当前 MVP 暂未使用
-- 入参：`refreshToken`
-- 出参：`accessToken`
+### `POST /auth/login`
+- 说明：开发/应急选择用户登录，仅在 `ALLOW_DEV_LOGIN=true` 或配置 `DEV_LOGIN_KEY` 时可用
+- 入参：`username`、`loginKey`
+- 出参：`accessToken`、`tokenType`、`user`
 
 ### `POST /auth/logout`
 - 说明：登出
@@ -255,7 +251,7 @@
   - `rawContent`
 
 ### `POST /requirements/with-task`
-- 说明：快速创建需求、确认一个需求项，并自动生成一个待指派任务；用于当前 MVP“一个需求对应一个任务”的录入页
+- 说明：快速创建需求、确认一个需求项，并自动生成一个待指派任务；当前录入页采用“一个需求对应一个任务”的链路
 - 关键字段：`projectId`、`customerId`、`title`、`rawContent`、`priority`、`estimatedHours`
 - 返回：`requirement`、`item`、`task`
 - 角色口径：按 `businessCategory` 查询 `business_category_owner_configs`，写入 `task.reporter_user_id` 作为需求负责人；任务执行人仍由后续指派动作写入 `task.assignee_user_id`。
@@ -384,7 +380,7 @@
 - 入参：`status`，可选 `in_progress`、`completed`
 
 ### `POST /tasks/{taskId}/result-files`
-- 说明：兼容旧版手动登记结果文件流程，当前 MVP 主链路不再使用
+- 说明：兼容旧版手动登记结果文件流程，当前主链路不再使用
 - 入参：`fileName`、`fileUrl`、`feishuFileToken`、`uploadedByUserId`、`remark`
 
 ### `POST /tasks/{taskId}/status`
@@ -753,7 +749,7 @@
 - 入参：`projectId`、`daysAhead`
 
 ### `POST /notifications/result-file-missing-scan`
-- 说明：兼容旧版结果文件流程，当前 MVP 主链路不再使用
+- 说明：兼容旧版结果文件流程，当前主链路不再使用
 - 入参：`projectId`、`statuses`，`statuses` 默认 `pending_review,completed`
 
 ### `POST /notifications/feishu-sync-failure-scan`

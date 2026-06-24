@@ -693,6 +693,23 @@
       border-radius: 10px;
       white-space: nowrap;
     }
+    .dashboard-filter-bar.settlement-filter-bar {
+      grid-template-columns: repeat(6, minmax(112px, 1fr)) minmax(170px, auto);
+    }
+    .settlement-filter-bar #settlementDimensionFilters { display: contents; }
+    .settlement-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(76px, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+    .settlement-actions .btn {
+      min-height: 34px;
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
     .dashboard-section-heading {
       display: flex;
       align-items: flex-end;
@@ -1145,6 +1162,7 @@
     @media (max-width: 980px) {
       .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
       .dashboard-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dashboard-filter-bar.settlement-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .dimension-summary-card { grid-template-columns: 1fr; }
       .edit-panel { grid-template-columns: 1fr; }
       .quotation-import-actions { flex-wrap: wrap; }
@@ -1158,6 +1176,7 @@
     }
     @media (max-width: 620px) {
       .dashboard-filter-bar { grid-template-columns: 1fr; }
+      .dashboard-filter-bar.settlement-filter-bar { grid-template-columns: 1fr; }
       .login { padding: 16px; }
       .login-card { border-radius: 18px; }
       .login-form { padding: 28px 22px 24px; }
@@ -1455,24 +1474,31 @@
       </section>
 
       <section id="view-settlement" class="grid hidden">
-        <div class="panel">
+        <div class="panel dashboard-toolbar-panel">
           <div class="section-title">
             <div>
               <div class="kicker">Settlement</div>
               <h3>结算统计</h3>
-              <p>基于“已确认报价子项 + 任务资产数量”统计结算金额和资产数量，支持按基金、平台、业务分类和员工维度查看。</p>
+              <p>基于“已确认报价子项 + 任务资产数量”统计结算金额和资产数量，支持按基金、平台和业务分类查看。</p>
             </div>
             <span class="tag">金额 / 资产 / 维度图表</span>
           </div>
-          <div class="form-grid">
+          <div class="dashboard-filter-bar settlement-filter-bar">
             <label>基金维度
               <select id="settlementCustomerSelect" onchange="setSettlementPrimaryCustomer(this.value)"></select>
             </label>
-          </div>
-          <div id="settlementDimensionFilters" class="form-grid"></div>
-          <div class="btns">
-            <button class="btn primary" onclick="loadSettlementStatement()">刷新结算统计</button>
-            <button class="btn" onclick="switchView('requirements')">回到需求与指派</button>
+            <div id="settlementDimensionFilters"></div>
+            <label>开始时间
+              <input type="date" id="settlementStartDateInput" onchange="setSettlementDetailFilter('startDate', this.value)" />
+            </label>
+            <label>结束时间
+              <input type="date" id="settlementEndDateInput" onchange="setSettlementDetailFilter('endDate', this.value)" />
+            </label>
+            <label class="filter-action settlement-actions">
+              <span>操作</span>
+              <button class="btn primary" onclick="loadSettlementStatement()">刷新统计</button>
+              <button class="btn" onclick="clearSettlementDetailFilters()">清空时间</button>
+            </label>
           </div>
         </div>
 
@@ -1507,9 +1533,12 @@
               <div class="kicker">Details</div>
               <h3>结算统计明细</h3>
             </div>
-            <span id="settlementScopeHint" class="tag">实时统计</span>
+            <div class="btns">
+              <span id="settlementScopeHint" class="tag">实时统计</span>
+              <button class="btn" onclick="exportSettlementDetailsToExcel()">导出Excel</button>
+              <button class="btn" onclick="exportSettlementAssetsToPpt()">导出资产PPT</button>
+            </div>
           </div>
-          <div id="settlementDetailFilters" class="form-grid"></div>
           <div id="settlementDetails" class="table-wrap"></div>
         </div>
       </section>
@@ -1666,7 +1695,6 @@
       settlementQuarter: null,
       settlementStatement: null,
       settlementDetailFilters: {
-        customerId: "all",
         startDate: "",
         endDate: "",
       },
@@ -2076,7 +2104,7 @@
         requirements: ["需求与指派", "录入客户需求后自动生成任务，并在同一页完成员工指派。"],
         quotations: ["合同报价录入", "上传合同报价并拆成最细粒度子项，为后续需求任务挂靠做准备。"],
         mappings: ["报价子项选择", "在历史需求任务中为需求选择对应基金的报价子项。"],
-        settlement: ["结算统计", "按基金、平台、业务分类和员工维度统计结算金额与资产数量。"],
+        settlement: ["结算统计", "按基金、平台和业务分类统计结算金额与资产数量。"],
         dashboard: ["需求面板", "按不同维度查看需求进度、任务状态、延期风险和资产交付情况。"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
       };
@@ -2374,7 +2402,7 @@
         ["业务平台", "businessPlatform", "全部平台"],
         ["业务大类", "businessCategory", "全部业务大类"],
         ["二级分类", "secondaryCategory", "全部二级分类"],
-        ...(containerId === "analyticsDimensionFilters" ? [] : [["员工", "assigneeUserId", "全部员工"]]),
+        ...(["analyticsDimensionFilters", "settlementDimensionFilters"].includes(containerId) ? [] : [["员工", "assigneeUserId", "全部员工"]]),
       ];
       const dimensionHtml = specs.map(([label, key, allLabel]) => dimensionSelect(label, key, allLabel, onChangeHandler, linked)).join("");
       const dateHtml = containerId === "analyticsDimensionFilters" ? dashboardDateFilterControls() : "";
@@ -4654,6 +4682,7 @@
       }
       const requestSeq = ++state.settlementRequestSeq;
       state.dimensionFilters.contactContextId = "all";
+      state.dimensionFilters.assigneeUserId = "all";
       const customerId = qs("settlementCustomerSelect")?.value || state.settlementCustomerId || "all";
       const quarter = state.settlementQuarter || currentQuarter();
       state.settlementCustomerId = customerId;
@@ -4756,7 +4785,7 @@
         ["待处理需求", summary.pendingCount || 0],
       ].map(([label, value]) => `<div class="mini-metric"><span>${label}</span><strong>${value}</strong></div>`).join("");
       renderSettlementCharts(statement.rows || []);
-      renderSettlementDetailFilters(statement.rows || []);
+      syncSettlementDateInputs();
       renderSettlementDetails(filteredSettlementDetailRows(statement.rows || []));
     }
     function buildSettlementDimensionTotals(rows, labelFn) {
@@ -4776,7 +4805,6 @@
       const selectedPlatform = state.dimensionFilters.businessPlatform || "all";
       const selectedCategory = state.dimensionFilters.businessCategory || "all";
       const selectedSecondary = state.dimensionFilters.secondaryCategory || "all";
-      const selectedEmployee = state.dimensionFilters.assigneeUserId || "all";
       const normalize = (value, fallback) => {
         const text = String(value || "").trim();
         return !text || text === "-" ? fallback : text;
@@ -4792,9 +4820,6 @@
       }
       if (!selectedSecondary || selectedSecondary === "all") {
         return { name: "二级分类", labelFor: row => normalize(row.secondaryCategory, "未设置二级分类") };
-      }
-      if (!selectedEmployee || selectedEmployee === "all") {
-        return { name: "员工", labelFor: row => normalize(row.employeeName, "未指派员工") };
       }
       return { name: "报价子项", labelFor: row => normalize(row.quotationItemName, "未关联报价子项") };
     }
@@ -4833,43 +4858,14 @@
       const day = String(date.getDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
     }
-    function settlementDetailCustomerOptions(rows) {
-      const groups = new Map();
-      for (const row of rows) {
-        if (!row.customerId) continue;
-        groups.set(row.customerId, row.customerName || customerName(row.customerId));
-      }
-      const options = [...groups.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), "zh-CN"));
-      return [
-        `<option value="all" ${state.settlementDetailFilters.customerId === "all" ? "selected" : ""}>全部基金</option>`,
-        ...options.map(([id, label]) => `<option value="${escapeAttr(id)}" ${state.settlementDetailFilters.customerId === id ? "selected" : ""}>${escapeHtml(label)}</option>`),
-      ].join("");
-    }
-    function renderSettlementDetailFilters(rows) {
-      const box = qs("settlementDetailFilters");
-      if (!box) return;
+    function syncSettlementDateInputs() {
       const filters = state.settlementDetailFilters;
-      box.innerHTML = `
-        <label>明细基金
-          <select onchange="setSettlementDetailFilter('customerId', this.value)">
-            ${settlementDetailCustomerOptions(rows)}
-          </select>
-        </label>
-        <label>开始时间
-          <input type="date" value="${escapeAttr(filters.startDate || "")}" onchange="setSettlementDetailFilter('startDate', this.value)" />
-        </label>
-        <label>结束时间
-          <input type="date" value="${escapeAttr(filters.endDate || "")}" onchange="setSettlementDetailFilter('endDate', this.value)" />
-        </label>
-        <label>操作
-          <button class="btn" onclick="clearSettlementDetailFilters()">清空明细筛选</button>
-        </label>
-      `;
+      if (qs("settlementStartDateInput")) qs("settlementStartDateInput").value = filters.startDate || "";
+      if (qs("settlementEndDateInput")) qs("settlementEndDateInput").value = filters.endDate || "";
     }
     function filteredSettlementDetailRows(rows) {
       const filters = state.settlementDetailFilters;
       return rows.filter(row => {
-        if (filters.customerId && filters.customerId !== "all" && row.customerId !== filters.customerId) return false;
         const dateKey = settlementRowDateKey(row);
         if (filters.startDate && (!dateKey || dateKey < filters.startDate)) return false;
         if (filters.endDate && (!dateKey || dateKey > filters.endDate)) return false;
@@ -4878,18 +4874,18 @@
     }
     function setSettlementDetailFilter(key, value) {
       if (!state.settlementDetailFilters) {
-        state.settlementDetailFilters = { customerId: "all", startDate: "", endDate: "" };
+        state.settlementDetailFilters = { startDate: "", endDate: "" };
       }
-      state.settlementDetailFilters[key] = value || (key === "customerId" ? "all" : "");
+      state.settlementDetailFilters[key] = value || "";
       const rows = state.settlementStatement?.rows || [];
-      renderSettlementDetailFilters(rows);
+      syncSettlementDateInputs();
       renderSettlementDetails(filteredSettlementDetailRows(rows));
     }
     function clearSettlementDetailFilters() {
-      state.settlementDetailFilters = { customerId: "all", startDate: "", endDate: "" };
+      state.settlementDetailFilters = { startDate: "", endDate: "" };
       const rows = state.settlementStatement?.rows || [];
-      renderSettlementDetailFilters(rows);
-      renderSettlementDetails(rows);
+      syncSettlementDateInputs();
+      renderSettlementDetails(filteredSettlementDetailRows(rows));
     }
     function renderSettlementDetails(rows) {
       const box = qs("settlementDetails");
@@ -4916,6 +4912,113 @@
           </tbody>
         </table>
       `;
+    }
+    function exportSettlementDetailsToExcel() {
+      const rows = filteredSettlementDetailRows(state.settlementStatement?.rows || []);
+      if (!rows.length) {
+        toast("暂无可导出的结算明细");
+        return;
+      }
+      const headers = ["基金", "季度", "合同报价", "时间", "需求编号", "需求标题", "需求项", "任务编号", "任务名称", "报价子项", "业务平台", "业务大类", "二级分类", "资产个数", "单价", "结算金额", "状态"];
+      const tableRows = rows.map(row => [
+        row.customerName,
+        row.quarter,
+        row.quotationNo,
+        settlementRowDateKey(row) || "-",
+        row.requirementCode,
+        row.requirementTitle,
+        row.requirementItemTitle,
+        row.taskNo,
+        row.taskName,
+        row.quotationItemName,
+        row.businessPlatform,
+        row.businessCategory,
+        row.secondaryCategory,
+        row.assetCount > 0 ? row.assetCount : "未开始",
+        Number(row.unitPrice || 0).toFixed(2),
+        Number(row.amount || 0).toFixed(2),
+        row.status,
+      ]);
+      const html = `
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              table { border-collapse: collapse; }
+              th, td { border: 1px solid #d9d9d9; padding: 6px 8px; white-space: nowrap; }
+              th { background: #eef4ea; font-weight: 700; }
+              .num { mso-number-format:"0.00"; }
+            </style>
+          </head>
+          <body>
+            <table>
+              <thead><tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+              <tbody>
+                ${tableRows.map(row => `<tr>${row.map((cell, index) => `<td class="${index === 14 || index === 15 ? "num" : ""}">${escapeHtml(cell ?? "-")}</td>`).join("")}</tr>`).join("")}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `;
+      const blob = new Blob(["\ufeff", html], { type: "application/vnd.ms-excel;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const filters = state.settlementDetailFilters || {};
+      const datePart = [filters.startDate, filters.endDate].filter(Boolean).join("_") || new Date().toISOString().slice(0, 10);
+      const scope = state.settlementCustomerId === "all" ? "全部基金" : customerName(state.settlementCustomerId);
+      link.href = url;
+      link.download = `结算统计明细_${scope}_${datePart}.xls`.replace(/[\\/:*?"<>|]/g, "_");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast(`已导出 ${rows.length} 条结算明细`);
+    }
+    async function exportSettlementAssetsToPpt() {
+      const rows = filteredSettlementDetailRows(state.settlementStatement?.rows || []);
+      const taskIds = [...new Set(rows
+        .filter(row => Number(row.assetCount || 0) > 0)
+        .map(row => row.task?.id)
+        .filter(Boolean))];
+      if (!taskIds.length) {
+        toast("暂无可导出的资产图片");
+        return;
+      }
+      try {
+        const params = new URLSearchParams({ taskIds: taskIds.join(",") });
+        const response = await fetch(`${apiBase}/tasks/assets/export-ppt?${params.toString()}`, {
+          headers: state.accessToken ? { Authorization: `Bearer ${state.accessToken}` } : {},
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          let message = text || response.statusText;
+          try {
+            message = JSON.parse(text)?.message || message;
+          } catch {}
+          throw new Error(message);
+        }
+        const blob = await response.blob();
+        const filename = filenameFromDisposition(response.headers.get("content-disposition")) || `资产交付PPT_${new Date().toISOString().slice(0, 10)}.pptx`;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename.replace(/[\\/:*?"<>|]/g, "_");
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        toast(`已导出 ${taskIds.length} 个任务的资产PPT`);
+      } catch (error) {
+        toast(error.message || "资产PPT导出失败");
+      }
+    }
+    function filenameFromDisposition(disposition) {
+      if (!disposition) return "";
+      const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+      if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replaceAll('"', ""));
+      const filenameMatch = /filename="?([^"]+)"?/i.exec(disposition);
+      if (filenameMatch?.[1]) return decodeURIComponent(filenameMatch[1]);
+      return "";
     }
     async function createRequirement() {
       const selectedCandidateId = state.selectedAiPreviewCandidateId;

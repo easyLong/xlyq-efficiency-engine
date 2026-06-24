@@ -11,7 +11,7 @@
 ## 当前实现备注（2026-06-17）
 
 - 当前运行库名为 `ops_platform`。
-- 当前 MVP 仍保留 `projects` 作为后台挂靠对象，但业务筛选不再使用“项目”作为前台维度。
+- 当前系统仍保留 `projects` 作为后台挂靠对象，但业务筛选不再使用“项目”作为前台维度。
 - 前台核心筛选维度为：基金、业务平台、业务大类、二级分类、员工；对接人保留为需求来源和录入辅助，不再作为全局统计筛选。
 - 群内对接人映射表为 `group_contact_mappings`，用于维护“群 + 对接人 -> 基金客户 + 业务平台”；旧的 `contact_context_configs`、`source_contact_contexts`、`wechat_group_configs` 仅作为迁移来源。
 - 业务大类与二级分类关系表为 `business_category_secondary_categories`，用于大类选择后二级分类下拉联动。
@@ -1021,7 +1021,7 @@ AI 建议采纳记录表。
 
 ## 17. V1 必做表清单
 
-如果要尽快做 MVP，建议先落以下表：
+如果需要分阶段落库，建议优先落以下表：
 
 - `users`
 - `roles`

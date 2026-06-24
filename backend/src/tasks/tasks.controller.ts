@@ -7,13 +7,15 @@ import {
   Post,
   Query,
   Req,
+  Res,
 } from '@nestjs/common';
-import { Request } from 'express';
+import type { Request, Response } from 'express';
 import { Permission } from '../common/decorators/permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { UserEntity } from '../users/entities/user.entity';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { ExportTaskAssetsPptDto } from './dto/export-task-assets-ppt.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
 import { ReturnTaskRevisionDto } from './dto/return-task-revision.dto';
@@ -51,6 +53,24 @@ export class TasksController {
       customerCode ?? customerId,
       request?.user,
     );
+  }
+
+  @Get('assets/export-ppt')
+  @Permission('settlement.view_all')
+  async exportAssetsPpt(
+    @Query() dto: ExportTaskAssetsPptDto,
+    @Res() response: Response,
+  ) {
+    const result = await this.tasksService.exportAssetsPpt(dto);
+    response.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    );
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="assets.pptx"; filename*=UTF-8''${encodeURIComponent(result.fileName)}`,
+    );
+    response.send(result.buffer);
   }
 
   @Get(':id/status-history')

@@ -1,6 +1,6 @@
 # 向量引擎管理工作台 PRD
 
-> 说明：本文档保留 V1 产品需求和长期目标，当前 MVP 已实现范围请以 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[MVP_SCOPE.md](MVP_SCOPE.md) 和 [DATA_FLOW.md](DATA_FLOW.md) 为准。
+> 说明：本文档保留 V1 产品需求和长期目标，当前实现状态请以 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[DATA_FLOW.md](DATA_FLOW.md) 和相关运行文档为准。
 
 ## 1. 文档信息
 

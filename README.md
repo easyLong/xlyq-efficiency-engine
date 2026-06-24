@@ -4,7 +4,7 @@
 
 向量引擎管理工作台是一套面向基金客户服务团队的项目效能系统，用来把“需求录入、任务指派、资产登记、合同报价录入、报价子项选择、结算统计、需求面板”串成一条可追踪的数据链路。
 
-当前仓库已落地可运行 MVP：后端为 NestJS + TypeORM + MySQL，前端暂时是后端托管的静态页面。
+当前仓库已落地可运行的业务工作台：后端为 NestJS + TypeORM + MySQL，前端由后端托管静态页面。
 
 ## 当前能力
 
@@ -13,7 +13,7 @@
 - 健康检查：`GET /api/v1/health`
 - 员工本地交付登记页：`GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`
 - 当前默认数据库：`ops_platform`
-- 登录与接口：管理后台使用员工姓名下拉选择 + 密码登录，下拉账号使用 `display_name`，密码直接读取 `users.passwd` 明文字段；登录下拉默认只展示管理员和负责人，其它员工需设置 `users.login_enabled = 1` 后才可显示和登录。飞书通知链接使用任务 token 免登录直达，MVP 用户选择登录仅作为开发/应急入口；受保护接口使用 `Authorization: Bearer <accessToken>`，登录结果会返回角色、权限点和数据范围。
+- 登录与接口：管理后台使用员工姓名下拉选择 + 密码登录，下拉账号使用 `display_name`，密码直接读取 `users.passwd` 明文字段；登录下拉默认只展示管理员和负责人，其它员工需设置 `users.login_enabled = 1` 后才可显示和登录。飞书通知链接使用任务 token 免登录直达，开发/应急选择用户入口生产默认关闭；受保护接口使用 `Authorization: Bearer <accessToken>`，登录结果会返回角色、权限点和数据范围。
 
 核心闭环：
 
@@ -106,7 +106,7 @@ npm run migrate:project-tables -- --execute
 | [DATA_FLOW.md](DATA_FLOW.md) | 需求、任务、报价、结算的数据链路和一致性规则 |
 | [AI_INTAKE_PREVIEW.md](AI_INTAKE_PREVIEW.md) | AI 候选需求预览、证据链、人工确认入库流程 |
 | [ACCESS_CONTROL.md](ACCESS_CONTROL.md) | 页面可见性、角色权限、数据范围和接口控制 |
-| [MVP_SCOPE.md](MVP_SCOPE.md) | MVP 范围和验收闭环 |
+| [MVP_SCOPE.md](MVP_SCOPE.md) | 早期版本范围归档 |
 | [API_SPEC.md](API_SPEC.md) | 当前主要 API 清单和联调说明 |
 | [DB_SCHEMA.md](DB_SCHEMA.md) | 数据库表结构设计说明 |
 | [mysql_schema.sql](mysql_schema.sql) | MySQL 建表 SQL |
@@ -119,7 +119,7 @@ npm run migrate:project-tables -- --execute
 
 ## 当前已知限制
 
-- 管理后台已切换为员工姓名下拉选择 + 密码登录；飞书通知链接仍通过任务 token 免登录直达资产登记/进度反馈页。MVP 用户选择登录作为开发/应急入口保留，生产默认关闭。
+- 管理后台已切换为员工姓名下拉选择 + 密码登录；飞书通知链接仍通过任务 token 免登录直达资产登记/进度反馈页。开发/应急选择用户入口保留，生产默认关闭。
 - 管理端前端仍是单个静态 HTML，后续应工程化为 Vue/React 项目。
 - 飞书在线表格依赖企业应用权限；权限不足时自动降级到本地交付登记页。
 - 结算单目前是实时预览，还没有正式结算单持久化、审批和导出流程。

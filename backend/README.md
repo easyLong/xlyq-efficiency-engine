@@ -2,7 +2,7 @@
 
 更新时间：2026-06-22
 
-这是向量引擎管理工作台的 NestJS 后端服务，同时托管当前 MVP 静态页面。
+这是向量引擎管理工作台的 NestJS 后端服务，同时托管管理端静态页面。
 
 ## 运行入口
 
@@ -43,7 +43,7 @@ src/
   weekly-reports/    周报
   worklogs/          工时
 public/
-  index.html         MVP 管理端
+  index.html         管理端工作台
   asset-sheet.html   本地交付登记页
   js/                管理端静态 JS 模块
 scripts/
