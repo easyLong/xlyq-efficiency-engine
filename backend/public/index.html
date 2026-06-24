@@ -550,13 +550,68 @@
       min-height: 100vh;
       display: grid;
       place-items: center;
-      padding: 30px;
+      padding: clamp(18px, 4vw, 44px);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.22), rgba(237,244,235,.68)),
+        linear-gradient(135deg, #f7f9f4 0%, #eef4eb 100%);
     }
-    .login-card { width: min(880px, 100%); display: grid; grid-template-columns: .95fr 1.05fr; overflow: hidden; padding: 0; }
-    .login-hero { background: #16221b; color: #f8f5e8; padding: 34px; }
-    .login-hero h1 { margin: 0 0 12px; font-size: 34px; }
-    .login-hero p { color: rgba(248,245,232,.70); line-height: 1.8; }
-    .login-form { padding: 34px; }
+    .login-card {
+      width: min(460px, 100%);
+      overflow: hidden;
+      padding: 0;
+      border-radius: 22px;
+      border: 1px solid rgba(207, 218, 200, .9);
+      background: rgba(255, 253, 248, .96);
+      box-shadow: 0 26px 70px rgba(33, 52, 38, .15);
+    }
+    .login-form { padding: 38px 38px 32px; }
+    .login-form h2 {
+      margin: 0 0 26px;
+      color: #16221b;
+      font-size: 26px;
+      line-height: 1.25;
+      text-align: center;
+    }
+    .login-form h2::after {
+      content: "";
+      display: block;
+      width: 38px;
+      height: 3px;
+      margin: 12px auto 0;
+      border-radius: 999px;
+      background: #f0c66f;
+    }
+    .login-form label { margin-bottom: 16px; }
+    .login-form input,
+    .login-form select {
+      min-height: 46px;
+      border-radius: 12px;
+      background: #fffefa;
+    }
+    .login-form .btns {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .login-form .btn {
+      min-height: 46px;
+      border-radius: 12px;
+    }
+    .login-form .btn.danger {
+      background: transparent;
+      color: #687366;
+      border-color: transparent;
+      min-height: 36px;
+      padding: 7px 10px;
+      font-weight: 600;
+    }
+    .login-form .btn.danger:hover { background: #f5f7f0; color: #2f6b45; }
+    .login-form #loginHint {
+      margin: 18px 0 0;
+      text-align: center;
+      line-height: 1.6;
+    }
     label { display: grid; gap: 7px; color: #687366; font-size: 13px; margin-bottom: 12px; }
     input, textarea, select {
       width: 100%;
@@ -1103,29 +1158,40 @@
     }
     @media (max-width: 620px) {
       .dashboard-filter-bar { grid-template-columns: 1fr; }
+      .login { padding: 16px; }
+      .login-card { border-radius: 18px; }
+      .login-form { padding: 28px 22px 24px; }
+      .login-form h2 { font-size: 24px; margin-bottom: 22px; }
     }
   </style>
 </head>
 <body>
   <div id="loginView" class="login">
     <div class="panel login-card">
-      <div class="login-hero">
-        <h1>向量引擎管理工作台</h1>
-        <p>从需求录入、任务指派、飞书通知到交付验收与统计分析，统一管理业务执行过程。</p>
-        <p class="muted">请选择已同步的企业员工账号进入工作台。</p>
-      </div>
       <div class="login-form">
         <h2>登录工作台</h2>
-        <label>选择登录用户
-          <select id="loginUser"></select>
+        <label>选择账号
+          <select id="loginAccount" autocomplete="username"></select>
         </label>
-        <label>或输入用户名
-          <input id="loginUsername" placeholder="例如 demo.pm.v2" />
+        <label>密码
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="请输入密码" onkeydown="if(event.key==='Enter') passwordLogin()" />
         </label>
         <div class="btns">
-          <button class="btn primary" onclick="login()">进入系统</button>
-          <button class="btn" onclick="loadBootstrap()">刷新用户</button>
+          <button class="btn primary" onclick="passwordLogin()">登录</button>
           <button class="btn danger" onclick="resetLocalSession()">清理登录态</button>
+        </div>
+        <div id="emergencyLoginBox" class="hidden">
+          <hr />
+          <label>应急选择用户
+            <select id="loginUser"></select>
+          </label>
+          <label>应急密钥
+            <input id="loginKey" type="password" placeholder="已开启 ALLOW_DEV_LOGIN 时可留空" />
+          </label>
+          <div class="btns">
+            <button class="btn" onclick="login()">应急进入</button>
+            <button class="btn" onclick="loadBootstrap()">刷新用户</button>
+          </div>
         </div>
         <p class="muted" id="loginHint">正在加载用户...</p>
       </div>
@@ -1149,7 +1215,7 @@
         <button data-view="dashboard" onclick="switchView('dashboard')">需求面板</button>
         <button data-view="messages" onclick="switchView('messages')">消息记录</button>
       </nav>
-      <button class="btn warn" onclick="logout()">退出登录</button>
+      <button id="logoutButton" class="btn warn" onclick="logout()">退出登录</button>
     </aside>
 
     <main class="main">
@@ -1575,6 +1641,8 @@
     const state = {
       user: null,
       accessToken: null,
+      taskSessionActive: false,
+      loginConfig: null,
       users: [],
       projects: [],
       customers: [],
@@ -1776,11 +1844,16 @@
       return api.request(path, options);
     }
     async function loadBootstrap() {
-      const { users, health } = await api.loadBootstrap();
+      const [{ users, health }, loginConfig] = await Promise.all([
+        api.loadBootstrap(),
+        request("/auth/login-config").catch(() => ({ passwordLoginEnabled: true, emergencyLoginEnabled: false })),
+      ]);
       state.users = users;
+      state.loginConfig = loginConfig;
       qs("healthPill").textContent = `后端 ${health.status} / 数据库 ${health.database}`;
       renderLoginUsers();
-      qs("loginHint").textContent = "请选择用户登录。";
+      renderLoginConfig();
+      qs("loginHint").textContent = loginConfig?.emergencyLoginEnabled ? "请选择账号并输入密码登录；应急入口已开启。" : "请选择账号并输入密码登录。";
     }
     async function loadAppData() {
       const appData = await api.loadAppData();
@@ -1792,8 +1865,10 @@
       const refreshedUser = state.users.find(user => user.id === state.user?.id || user.username === state.user?.username);
       if (refreshedUser) {
         state.user = { ...state.user, ...refreshedUser };
-        window.XlyqAppShell.session.write({ user: state.user, accessToken: state.accessToken });
-        qs("currentUserMeta").textContent = userMetaLabel(state.user);
+        if (!state.taskSessionActive) {
+          window.XlyqAppShell.session.write({ user: state.user, accessToken: state.accessToken });
+        }
+        qs("currentUserMeta").textContent = state.taskSessionActive ? `员工临时视图 · ${userMetaLabel(state.user)}` : userMetaLabel(state.user);
       }
       state.requirements = appData.requirements;
       state.requirementItems = appData.requirementItems;
@@ -1844,7 +1919,15 @@
       }
     }
     function renderLoginUsers() {
-      qs("loginUser").innerHTML = state.users.map(u => `<option value="${escapeAttr(u.username)}">${escapeHtml(userLoginLabel(u))}</option>`).join("");
+      const options = state.users.map(u => `<option value="${escapeAttr(userLoginAccount(u))}">${escapeHtml(userLoginLabel(u))}</option>`).join("");
+      if (qs("loginAccount")) qs("loginAccount").innerHTML = options;
+      if (qs("loginUser")) qs("loginUser").innerHTML = options;
+    }
+    function renderLoginConfig() {
+      const emergencyBox = qs("emergencyLoginBox");
+      if (emergencyBox) {
+        emergencyBox.classList.toggle("hidden", !state.loginConfig?.emergencyLoginEnabled);
+      }
     }
     function renderAnalyticsFilters(customers) {
       const select = qs("analyticsCustomerSelect");
@@ -1892,10 +1975,11 @@
       if (qs("businessPlatformInput")) qs("businessPlatformInput").value = normalizeBusinessPlatform(context?.business_platform || "");
     }
     async function login() {
-      const username = qs("loginUsername").value.trim() || qs("loginUser").value;
+      const username = qs("loginUser").value;
+      const loginKey = qs("loginKey")?.value.trim() || undefined;
       let result = null;
       try {
-        result = await request("/auth/login", { method: "POST", body: { username } });
+        result = await request("/auth/login", { method: "POST", body: { username, loginKey } });
       } catch (error) {
         qs("loginHint").textContent = error.message;
         toast(error.message);
@@ -1906,14 +1990,35 @@
       addLog("登录成功", result.user);
       await initializeAppAfterLogin();
     }
-    function enterApp(user, accessToken = null) {
+    async function passwordLogin() {
+      const account = qs("loginAccount").value.trim();
+      const password = qs("loginPassword").value;
+      if (!account || !password) {
+        qs("loginHint").textContent = "请选择账号并输入密码。";
+        return;
+      }
+      try {
+        const result = await request("/auth/password-login", { method: "POST", body: { account, password } });
+        enterApp(result.user, result.accessToken);
+        addLog("账号登录成功", result.user);
+        await initializeAppAfterLogin();
+      } catch (error) {
+        qs("loginHint").textContent = error.message;
+        toast(error.message);
+      }
+    }
+    function enterApp(user, accessToken = null, options = {}) {
       state.user = user;
       state.accessToken = accessToken || `mvp-${user.id}`;
-      window.XlyqAppShell.session.write({ user: state.user, accessToken: state.accessToken });
+      state.taskSessionActive = Boolean(options.taskSession);
+      if (!state.taskSessionActive) {
+        window.XlyqAppShell.session.write({ user: state.user, accessToken: state.accessToken });
+      }
       qs("loginView").classList.add("hidden");
       qs("appView").classList.remove("hidden");
       qs("currentUser").textContent = state.user.display_name || state.user.username;
-      qs("currentUserMeta").textContent = userMetaLabel(state.user);
+      qs("currentUserMeta").textContent = state.taskSessionActive ? `员工临时视图 · ${userMetaLabel(state.user)}` : userMetaLabel(state.user);
+      if (qs("logoutButton")) qs("logoutButton").textContent = state.taskSessionActive ? "退出员工视图" : "退出登录";
       applyRoleVisibility();
     }
     async function initializeAppAfterLogin() {
@@ -1934,11 +2039,19 @@
     function resetLocalSession() {
       window.XlyqAppShell.session.clear();
       sessionStorage.clear();
-      qs("loginUsername").value = "";
-      qs("loginHint").textContent = "已清理本地登录状态，请重新选择用户进入。";
+      if (qs("loginAccount")) qs("loginAccount").selectedIndex = state.users.length ? 0 : -1;
+      if (qs("loginPassword")) qs("loginPassword").value = "";
+      if (qs("loginKey")) qs("loginKey").value = "";
+      qs("loginHint").textContent = "已清理本地登录状态，请重新登录。";
       toast("已清理本地登录状态");
     }
     function logout() {
+      if (state.taskSessionActive) {
+        sessionStorage.removeItem("xlyqTaskSession");
+        sessionStorage.removeItem("mvpSession");
+        location.replace("/");
+        return;
+      }
       window.XlyqAppShell.session.clear();
       location.reload();
     }
@@ -2382,8 +2495,10 @@
       return user.username || "未命名用户";
     }
     function userLoginLabel(user) {
-      const name = userDisplayName(user);
-      return isTechnicalFeishuId(user.username) ? name : `${name} · ${user.username}`;
+      return userDisplayName(user);
+    }
+    function userLoginAccount(user) {
+      return user.display_name || user.username || "";
     }
     function userMetaLabel(user) {
       if (!user) return "-";
@@ -5812,20 +5927,20 @@
     window.addEventListener("DOMContentLoaded", async () => {
       try {
         await loadBootstrap();
-        const tabSession = sessionStorage.getItem("mvpSession");
-        const savedSession = tabSession || window.XlyqAppShell.session.read();
-        const legacyUser = window.XlyqAppShell.session.readLegacyUser();
-        if (savedSession || legacyUser) {
+        sessionStorage.removeItem("mvpSession");
+        const pageParams = new URLSearchParams(location.search);
+        const taskSessionRequested = pageParams.get("taskSession") === "1";
+        const taskSession = taskSessionRequested ? sessionStorage.getItem("xlyqTaskSession") : null;
+        const savedSession = taskSession || window.XlyqAppShell.session.read();
+        if (savedSession) {
           let session = null;
           try {
-            session = savedSession ? JSON.parse(savedSession) : { user: JSON.parse(legacyUser), accessToken: null };
+            session = JSON.parse(savedSession);
           } catch {
             window.XlyqAppShell.session.clear();
           }
-          if (session?.user?.username) {
-            const result = await request("/auth/login", { method: "POST", body: { username: session.user.username } });
-            session = { user: result.user, accessToken: result.accessToken };
-            enterApp(session.user, session.accessToken);
+          if (session?.user?.username && session?.accessToken) {
+            enterApp(session.user, session.accessToken, { taskSession: Boolean(taskSession) });
             await initializeAppAfterLogin();
           } else {
             window.XlyqAppShell.session.clear();

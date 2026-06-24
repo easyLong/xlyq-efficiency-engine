@@ -52,6 +52,8 @@ DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
   `id` CHAR(36) NOT NULL,
   `username` VARCHAR(64) NOT NULL,
+  `passwd` VARCHAR(128) NULL,
+  `login_enabled` TINYINT(1) NOT NULL DEFAULT 0,
   `display_name` VARCHAR(64) NOT NULL,
   `email` VARCHAR(128) NULL,
   `mobile` VARCHAR(32) NULL,
@@ -59,6 +61,8 @@ CREATE TABLE `users` (
   `status` VARCHAR(32) NOT NULL,
   `source` VARCHAR(32) NOT NULL,
   `feishu_open_id` VARCHAR(128) NULL,
+  `password_hash` VARCHAR(255) NULL,
+  `password_updated_at` DATETIME NULL,
   `last_login_at` DATETIME NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

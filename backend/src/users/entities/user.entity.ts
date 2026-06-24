@@ -6,6 +6,12 @@ export class UserEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 64 })
   username!: string;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  passwd!: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  login_enabled!: boolean;
+
   @Column({ type: 'varchar', length: 64 })
   display_name!: string;
 
@@ -26,4 +32,13 @@ export class UserEntity extends BaseSoftDeleteEntity {
 
   @Column({ type: 'varchar', length: 128, nullable: true })
   feishu_open_id!: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  password_hash!: string | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  password_updated_at!: Date | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  last_login_at!: Date | null;
 }

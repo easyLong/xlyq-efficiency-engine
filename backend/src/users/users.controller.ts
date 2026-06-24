@@ -4,6 +4,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { UserEntity } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
+import { PasswordLoginDto } from './dto/password-login.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
@@ -28,9 +29,21 @@ export class UsersController {
     return this.usersService.login(dto);
   }
 
+  @Public()
+  @Get('auth/login-config')
+  getLoginConfig() {
+    return this.usersService.getLoginConfig();
+  }
+
+  @Public()
+  @Post('auth/password-login')
+  loginWithPassword(@Body() dto: PasswordLoginDto) {
+    return this.usersService.loginWithPassword(dto);
+  }
+
   @Get('users/me')
   getMe(@Req() request: Request & { user?: UserEntity }) {
-    return request.user;
+    return request.user?.id ? this.usersService.findOne(request.user.id) : null;
   }
 
   @Get('roles')

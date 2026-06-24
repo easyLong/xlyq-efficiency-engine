@@ -805,7 +805,7 @@
       const switched = applyAssigneeSession(session);
       setTimeout(() => {
         if (switched) {
-          location.replace("/");
+          location.replace("/?taskSession=1");
           return;
         }
         window.close();
@@ -817,7 +817,7 @@
       const user = session?.user;
       const accessToken = session?.accessToken;
       if (!user?.username || !accessToken) return false;
-      sessionStorage.setItem("mvpSession", JSON.stringify({ user, accessToken }));
+      sessionStorage.setItem("xlyqTaskSession", JSON.stringify({ user, accessToken }));
       return true;
     }
 

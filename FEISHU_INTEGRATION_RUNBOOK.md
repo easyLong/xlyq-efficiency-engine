@@ -6,6 +6,7 @@
 
 - 飞书企业自建应用的个人消息投递已跑通，任务指派后可以向员工 `open_id` 发送卡片消息。
 - 通讯录同步已切换为正式企业应用配置，支持从指定部门递归同步子部门员工。
+- 飞书通知链接不进入管理后台登录页；员工点击卡片按钮后，系统通过任务 token 校验身份并直达资产登记或进度反馈页面。
 - 指派并创建资产入口时，系统只发送一条飞书消息，消息内包含“填写项目资产”按钮。
 - 飞书在线表格创建需要应用权限：`drive:drive`、`sheets:spreadsheet`、`sheets:spreadsheet:create`。权限未开通时，飞书接口会返回 `Access denied`，系统会自动降级为本地交付登记页。
 - 本地交付登记 URL 由 `APP_PUBLIC_BASE_URL` 生成，并附带任务访问 token。若配置为 `http://localhost:3000`，只有本机浏览器可访问，飞书移动端员工无法打开；生产或真实联调请配置公网 HTTPS 地址。
@@ -19,6 +20,17 @@ FEISHU_DEFAULT_DEPARTMENT_ID=0
 APP_PUBLIC_BASE_URL=https://your-public-domain.example.com
 TASK_ACCESS_TOKEN_SECRET=replace-with-a-long-random-secret
 ```
+
+## 飞书通知链接免登录
+
+飞书卡片按钮面向执行员工，不进入管理后台登录页。链接形态如下：
+
+```text
+https://your-public-domain.example.com/asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<taskToken>
+https://your-public-domain.example.com/task-progress.html?taskId=<taskId>&taskNo=<taskNo>&token=<taskToken>
+```
+
+后端按任务 token 校验访问权限，校验通过后只允许访问该任务对应的资产登记或进度反馈能力。管理后台仍使用员工姓名下拉选择 + 密码登录，密码读取 `users.passwd` 明文字段；登录下拉默认只展示管理员和负责人，其它员工需设置 `users.login_enabled = 1` 后才显示；开发/应急选择用户登录只在环境变量开启时可用。
 
 如需使用机器人群通知，再配置：
 

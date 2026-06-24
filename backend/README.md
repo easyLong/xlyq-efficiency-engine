@@ -155,7 +155,21 @@ npm run migrate:project-tables -- --help
 
 完整接口清单见 [../API_SPEC.md](../API_SPEC.md)。
 
-管理端接口默认需要 `Authorization: Bearer <accessToken>`；`/api/v1/health`、`/api/v1/auth/login-users`、`/api/v1/auth/login`、飞书事件回调和带任务 token 的交付登记接口是公开入口。
+管理端接口默认需要 `Authorization: Bearer <accessToken>`；`/api/v1/health`、`/api/v1/auth/login-config`、`/api/v1/auth/password-login`、开发/应急登录接口、飞书事件回调和带任务 token 的交付登记接口是公开入口。
+
+管理后台使用账号下拉选择 + 密码登录；下拉账号使用员工 `display_name`，密码直接读取 `users.passwd` 明文字段。登录下拉默认只展示管理员和负责人，其它员工需设置 `users.login_enabled = 1` 后才可显示和登录。飞书通知链接不进入后台登录页，而是通过任务 token 校验后直达资产登记或进度反馈页面。
+
+账号密码初始化：
+
+- 默认策略：启动时为所有 `passwd` 为空的 active 用户初始化明文密码，初始密码等于该用户的 `username`。
+- `INITIAL_USER_PASSWORD`：如需覆盖默认策略，可启动时为所有 `passwd` 为空的 active 用户初始化同一个临时密码，适合首次上线批量开通后再人工修改。
+- `INITIAL_ADMIN_PASSWORD`：兼容旧配置；默认策略已覆盖 active 管理员账号。
+- 如需把历史已有密码统一重置为 `username`，执行 `npm run reset:user-passwords`；只想补齐空 `passwd` 可执行 `npm run reset:user-passwords -- --missing-only`。
+- 也可以直接通过 SQL 修改：`UPDATE users SET passwd = '新密码', password_updated_at = NOW() WHERE display_name = '员工姓名';`
+- 其它员工如需出现在登录下拉并允许进入工作台，执行：`UPDATE users SET login_enabled = 1 WHERE display_name = '员工姓名';`
+- 如需关闭普通员工工作台登录，执行：`UPDATE users SET login_enabled = 0 WHERE display_name = '员工姓名';`
+- `POST /api/v1/users` 和 `PATCH /api/v1/users/{userId}` 支持传入 `password`，后端会写入 `users.passwd`。
+- `ALLOW_DEV_LOGIN=true` 或配置 `DEV_LOGIN_KEY` 时，才会开放选择用户的开发/应急登录入口；生产默认关闭。
 
 ## 数据链路说明
 

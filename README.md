@@ -13,7 +13,7 @@
 - 健康检查：`GET /api/v1/health`
 - 员工本地交付登记页：`GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`
 - 当前默认数据库：`ops_platform`
-- 登录与接口：当前为 MVP 用户选择登录，受保护接口使用 `Authorization: Bearer <accessToken>`；登录结果会返回角色、权限点和数据范围。
+- 登录与接口：管理后台使用员工姓名下拉选择 + 密码登录，下拉账号使用 `display_name`，密码直接读取 `users.passwd` 明文字段；登录下拉默认只展示管理员和负责人，其它员工需设置 `users.login_enabled = 1` 后才可显示和登录。飞书通知链接使用任务 token 免登录直达，MVP 用户选择登录仅作为开发/应急入口；受保护接口使用 `Authorization: Bearer <accessToken>`，登录结果会返回角色、权限点和数据范围。
 
 核心闭环：
 
@@ -119,7 +119,7 @@ npm run migrate:project-tables -- --execute
 
 ## 当前已知限制
 
-- 登录仍是 MVP 用户选择登录，没有账号密码校验；角色权限和数据范围已接入 MVP Token 鉴权，后续可替换为正式账号体系。
+- 管理后台已切换为员工姓名下拉选择 + 密码登录；飞书通知链接仍通过任务 token 免登录直达资产登记/进度反馈页。MVP 用户选择登录作为开发/应急入口保留，生产默认关闭。
 - 管理端前端仍是单个静态 HTML，后续应工程化为 Vue/React 项目。
 - 飞书在线表格依赖企业应用权限；权限不足时自动降级到本地交付登记页。
 - 结算单目前是实时预览，还没有正式结算单持久化、审批和导出流程。
