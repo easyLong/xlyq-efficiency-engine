@@ -4735,9 +4735,11 @@
         const unitPrice = Number(row.quotationItem?.unit_price || 0);
         const isConfirmed = row.mapping?.mapping_status === "matched" && !!row.quotationItem;
         const amount = isConfirmed && assetCount > 0 ? assetCount * unitPrice : 0;
+        const contactContext = contactContextForRequirement(row.requirement);
         return {
           customerId: row.requirement?.customer_code || workbench.customerId,
           customerName: customerName(row.requirement?.customer_code || workbench.customerId),
+          contactContextName: contactContext?.contact_name || "-",
           quarter: workbench.quarter,
           quotationNo: workbench.selectedQuotation?.quotation_no || "-",
           requirementCode: row.requirement?.requirement_code || "-",
@@ -4895,11 +4897,12 @@
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>基金 / 季度</th><th>时间</th><th>需求任务</th><th>报价子项</th><th>资产个数</th><th>单价</th><th>结算金额</th><th>状态</th></tr></thead>
+          <thead><tr><th>基金 / 季度</th><th>对接人</th><th>时间</th><th>需求任务</th><th>报价子项</th><th>资产个数</th><th>单价</th><th>结算金额</th><th>状态</th></tr></thead>
           <tbody>
             ${rows.map(row => `
               <tr>
                 <td>${safeText(row.customerName)}<br><span class="row-sub">${safeText(row.quarter)} · ${safeText(row.quotationNo)}</span></td>
+                <td>${safeText(row.contactContextName)}</td>
                 <td>${safeText(settlementRowDateKey(row) || "-")}</td>
                 <td><div class="row-title">${safeText(row.requirementItemTitle)}</div><div class="row-sub">${safeText(row.requirementCode)}<br>${safeText(row.taskNo)} ${safeText(row.taskName)}</div></td>
                 <td>${safeText(row.quotationItemName)}</td>
@@ -4919,9 +4922,10 @@
         toast("暂无可导出的结算明细");
         return;
       }
-      const headers = ["基金", "季度", "合同报价", "时间", "需求编号", "需求标题", "需求项", "任务编号", "任务名称", "报价子项", "业务平台", "业务大类", "二级分类", "资产个数", "单价", "结算金额", "状态"];
+      const headers = ["基金", "对接人", "季度", "合同报价", "时间", "需求编号", "需求标题", "需求项", "任务编号", "任务名称", "报价子项", "业务平台", "业务大类", "二级分类", "资产个数", "单价", "结算金额", "状态"];
       const tableRows = rows.map(row => [
         row.customerName,
+        row.contactContextName,
         row.quarter,
         row.quotationNo,
         settlementRowDateKey(row) || "-",
@@ -4954,7 +4958,7 @@
             <table>
               <thead><tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
               <tbody>
-                ${tableRows.map(row => `<tr>${row.map((cell, index) => `<td class="${index === 14 || index === 15 ? "num" : ""}">${escapeHtml(cell ?? "-")}</td>`).join("")}</tr>`).join("")}
+                ${tableRows.map(row => `<tr>${row.map((cell, index) => `<td class="${index === 15 || index === 16 ? "num" : ""}">${escapeHtml(cell ?? "-")}</td>`).join("")}</tr>`).join("")}
               </tbody>
             </table>
           </body>

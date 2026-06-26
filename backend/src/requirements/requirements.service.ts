@@ -338,6 +338,23 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       dto.ownerUserId,
       true,
     );
+    if (!ownerUserId) {
+      await this.dataSource.query(
+        `
+          UPDATE business_category_owner_configs
+          SET status = 'inactive',
+              deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE business_category_code = ?
+            AND deleted_at IS NULL
+        `,
+        [normalizedCategoryCode],
+      );
+      await this.backfillTaskReportersForBusinessCategory(
+        normalizedCategoryCode,
+      );
+      return this.listBusinessCategoryOwners();
+    }
 
     await this.dataSource.query(
       `
@@ -352,8 +369,8 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         VALUES (?, ?, ?, ?, 'active', '按业务大类配置需求负责人')
         ON DUPLICATE KEY UPDATE
           business_category_name = VALUES(business_category_name),
-          owner_user_id = VALUES(owner_user_id),
           status = 'active',
+          deleted_at = NULL,
           updated_at = CURRENT_TIMESTAMP
       `,
       [
@@ -2383,11 +2400,12 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         deleted_at DATETIME NULL,
         PRIMARY KEY (id),
-        UNIQUE KEY uk_business_category_owner (business_category_code),
+        UNIQUE KEY uk_business_category_owner_user (business_category_code, owner_user_id),
         KEY idx_business_category_owner_user (owner_user_id),
         KEY idx_business_category_owner_status (status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务大类负责人配置表'
     `);
+    await this.ensureBusinessCategoryOwnerConfigIndexes();
 
     for (const type of this.projectTypes) {
       await this.dataSource.query(
