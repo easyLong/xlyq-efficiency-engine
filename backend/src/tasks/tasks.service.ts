@@ -1593,25 +1593,26 @@ export class TasksService implements OnModuleInit {
       throw new BadRequestException('当前筛选范围内没有可导出的图片资产');
     }
     const sections = this.buildAssetQuotationSections(groups);
+    const documentTitle = this.assetDocumentTitle(sections);
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_WIDE';
     pptx.author = 'xlyq-efficiency-engine';
     pptx.subject = 'Task delivery asset export';
-    pptx.title = '资产交付PPT';
+    pptx.title = documentTitle;
     pptx.company = 'xlyq-efficiency-engine';
     pptx.theme = {
       headFontFace: 'Microsoft YaHei',
       bodyFontFace: 'Microsoft YaHei',
     };
 
-    this.addAssetDocumentSlides(pptx, sections);
+    this.addAssetDocumentSlides(pptx, sections, documentTitle);
 
     const output = await pptx.write({ outputType: 'nodebuffer' });
     const buffer = Buffer.isBuffer(output)
       ? output
       : Buffer.from(output as ArrayBuffer);
     return {
-      fileName: `资产交付PPT_${this.dateStamp()}.pptx`,
+      fileName: `${this.safeExportFileName(documentTitle)}_${this.dateStamp()}.pptx`,
       buffer,
     };
   }
@@ -1872,8 +1873,8 @@ export class TasksService implements OnModuleInit {
   private addAssetDocumentSlides(
     pptx: pptxgen,
     sections: ExportAssetQuotationSection[],
+    title = this.assetDocumentTitle(sections),
   ) {
-    const title = this.assetDocumentTitle(sections);
     let slide = this.addAssetDocumentPage(pptx, title);
     let currentY = 1.08;
     const leftX = 0.76;
@@ -2076,6 +2077,15 @@ export class TasksService implements OnModuleInit {
       ? fundName
       : `${fundName}基金`;
     return `${normalizedFundName}-结算项目`;
+  }
+
+  private safeExportFileName(value: string) {
+    return (
+      String(value || '资产导出')
+        .replace(/[\\/:*?"<>|]/g, '_')
+        .replace(/\s+/g, '')
+        .slice(0, 80) || '资产导出'
+    );
   }
 
   private assetQuotationItemName(item: ExportAssetQuotationItem | null) {
