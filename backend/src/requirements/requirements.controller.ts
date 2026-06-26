@@ -80,11 +80,18 @@ export class RequirementsController {
   @Permission('ai_preview.confirm_owned')
   rejectAiPreviewCandidate(
     @Param('candidateId') candidateId: string,
+    @Body()
+    dto: {
+      rejectReasons?: unknown;
+      rejectNote?: unknown;
+      useForPromptOptimization?: unknown;
+    },
     @Req() request?: Request & { user?: UserEntity },
   ) {
     return this.requirementsService.rejectAiPreviewCandidate(
       candidateId,
       request?.user?.id ?? null,
+      dto,
     );
   }
 
@@ -144,10 +151,7 @@ export class RequirementsController {
   }
 
   @Post(':id/items')
-  createItem(
-    @Param('id') id: string,
-    @Body() dto: CreateRequirementItemDto,
-  ) {
+  createItem(@Param('id') id: string, @Body() dto: CreateRequirementItemDto) {
     return this.requirementsService.createItem(id, dto);
   }
 }

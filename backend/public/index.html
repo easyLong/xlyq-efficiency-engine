@@ -1158,6 +1158,66 @@
       border-radius: 10px;
       padding: 7px 12px;
     }
+    .reject-dialog {
+      width: min(560px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      border: 1px solid #ead2c7;
+      border-radius: 16px;
+      background: #fffdf9;
+      box-shadow: 0 24px 70px rgba(22, 34, 27, .22);
+      overflow: hidden;
+    }
+    .reject-dialog-head,
+    .reject-dialog-body {
+      padding: 16px 18px;
+    }
+    .reject-dialog-head {
+      border-bottom: 1px solid #efe7d3;
+    }
+    .reject-dialog-head h3 { margin: 0 0 6px; font-size: 17px; color: #18231d; }
+    .reject-dialog-head p { margin: 0; color: #667163; line-height: 1.55; font-size: 13px; }
+    .reject-dialog-body {
+      display: grid;
+      gap: 13px;
+      max-height: calc(100vh - 190px);
+      overflow: auto;
+    }
+    .reject-reason-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .reject-reason-option {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 10px;
+      border: 1px solid #d8dfcf;
+      border-radius: 12px;
+      background: #fbf8ed;
+      color: #29362d;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .reject-reason-option input { width: auto; }
+    .reject-note-label span,
+    .reject-feedback-toggle {
+      color: #4b594c;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .reject-note-label textarea { margin-top: 7px; min-height: 92px; }
+    .reject-feedback-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+    }
+    .reject-feedback-toggle input { width: auto; }
     .hidden { display: none !important; }
     @media (max-width: 980px) {
       .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
@@ -1166,6 +1226,7 @@
       .dimension-summary-card { grid-template-columns: 1fr; }
       .edit-panel { grid-template-columns: 1fr; }
       .quotation-import-actions { flex-wrap: wrap; }
+      .reject-reason-grid { grid-template-columns: 1fr; }
       .side { position: static; flex-wrap: wrap; }
       .side-stack, .requirements-compose {
         position: static;
@@ -1658,6 +1719,29 @@
       </div>
     </div>
   </div>
+  <div id="aiRejectBackdrop" class="dialog-backdrop hidden" onclick="handleAiRejectBackdropClick(event)">
+    <div class="reject-dialog" role="dialog" aria-modal="true" aria-labelledby="aiRejectTitle" onclick="event.stopPropagation()">
+      <div class="reject-dialog-head">
+        <h3 id="aiRejectTitle">标记为伪需求</h3>
+        <p id="aiRejectCandidateTitle">请选择这条候选需求不应入库的原因，后续会用于优化 AI 识别提示词。</p>
+      </div>
+      <div class="reject-dialog-body">
+        <div id="aiRejectReasonList" class="reject-reason-grid"></div>
+        <label class="reject-note-label">
+          <span>补充说明</span>
+          <textarea id="aiRejectNote" placeholder="例如：只是客户在同步进度，并没有提出新的交付物。"></textarea>
+        </label>
+        <label class="reject-feedback-toggle">
+          <input id="aiRejectUseForPrompt" type="checkbox" checked />
+          加入伪需求样本库，用于后续优化识别规则
+        </label>
+      </div>
+      <div class="confirm-actions">
+        <button class="btn" onclick="resolveAiRejectDialog(false)">取消</button>
+        <button class="btn danger" onclick="resolveAiRejectDialog(true)">标记伪需求</button>
+      </div>
+    </div>
+  </div>
 
   <script src="/js/app-shell.js"></script>
   <script src="/js/api-client.js"></script>
@@ -1802,6 +1886,18 @@
       setTimeout(() => qs("toast").classList.remove("show"), 2300);
     }
     let pendingConfirmResolve = null;
+    let pendingAiRejectResolve = null;
+    const aiPreviewRejectReasons = [
+      { value: "chat_only", label: "只是闲聊/讨论" },
+      { value: "duplicate", label: "已有需求的重复表达" },
+      { value: "progress_update", label: "只是任务进展反馈" },
+      { value: "material_transfer", label: "只是资料/素材传递" },
+      { value: "no_deliverable", label: "缺少明确交付物" },
+      { value: "no_business_object", label: "缺少明确业务对象" },
+      { value: "unclear_intent", label: "客户意图不明确" },
+      { value: "wrong_category", label: "识别分类错误" },
+      { value: "other", label: "其它" },
+    ];
     let lastPointerPosition = null;
     document.addEventListener("pointerdown", event => {
       if (!event.target?.closest?.("#confirmBackdrop")) {
@@ -1858,9 +1954,68 @@
     function handleConfirmBackdropClick(event) {
       if (event.target?.id === "confirmBackdrop") resolveConfirmDialog(false);
     }
+    function aiRejectCandidateLabel(candidate) {
+      if (!candidate) return "请选择这条候选需求不应入库的原因，后续会用于优化 AI 识别提示词。";
+      const title = candidate.demand_title || candidate.business_name || `候选需求 #${candidate.candidate_id}`;
+      const source = [candidate.customer_name, candidate.chat_name, candidate.business_platform]
+        .filter(Boolean)
+        .join(" / ");
+      return `${title}${source ? ` · ${source}` : ""}`;
+    }
+    function showAiRejectDialog(candidate) {
+      qs("aiRejectCandidateTitle").textContent = aiRejectCandidateLabel(candidate);
+      qs("aiRejectReasonList").innerHTML = aiPreviewRejectReasons.map(reason => `
+        <label class="reject-reason-option">
+          <input type="checkbox" name="aiRejectReason" value="${escapeAttr(reason.value)}" />
+          <span>${escapeHtml(reason.label)}</span>
+        </label>
+      `).join("");
+      qs("aiRejectNote").value = "";
+      qs("aiRejectUseForPrompt").checked = true;
+      qs("aiRejectBackdrop").classList.remove("hidden");
+      qs("aiRejectReasonList")?.querySelector("input")?.focus();
+      return new Promise(resolve => {
+        pendingAiRejectResolve = resolve;
+      });
+    }
+    function resolveAiRejectDialog(confirmed) {
+      if (!confirmed) {
+        qs("aiRejectBackdrop").classList.add("hidden");
+        if (pendingAiRejectResolve) {
+          pendingAiRejectResolve(null);
+          pendingAiRejectResolve = null;
+        }
+        return;
+      }
+      const rejectReasons = [...document.querySelectorAll("input[name='aiRejectReason']:checked")]
+        .map(item => item.value);
+      if (!rejectReasons.length) {
+        toast("请选择至少一个伪需求原因");
+        return;
+      }
+      const payload = {
+        rejectReasons,
+        rejectNote: qs("aiRejectNote")?.value.trim() || "",
+        useForPromptOptimization: Boolean(qs("aiRejectUseForPrompt")?.checked),
+      };
+      qs("aiRejectBackdrop").classList.add("hidden");
+      if (pendingAiRejectResolve) {
+        pendingAiRejectResolve(payload);
+        pendingAiRejectResolve = null;
+      }
+    }
+    function handleAiRejectBackdropClick(event) {
+      if (event.target?.id === "aiRejectBackdrop") resolveAiRejectDialog(false);
+    }
     document.addEventListener("keydown", event => {
-      if (event.key === "Escape" && !qs("confirmBackdrop")?.classList.contains("hidden")) {
-        resolveConfirmDialog(false);
+      if (event.key === "Escape") {
+        if (!qs("aiRejectBackdrop")?.classList.contains("hidden")) {
+          resolveAiRejectDialog(false);
+          return;
+        }
+        if (!qs("confirmBackdrop")?.classList.contains("hidden")) {
+          resolveConfirmDialog(false);
+        }
       }
     });
     function addLog(title, data) {
@@ -3017,14 +3172,14 @@
     async function rejectAiPreviewCandidate(event, candidateId) {
       event?.stopPropagation();
       if (!candidateId) return;
-      const confirmed = await confirmDialog({
-        title: "标记伪需求",
-        message: "确认将这条 AI 预览候选标记为伪需求吗？标记后将不再显示在预览区。",
-        okText: "标记伪需求",
-      });
-      if (!confirmed) return;
+      const candidate = (state.aiPreviewCandidates || []).find(item => String(item.candidate_id) === String(candidateId));
+      const feedback = await showAiRejectDialog(candidate);
+      if (!feedback) return;
       try {
-        await request(`/requirements/ai-preview-candidates/${encodeURIComponent(candidateId)}/reject`, { method: "POST" });
+        await request(`/requirements/ai-preview-candidates/${encodeURIComponent(candidateId)}/reject`, {
+          method: "POST",
+          body: feedback,
+        });
         state.aiPreviewCandidates = (state.aiPreviewCandidates || []).filter(item => String(item.candidate_id) !== String(candidateId));
         if (String(state.selectedAiPreviewCandidateId || "") === String(candidateId)) {
           state.selectedAiPreviewCandidateId = null;

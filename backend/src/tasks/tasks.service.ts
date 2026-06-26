@@ -51,13 +51,35 @@ type ExportAssetImage = {
   error?: string;
 };
 
+type ExportAssetQuotationItem = {
+  id: string;
+  quotation_id: string;
+  quotation_no: string | null;
+  item_code: string;
+  item_name: string;
+  unit: string | null;
+  unit_price: string;
+  sort_order: number | null;
+};
+
 type ExportAssetTaskGroup = {
   task: TaskEntity;
   project: ProjectEntity | null;
+  customerName: string | null;
   requirement: RequirementEntity | null;
   requirementItem: RequirementItemEntity | null;
+  quotationItem: ExportAssetQuotationItem | null;
   assignee: UserEntity | null;
   images: ExportAssetImage[];
+};
+
+type ExportAssetQuotationSection = {
+  key: string;
+  quotationItem: ExportAssetQuotationItem | null;
+  pathParts: string[];
+  groups: ExportAssetTaskGroup[];
+  imageCount: number;
+  loadedImageCount: number;
 };
 
 @Injectable()
@@ -1570,6 +1592,7 @@ export class TasksService implements OnModuleInit {
     if (groups.length === 0) {
       throw new BadRequestException('当前筛选范围内没有可导出的图片资产');
     }
+    const sections = this.buildAssetQuotationSections(groups);
     const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_WIDE';
     pptx.author = 'xlyq-efficiency-engine';
@@ -1581,11 +1604,7 @@ export class TasksService implements OnModuleInit {
       bodyFontFace: 'Microsoft YaHei',
     };
 
-    this.addAssetExportCoverSlide(pptx, groups);
-    this.addAssetDirectorySlides(pptx, groups);
-    for (const group of groups) {
-      this.addAssetTaskSlides(pptx, group);
-    }
+    this.addAssetDocumentSlides(pptx, sections);
 
     const output = await pptx.write({ outputType: 'nodebuffer' });
     const buffer = Buffer.isBuffer(output)
@@ -1647,6 +1666,81 @@ export class TasksService implements OnModuleInit {
           where: { id: In(requirementIds) },
         })
       : [];
+    const mappings = requirementItemIds.length
+      ? await this.dataSource.query(
+          `
+            SELECT requirement_item_id, quotation_item_id
+            FROM requirement_quotation_mappings
+            WHERE requirement_item_id IN (${requirementItemIds
+              .map(() => '?')
+              .join(',')})
+              AND quotation_item_id IS NOT NULL
+              AND mapping_status = 'matched'
+            ORDER BY updated_at DESC
+          `,
+          requirementItemIds,
+        )
+      : [];
+    const quotationItemIdByRequirementItemId = new Map<string, string>();
+    for (const mapping of mappings) {
+      const requirementItemId = String(mapping.requirement_item_id ?? '');
+      const quotationItemId = String(mapping.quotation_item_id ?? '');
+      if (
+        requirementItemId &&
+        quotationItemId &&
+        !quotationItemIdByRequirementItemId.has(requirementItemId)
+      ) {
+        quotationItemIdByRequirementItemId.set(
+          requirementItemId,
+          quotationItemId,
+        );
+      }
+    }
+    const quotationItemIds = this.uniqueTextValues([
+      ...quotationItemIdByRequirementItemId.values(),
+    ]);
+    const quotationItems: ExportAssetQuotationItem[] = quotationItemIds.length
+      ? await this.dataSource.query(
+          `
+            SELECT
+              item.id,
+              item.quotation_id,
+              quotation.quotation_no,
+              item.item_code,
+              item.item_name,
+              item.unit,
+              item.unit_price,
+              item.sort_order
+            FROM quotation_items item
+            LEFT JOIN quotations quotation
+              ON quotation.id = item.quotation_id
+             AND quotation.deleted_at IS NULL
+            WHERE item.id IN (${quotationItemIds.map(() => '?').join(',')})
+              AND item.deleted_at IS NULL
+          `,
+          quotationItemIds,
+        )
+      : [];
+    const customerCodes = this.uniqueTextValues([
+      ...projects.map((project) => project.customer_code).filter(Boolean),
+      ...requirements
+        .map((requirement) => requirement.customer_code)
+        .filter(Boolean),
+    ]);
+    const customerRows: Array<{
+      customer_code: string;
+      customer_name: string;
+    }> = customerCodes.length
+      ? await this.dataSource.query(
+          `
+            SELECT customer_code, customer_name
+            FROM customers
+            WHERE customer_code IN (${customerCodes.map(() => '?').join(',')})
+              AND deleted_at IS NULL
+          `,
+          customerCodes,
+        )
+      : [];
 
     const projectById = new Map(
       projects.map((project) => [project.id, project]),
@@ -1654,6 +1748,15 @@ export class TasksService implements OnModuleInit {
     const itemById = new Map(requirementItems.map((item) => [item.id, item]));
     const requirementById = new Map(
       requirements.map((requirement) => [requirement.id, requirement]),
+    );
+    const quotationItemById = new Map(
+      quotationItems.map((item) => [item.id, item]),
+    );
+    const customerNameByCode = new Map(
+      customerRows.map((customer) => [
+        customer.customer_code,
+        customer.customer_name,
+      ]),
     );
     const assigneeById = new Map(assignees.map((user) => [user.id, user]));
     const filesByTaskId = new Map<string, TaskResultFileEntity[]>();
@@ -1684,8 +1787,20 @@ export class TasksService implements OnModuleInit {
         return {
           task,
           project: projectById.get(task.project_id) ?? null,
+          customerName:
+            customerNameByCode.get(
+              requirement?.customer_code ??
+                projectById.get(task.project_id)?.customer_code ??
+                '',
+            ) ?? null,
           requirement,
           requirementItem,
+          quotationItem: requirementItem
+            ? (quotationItemById.get(
+                quotationItemIdByRequirementItemId.get(requirementItem.id) ??
+                  '',
+              ) ?? null)
+            : null,
           assignee: task.assignee_user_id
             ? (assigneeById.get(task.assignee_user_id) ?? null)
             : null,
@@ -1704,6 +1819,9 @@ export class TasksService implements OnModuleInit {
 
   private assetGroupSortKey(group: ExportAssetTaskGroup) {
     return [
+      group.quotationItem?.quotation_no ?? '',
+      `${Number(group.quotationItem?.sort_order ?? 999999)}`.padStart(6, '0'),
+      this.assetQuotationItemLabel(group),
       group.project?.customer_code ?? '',
       group.requirement?.requirement_code ?? '',
       group.requirementItem?.item_no ?? '',
@@ -1712,310 +1830,307 @@ export class TasksService implements OnModuleInit {
     ].join('|');
   }
 
-  private addAssetExportCoverSlide(
+  private buildAssetQuotationSections(groups: ExportAssetTaskGroup[]) {
+    const sectionByKey = new Map<string, ExportAssetQuotationSection>();
+    for (const group of groups) {
+      const pathParts = this.assetQuotationPathParts(group.quotationItem);
+      const key = group.quotationItem?.id ?? `unmapped:${pathParts.join('>')}`;
+      let section = sectionByKey.get(key);
+      if (!section) {
+        section = {
+          key,
+          quotationItem: group.quotationItem,
+          pathParts,
+          groups: [],
+          imageCount: 0,
+          loadedImageCount: 0,
+        };
+        sectionByKey.set(key, section);
+      }
+      section.groups.push(group);
+      section.imageCount += group.images.length;
+      section.loadedImageCount += group.images.filter(
+        (image) => image.dataUri,
+      ).length;
+    }
+    return [...sectionByKey.values()].sort((a, b) =>
+      this.assetSectionSortKey(a).localeCompare(
+        this.assetSectionSortKey(b),
+        'zh-Hans-CN',
+      ),
+    );
+  }
+
+  private assetSectionSortKey(section: ExportAssetQuotationSection) {
+    return [
+      section.quotationItem?.quotation_no ?? '',
+      `${Number(section.quotationItem?.sort_order ?? 999999)}`.padStart(6, '0'),
+      this.assetQuotationPathLabel(section.pathParts),
+    ].join('|');
+  }
+
+  private addAssetDocumentSlides(
     pptx: pptxgen,
-    groups: ExportAssetTaskGroup[],
+    sections: ExportAssetQuotationSection[],
   ) {
-    const slide = pptx.addSlide();
-    slide.background = { color: 'F7FAF4' };
-    slide.addShape(pptx.ShapeType.rect, {
-      x: 0,
-      y: 0,
-      w: 13.33,
-      h: 1.2,
-      fill: { color: '16221B' },
-      line: { color: '16221B' },
-    });
-    slide.addText('资产交付PPT', {
-      x: 0.55,
-      y: 0.32,
-      w: 7.5,
-      h: 0.5,
-      fontSize: 28,
-      bold: true,
-      color: 'F8F5E8',
-      margin: 0,
-    });
-    const imageCount = groups.reduce(
-      (sum, group) => sum + group.images.length,
-      0,
-    );
-    const loadedImageCount = groups.reduce(
-      (sum, group) =>
-        sum + group.images.filter((image) => image.dataUri).length,
-      0,
-    );
-    slide.addText(
-      [
-        `导出时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
-        `任务数量：${groups.length}`,
-        `图片资产：${loadedImageCount}/${imageCount}`,
-        `目录层级：基金/项目 → 需求 → 需求项 → 任务 → 图片资产`,
-      ].join('\n'),
-      {
-        x: 0.72,
-        y: 1.72,
-        w: 4.2,
-        h: 1.5,
-        fontSize: 16,
-        color: '243329',
-        breakLine: false,
-        fit: 'shrink',
-      },
-    );
-    const rows = groups
-      .slice(0, 12)
-      .map((group, index) => [
-        `${index + 1}`,
-        group.project?.customer_code ?? '-',
-        group.requirement?.requirement_code ?? '-',
-        group.task.task_no,
-        group.task.task_name,
-        `${group.images.length}`,
-      ]);
-    const tableRows = [
-      ['#', '基金', '需求', '任务编号', '任务名称', '图片'],
-      ...rows,
-    ].map((row) => row.map((cell) => ({ text: String(cell) })));
-    slide.addTable(tableRows, {
-      x: 0.72,
-      y: 3.45,
-      w: 11.9,
-      h: 3.25,
-      border: { type: 'solid', color: 'DDE5D8', pt: 1 },
-      fill: { color: 'FFFFFF' },
-      color: '243329',
-      fontSize: 10,
-      margin: 0.06,
-      valign: 'middle',
-      colW: [0.45, 1.1, 1.15, 1.2, 6.8, 0.85],
-    });
-    if (groups.length > rows.length) {
-      slide.addText(
-        `另有 ${groups.length - rows.length} 个任务在后续页面展示`,
-        {
-          x: 0.72,
-          y: 6.92,
-          w: 8,
-          h: 0.25,
-          fontSize: 10,
-          color: '667163',
-        },
+    const title = this.assetDocumentTitle(sections);
+    let slide = this.addAssetDocumentPage(pptx, title);
+    let currentY = 1.08;
+    const leftX = 0.76;
+    const columnGap = 0.38;
+    const columnW = 5.75;
+    const captionH = 0.25;
+    const imageH = 2.06;
+    const rowGap = 0.34;
+    const bottomY = 7.18;
+
+    sections.forEach((section, sectionIndex) => {
+      const images = section.groups.flatMap((group) => group.images);
+      if (!images.length) return;
+      const sectionTitle = this.assetQuotationDisplayPathLabel(
+        section.pathParts,
       );
-    }
-  }
+      if (currentY > 1.12 && currentY + 0.5 > bottomY) {
+        slide = this.addAssetDocumentPage(pptx, title);
+        currentY = 1.08;
+      }
+      this.addAssetDocumentSectionTitle(
+        slide,
+        sectionIndex + 1,
+        sectionTitle,
+        currentY,
+      );
+      currentY += 0.42;
 
-  private addAssetDirectorySlides(
-    pptx: pptxgen,
-    groups: ExportAssetTaskGroup[],
-  ) {
-    const rows = groups.map((group, index) => [
-      `${index + 1}`,
-      this.assetProjectLabel(group),
-      this.assetRequirementLabel(group),
-      this.assetRequirementItemLabel(group),
-      `${group.task.task_no} ${group.task.task_name}`,
-      `${group.images.length}`,
-    ]);
-    const pages = this.chunkArray(rows, 14);
-    pages.forEach((pageRows, pageIndex) => {
-      const slide = pptx.addSlide();
-      slide.background = { color: 'FFFFFF' };
-      slide.addShape(pptx.ShapeType.rect, {
-        x: 0,
-        y: 0,
-        w: 13.33,
-        h: 0.92,
-        fill: { color: '16221B' },
-        line: { color: '16221B' },
-      });
-      slide.addText('资产层级目录', {
-        x: 0.55,
-        y: 0.24,
-        w: 4.4,
-        h: 0.38,
-        fontSize: 20,
-        bold: true,
-        color: 'F8F5E8',
-        margin: 0,
-      });
-      slide.addText(`第 ${pageIndex + 1}/${pages.length} 页`, {
-        x: 10.9,
-        y: 0.32,
-        w: 1.7,
-        h: 0.22,
-        fontSize: 10,
-        color: 'DCE6D7',
-        align: 'right',
-        margin: 0,
-      });
-      const tableRows = [
-        ['#', '基金/项目', '需求', '需求项', '任务', '图片数'],
-        ...pageRows,
-      ].map((row) => row.map((cell) => ({ text: String(cell) })));
-      slide.addTable(tableRows, {
-        x: 0.5,
-        y: 1.18,
-        w: 12.35,
-        h: 5.95,
-        border: { type: 'solid', color: 'DDE5D8', pt: 1 },
-        fill: { color: 'FFFFFF' },
-        color: '243329',
-        fontSize: 8.8,
-        margin: 0.05,
-        valign: 'middle',
-        colW: [0.42, 1.95, 1.9, 2.15, 5.05, 0.68],
-      });
-    });
-  }
-
-  private addAssetTaskSlides(pptx: pptxgen, group: ExportAssetTaskGroup) {
-    const images = group.images;
-    const pages = this.chunkArray(images, 4);
-    pages.forEach((pageImages, pageIndex) => {
-      const slide = pptx.addSlide();
-      slide.background = { color: 'FFFFFF' };
-      this.addAssetSlideHeader(pptx, slide, group, pageIndex + 1, pages.length);
-      const slots = [
-        { x: 0.58, y: 1.68, w: 5.85, h: 2.22 },
-        { x: 6.9, y: 1.68, w: 5.85, h: 2.22 },
-        { x: 0.58, y: 4.4, w: 5.85, h: 2.22 },
-        { x: 6.9, y: 4.4, w: 5.85, h: 2.22 },
-      ];
-      pageImages.forEach((image, index) => {
-        const slot = slots[index];
-        slide.addShape(pptx.ShapeType.rect, {
-          ...slot,
-          fill: { color: 'F7FAF4' },
-          line: { color: 'DDE5D8', pt: 1 },
-        });
-        if (image.dataUri) {
-          slide.addImage({
-            data: image.dataUri,
-            x: slot.x + 0.08,
-            y: slot.y + 0.08,
-            w: slot.w - 0.16,
-            h: slot.h - 0.45,
-            sizing: {
-              type: 'contain',
-              w: slot.w - 0.16,
-              h: slot.h - 0.45,
-            },
-          });
-        } else {
-          slide.addText(image.error ?? '图片读取失败', {
-            x: slot.x + 0.18,
-            y: slot.y + 0.78,
-            w: slot.w - 0.36,
-            h: 0.42,
-            fontSize: 13,
-            color: 'A15C20',
-            align: 'center',
-          });
+      images.forEach((image, imageIndex) => {
+        const columnIndex = imageIndex % 2;
+        const isRowStart = columnIndex === 0;
+        if (!isRowStart && currentY + imageH + captionH > bottomY) {
+          slide = this.addAssetDocumentPage(pptx, title);
+          currentY = 1.08;
+          this.addAssetDocumentSectionTitle(
+            slide,
+            sectionIndex + 1,
+            `${sectionTitle}（续）`,
+            currentY,
+          );
+          currentY += 0.42;
         }
-        slide.addText(this.assetCaption(image.file), {
-          x: slot.x + 0.12,
-          y: slot.y + slot.h - 0.3,
-          w: slot.w - 0.24,
-          h: 0.22,
-          fontSize: 8,
-          color: '596657',
-          fit: 'shrink',
-          margin: 0,
+        if (isRowStart && currentY + imageH + captionH > bottomY) {
+          slide = this.addAssetDocumentPage(pptx, title);
+          currentY = 1.08;
+          this.addAssetDocumentSectionTitle(
+            slide,
+            sectionIndex + 1,
+            `${sectionTitle}（续）`,
+            currentY,
+          );
+          currentY += 0.42;
+        }
+        const x = leftX + columnIndex * (columnW + columnGap);
+        this.addAssetDocumentImage(slide, image, {
+          x,
+          y: currentY,
+          w: columnW,
+          h: imageH,
+          caption: this.assetImageName(image),
+          captionH,
         });
+        if (columnIndex === 1 || imageIndex === images.length - 1) {
+          currentY += imageH + captionH + rowGap;
+        }
       });
+      currentY += 0.12;
     });
   }
 
-  private addAssetSlideHeader(
-    pptx: pptxgen,
-    slide: pptxgen.Slide,
-    group: ExportAssetTaskGroup,
-    pageNo: number,
-    pageTotal: number,
-  ) {
-    slide.addShape(pptx.ShapeType.rect, {
-      x: 0,
-      y: 0,
-      w: 13.33,
-      h: 1.16,
-      fill: { color: '16221B' },
-      line: { color: '16221B' },
-    });
-    slide.addText(group.task.task_name, {
-      x: 0.55,
-      y: 0.23,
-      w: 8.4,
-      h: 0.38,
-      fontSize: 20,
+  private addAssetDocumentPage(pptx: pptxgen, title: string) {
+    const slide = pptx.addSlide();
+    slide.background = { color: 'FFFFFF' };
+    slide.addText(title, {
+      x: 0.7,
+      y: 0.36,
+      w: 11.95,
+      h: 0.42,
+      fontSize: 21,
       bold: true,
-      color: 'F8F5E8',
-      fit: 'shrink',
+      color: '16221B',
       margin: 0,
+      fit: 'shrink',
     });
-    slide.addText(
-      [
-        group.project?.customer_code ?? '-',
-        group.requirement?.requirement_code ?? '-',
-        group.task.task_no,
-        `第 ${pageNo}/${pageTotal} 页`,
-      ].join('  /  '),
-      {
-        x: 0.55,
-        y: 0.68,
-        w: 11.7,
-        h: 0.25,
-        fontSize: 10,
-        color: 'DCE6D7',
+    slide.addShape('line', {
+      x: 0.7,
+      y: 0.88,
+      w: 11.95,
+      h: 0,
+      line: { color: 'DDE5D8', pt: 1 },
+    });
+    return slide;
+  }
+
+  private addAssetDocumentSectionTitle(
+    slide: pptxgen.Slide,
+    index: number,
+    title: string,
+    y: number,
+  ) {
+    slide.addShape('roundRect', {
+      x: 0.76,
+      y: y - 0.02,
+      w: 0.5,
+      h: 0.28,
+      rectRadius: 0.04,
+      fill: { color: 'EAF2E8' },
+      line: { color: 'C9D8C8', pt: 0.7 },
+    });
+    slide.addText(`${index}）`, {
+      x: 0.84,
+      y: y + 0.03,
+      w: 0.34,
+      h: 0.16,
+      fontSize: 10,
+      bold: true,
+      color: '2F6B45',
+      margin: 0,
+      fit: 'shrink',
+    });
+    slide.addText(title, {
+      x: 1.35,
+      y,
+      w: 11.22,
+      h: 0.28,
+      fontSize: 13,
+      bold: true,
+      color: '243329',
+      margin: 0,
+      fit: 'shrink',
+    });
+  }
+
+  private addAssetDocumentImage(
+    slide: pptxgen.Slide,
+    image: ExportAssetImage,
+    slot: {
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      caption: string;
+      captionH: number;
+    },
+  ) {
+    if (image.dataUri) {
+      slide.addImage({
+        data: image.dataUri,
+        x: slot.x,
+        y: slot.y,
+        w: slot.w,
+        h: slot.h,
+        sizing: {
+          type: 'contain',
+          w: slot.w,
+          h: slot.h,
+        },
+      });
+    } else {
+      slide.addText(image.error ?? '图片读取失败', {
+        x: slot.x,
+        y: slot.y,
+        w: slot.w,
+        h: slot.h,
+        fontSize: 13,
+        color: 'A15C20',
+        align: 'center',
+        margin: 0.1,
         fit: 'shrink',
-        margin: 0,
-      },
+      });
+    }
+    slide.addText(slot.caption, {
+      x: slot.x,
+      y: slot.y + slot.h + 0.08,
+      w: slot.w,
+      h: slot.captionH,
+      fontSize: 9,
+      color: '596657',
+      align: 'center',
+      margin: 0,
+      fit: 'shrink',
+    });
+  }
+
+  private assetQuotationItemLabel(group: ExportAssetTaskGroup) {
+    return this.assetQuotationPathLabel(
+      this.assetQuotationPathParts(group.quotationItem),
     );
-    slide.addText(
-      [
-        `需求：${group.requirement?.title ?? group.requirementItem?.item_title ?? '-'}`,
-        `需求项：${group.requirementItem?.item_title ?? '-'}`,
-        `执行人：${group.assignee?.display_name ?? group.assignee?.username ?? '-'}`,
-      ].join('\n'),
-      {
-        x: 0.58,
-        y: 1.23,
-        w: 12.1,
-        h: 0.35,
-        fontSize: 9,
-        color: '596657',
-        fit: 'shrink',
-        margin: 0,
-      },
-    );
   }
 
-  private assetCaption(file: TaskResultFileEntity | null) {
-    if (!file) {
-      return '暂无图片资产';
+  private assetDocumentTitle(sections: ExportAssetQuotationSection[]) {
+    const groups = sections.flatMap((section) => section.groups);
+    const firstGroup = groups[0] ?? null;
+    const fundName =
+      firstGroup?.customerName ||
+      firstGroup?.project?.customer_code ||
+      firstGroup?.requirement?.customer_code ||
+      '基金';
+    const normalizedFundName = fundName.includes('基金')
+      ? fundName
+      : `${fundName}基金`;
+    return `${normalizedFundName}-结算项目`;
+  }
+
+  private assetQuotationItemName(item: ExportAssetQuotationItem | null) {
+    return item?.item_name || '未关联报价子项';
+  }
+
+  private assetQuotationPathParts(item: ExportAssetQuotationItem | null) {
+    const text = this.assetQuotationItemName(item)
+      .replace(/\r?\n/g, ' > ')
+      .replace(/\s*[＞>]\s*/g, ' > ');
+    const parts = text
+      .split(' > ')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    return parts.length ? parts : ['未关联报价子项'];
+  }
+
+  private assetQuotationPathLabel(parts: string[]) {
+    return parts.filter(Boolean).join(' > ') || '未关联报价子项';
+  }
+
+  private assetQuotationDisplayPathLabel(parts: string[]) {
+    const compactParts = parts.filter((part, index) => {
+      const previous = parts[index - 1];
+      return part && part !== previous;
+    });
+    return this.assetQuotationPathLabel(compactParts);
+  }
+
+  private assetQuotationLeafName(parts: string[]) {
+    return parts[parts.length - 1] || this.assetQuotationPathLabel(parts);
+  }
+
+  private assetImageName(image: ExportAssetImage) {
+    const fileName = image.file?.file_name?.trim() || '';
+    const parsedName = this.assetImageNameFromUrl(image.file?.file_url);
+    if (!fileName || /^图片-\d+$/i.test(fileName)) {
+      return parsedName || fileName || '未命名图片';
     }
-    const remark = file.remark ? ` · ${file.remark}` : '';
-    return `${file.file_name}${remark}`;
+    return fileName;
   }
 
-  private assetProjectLabel(group: ExportAssetTaskGroup) {
-    const customer = group.project?.customer_code ?? '-';
-    const projectName = group.project?.project_name ?? '';
-    return projectName ? `${customer} / ${projectName}` : customer;
-  }
-
-  private assetRequirementLabel(group: ExportAssetTaskGroup) {
-    if (!group.requirement) {
-      return '-';
-    }
-    return `${group.requirement.requirement_code} ${group.requirement.title}`;
-  }
-
-  private assetRequirementItemLabel(group: ExportAssetTaskGroup) {
-    if (!group.requirementItem) {
-      return '-';
-    }
-    return `${group.requirementItem.item_no} ${group.requirementItem.item_title}`;
+  private assetImageNameFromUrl(fileUrl?: string | null) {
+    const rawName = String(fileUrl ?? '')
+      .split(/[?#]/)[0]
+      .split(/[\\/]/)
+      .filter(Boolean)
+      .pop();
+    if (!rawName) return '';
+    const withoutExt = rawName.replace(/\.[^.]+$/, '');
+    const withoutHash = withoutExt.replace(/[-_][0-9a-f]{8,}$/i, '');
+    return withoutHash
+      .replace(/^(\d+)[-_]/, '$1 ')
+      .replace(/[_-]+/g, ' ')
+      .trim();
   }
 
   private isExportableImageFile(file: TaskResultFileEntity) {

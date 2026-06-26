@@ -36,6 +36,25 @@ import { UpdateRequirementItemDto } from './dto/update-requirement-item.dto';
 import { RequirementItemEntity } from './entities/requirement-item.entity';
 import { RequirementEntity } from './entities/requirement.entity';
 
+type AiPreviewRejectDto = {
+  rejectReasons?: unknown;
+  rejectNote?: unknown;
+  useForPromptOptimization?: unknown;
+};
+
+const AI_PREVIEW_REJECT_REASON_LABELS: Record<string, string> = {
+  chat_only: '只是闲聊/讨论',
+  duplicate: '已有需求的重复表达',
+  progress_update: '只是任务进展反馈',
+  material_transfer: '只是资料/素材传递',
+  no_deliverable: '缺少明确交付物',
+  no_business_object: '缺少明确业务对象',
+  unclear_intent: '客户意图不明确',
+  wrong_category: '识别分类错误',
+  other: '其它',
+  manual_reject: '人工标记伪需求',
+};
+
 @Injectable()
 export class RequirementsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RequirementsService.name);
@@ -205,7 +224,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     requirements = scoped.requirements;
     const scopedRequirementItems = scoped.requirementItems;
     const scopedTasks = scoped.tasks;
-    const scopedItemIds = new Set(scopedRequirementItems.map((item) => item.id));
+    const scopedItemIds = new Set(
+      scopedRequirementItems.map((item) => item.id),
+    );
     const scopedQuoteMappings = quoteVisible
       ? quoteMappings.filter((mapping) =>
           scopedItemIds.has(mapping.requirement_item_id),
@@ -381,9 +402,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       ],
     );
 
-    await this.backfillTaskReportersForBusinessCategory(
-      normalizedCategoryCode,
-    );
+    await this.backfillTaskReportersForBusinessCategory(normalizedCategoryCode);
     return this.listBusinessCategoryOwners();
   }
 
@@ -435,7 +454,27 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
   async rejectAiPreviewCandidate(
     candidateId: string,
     reviewedByUserId: string | null = null,
+    dto: AiPreviewRejectDto = {},
   ) {
+    const feedback = this.normalizeAiPreviewRejectFeedback(dto);
+    const candidateRows = await this.dataSource.query(
+      `
+        SELECT *
+        FROM demand_intake_candidates
+        WHERE id = ? OR external_candidate_id = ?
+        LIMIT 1
+      `,
+      [candidateId, candidateId],
+    );
+    const candidate = candidateRows?.[0] ?? null;
+    const reviewNote = [
+      `伪需求原因：${feedback.reasonLabels.join('、')}`,
+      feedback.note ? `补充说明：${feedback.note}` : '',
+      `用于模型优化：${feedback.useForPromptOptimization ? '是' : '否'}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const matchReason = `人工标记伪需求：${feedback.reasonLabels.join('、')}`;
     const result = await this.dataSource.query(
       `
         UPDATE demand_intake_candidates
@@ -443,15 +482,74 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
             review_status = 'rejected',
             reviewed_by_user_id = ?,
             reviewed_at = NOW(),
-            match_reason = COALESCE(match_reason, '人工标记伪需求'),
+            review_note = ?,
+            match_reason = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ? OR external_candidate_id = ?
       `,
-      [reviewedByUserId, candidateId, candidateId],
+      [reviewedByUserId, reviewNote, matchReason, candidateId, candidateId],
     );
+    const updated = result?.affectedRows ?? result?.[0]?.affectedRows ?? 0;
+    if (updated > 0 && candidate?.id) {
+      await this.dataSource.query(
+        `
+          INSERT INTO demand_candidate_review_logs (
+            id,
+            candidate_id,
+            review_action,
+            reject_reasons_json,
+            reject_reason_labels_json,
+            reject_note,
+            use_for_prompt_optimization,
+            reviewer_user_id,
+            candidate_snapshot_json,
+            created_at
+          ) VALUES (?, ?, 'reject', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `,
+        [
+          randomUUID(),
+          candidate.id,
+          JSON.stringify(feedback.reasonCodes),
+          JSON.stringify(feedback.reasonLabels),
+          feedback.note || null,
+          feedback.useForPromptOptimization ? 1 : 0,
+          reviewedByUserId,
+          JSON.stringify(candidate),
+        ],
+      );
+    }
     return {
-      updated: result?.affectedRows ?? result?.[0]?.affectedRows ?? 0,
+      updated,
       source: 'ops_platform',
+    };
+  }
+
+  private normalizeAiPreviewRejectFeedback(dto: AiPreviewRejectDto) {
+    const rawReasons = Array.isArray(dto?.rejectReasons)
+      ? dto.rejectReasons
+      : [];
+    const reasonCodes = [
+      ...new Set(
+        rawReasons
+          .map((item) => String(item ?? '').trim())
+          .filter((item) => item in AI_PREVIEW_REJECT_REASON_LABELS),
+      ),
+    ];
+    if (!reasonCodes.length) {
+      reasonCodes.push('manual_reject');
+    }
+    const note =
+      typeof dto?.rejectNote === 'string'
+        ? dto.rejectNote.trim().slice(0, 1000)
+        : '';
+    const useForPromptOptimization = dto?.useForPromptOptimization !== false;
+    return {
+      reasonCodes,
+      reasonLabels: reasonCodes.map(
+        (code) => AI_PREVIEW_REJECT_REASON_LABELS[code] ?? code,
+      ),
+      note,
+      useForPromptOptimization,
     };
   }
 
@@ -1513,7 +1611,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       where: { customer_code: legacy },
     });
     if (byCode) return legacy;
-    const byId = await this.customersRepository.findOne({ where: { id: legacy } });
+    const byId = await this.customersRepository.findOne({
+      where: { id: legacy },
+    });
     if (!byId?.customer_code) {
       throw new BadRequestException('Customer not found');
     }
@@ -1819,8 +1919,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
 
     return {
       mode: 'rule_fallback',
-      customerId:
-        bestScore > 0 ? (bestCustomer?.customer_code ?? null) : null,
+      customerId: bestScore > 0 ? (bestCustomer?.customer_code ?? null) : null,
       customerName:
         bestScore > 0 ? (bestCustomer?.customer_name ?? null) : null,
       projectType,
@@ -2286,7 +2385,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     if (!createIfMissing) {
       return null;
     }
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reference)) {
+    if (
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        reference,
+      )
+    ) {
       return null;
     }
 
@@ -2426,6 +2529,40 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         [randomUUID(), type.value, type.label],
       );
     }
+  }
+
+  private async ensureBusinessCategoryOwnerConfigIndexes() {
+    await this.dropIndexIfExists(
+      'business_category_owner_configs',
+      'uk_business_category_owner',
+    );
+    const uniqueRows = await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name = 'business_category_owner_configs'
+          AND index_name = 'uk_business_category_owner_user'
+      `,
+    );
+    if (Number(uniqueRows?.[0]?.count ?? 0) === 0) {
+      await this.dataSource.query(`
+        ALTER TABLE business_category_owner_configs
+        ADD UNIQUE KEY uk_business_category_owner_user (business_category_code, owner_user_id)
+      `);
+    }
+    await ensureIndex(
+      this.dataSource,
+      'business_category_owner_configs',
+      'idx_business_category_owner_user',
+      ['owner_user_id'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'business_category_owner_configs',
+      'idx_business_category_owner_status',
+      ['status'],
+    );
   }
 
   private async normalizeBusinessCategoryOwnerConfigUsers() {
@@ -2599,7 +2736,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'review_note',
       'review_note TEXT NULL AFTER reviewed_at',
     );
-    if (await this.columnExists('demand_intake_candidates', 'matched_customer_id')) {
+    if (
+      await this.columnExists('demand_intake_candidates', 'matched_customer_id')
+    ) {
       await this.dataSource.query(`
         UPDATE demand_intake_candidates candidate
         JOIN customers customer
@@ -2612,20 +2751,44 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           AND customer.customer_code <> ''
       `);
     }
-    await ensureIndex(this.dataSource, 'demand_intake_candidates', 'idx_demand_intake_capture', [
-      'source_app',
-      'external_capture_run_id',
-    ]);
-    await ensureIndex(this.dataSource, 'demand_intake_candidates', 'idx_demand_intake_source_key', [
-      'source_app',
-      'external_source_key',
-    ]);
-    await ensureIndex(this.dataSource, 'demand_intake_candidates', 'idx_demand_intake_review_owner', [
-      'review_owner_user_id',
-      'review_status',
-      'created_at',
-    ]);
+    await ensureIndex(
+      this.dataSource,
+      'demand_intake_candidates',
+      'idx_demand_intake_capture',
+      ['source_app', 'external_capture_run_id'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'demand_intake_candidates',
+      'idx_demand_intake_source_key',
+      ['source_app', 'external_source_key'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'demand_intake_candidates',
+      'idx_demand_intake_review_owner',
+      ['review_owner_user_id', 'review_status', 'created_at'],
+    );
     await this.assignAiPreviewReviewOwners();
+
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS demand_candidate_review_logs (
+        id CHAR(36) NOT NULL,
+        candidate_id CHAR(36) NOT NULL,
+        review_action VARCHAR(32) NOT NULL,
+        reject_reasons_json TEXT NULL,
+        reject_reason_labels_json TEXT NULL,
+        reject_note TEXT NULL,
+        use_for_prompt_optimization TINYINT(1) NOT NULL DEFAULT 1,
+        reviewer_user_id CHAR(36) NULL,
+        candidate_snapshot_json LONGTEXT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_demand_review_candidate (candidate_id, created_at),
+        KEY idx_demand_review_action (review_action, created_at),
+        KEY idx_demand_review_reviewer (reviewer_user_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI候选需求人工复核日志'
+    `);
 
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS demand_candidate_evidence (
@@ -2697,7 +2860,10 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       await this.dropForeignKeyIfExists(tableName, legacyForeignKeyName);
       await this.dropIndexIfExists(tableName, legacyIndexName);
       await this.dropIndexIfExists(tableName, `${legacyIndexName}_created`);
-      await this.dropIndexIfExists(tableName, `idx_${tableName}_customer_created`);
+      await this.dropIndexIfExists(
+        tableName,
+        `idx_${tableName}_customer_created`,
+      );
       await this.dropColumnIfExists(tableName, 'customer_id');
     }
     if (required) {
@@ -2743,7 +2909,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       [tableName, indexName],
     );
     if (Number(rows?.[0]?.count ?? 0) === 0) return;
-    await this.dataSource.query(`ALTER TABLE ${tableName} DROP INDEX ${indexName}`);
+    await this.dataSource.query(
+      `ALTER TABLE ${tableName} DROP INDEX ${indexName}`,
+    );
   }
 
   private async dropForeignKeyIfExists(

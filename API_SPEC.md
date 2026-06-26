@@ -1,13 +1,13 @@
 # 向量引擎管理工作台后端接口设计 API 清单
 
-更新时间：2026-06-17
+更新时间：2026-06-26
 
 ## 当前重点接口
 
 ### 静态页面
 
 - `GET /`：登录、需求录入、任务指派、合同报价录入、报价子项选择、结算统计、需求面板页面。
-- `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`：本地交付登记页，员工上传/粘贴图片资产并填写一个最终交付链接。
+- `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`：本地交付登记页，员工上传/粘贴图片资产并填写一个合作链接；页面内 `个人任务主页` 只切换到执行人临时视图，不触发提交。
 
 ### 认证
 
@@ -23,7 +23,7 @@
 - `PATCH /api/v1/requirements/business-category-owners/{categoryCode}`：更新某个业务大类的负责人；更新后会回填该业务大类历史任务的 `reporter_user_id`。
 - `GET /api/v1/requirements/ai-preview-candidates?limit=12`：读取 AI 已识别但未确认的候选需求，并返回证据链。
 - `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/confirm`：将候选需求标记为已确认，避免正式录入后重复展示。
-- `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/reject`：将候选需求标记为伪需求，状态置为 `rejected`，AI 预览区不再展示。
+- `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/reject`：将候选需求标记为伪需求，状态置为 `rejected`，AI 预览区不再展示；支持提交 `rejectReasons`、`rejectNote`、`useForPromptOptimization`，后端写入复核日志。
 - `POST /api/v1/requirements/ai-match-context`：根据文件内容匹配客户和业务大类。
 - `POST /api/v1/requirements/ai-split-with-tasks`：使用 OpenAI 兼容模型拆分需求，并为每条需求生成任务。
 - `PATCH /api/v1/requirements/{id}`：人工编辑历史需求任务，自动同步需求项和任务标题/描述/优先级。
@@ -31,11 +31,12 @@
 - `POST /api/v1/tasks/{id}/assign`：指派任务；`provisionWorkspace=true` 时创建资产入口并发送一条带按钮的飞书消息。
 - `GET /api/v1/tasks/{id}/asset-sheet/context?token=<token>`：员工交付登记页加载任务上下文。
 - `POST /api/v1/tasks/{id}/asset-sheet/upload-image?token=<token>`：上传本地图片，返回可保存的图片 URL。
-- `POST /api/v1/tasks/{id}/asset-sheet/local-assets?token=<token>`：保存图片资产 URL 和单个最终交付链接，图片资产去重统计，并将任务推进到待验收。
+- `POST /api/v1/tasks/{id}/asset-sheet/local-assets?token=<token>`：保存图片资产 URL 和单个合作链接，图片资产去重统计，并将任务推进到待验收。
 - `POST /api/v1/tasks/{id}/asset-sheet/sync`：读取飞书在线表资产 URL 并同步统计。
 - `GET /api/v1/tasks/board?liveAssetCount=true&customerCode=<customerCode>`：任务看板，支持实时资产数和基金客户筛选；`customerId` 仅保留兼容。
 - `GET /api/v1/tasks/{id}/workflow`：返回任务、资产数、工作目录、最近状态历史和统一 workflow 快照。
 - `GET /api/v1/tasks/{id}/status-history`：返回任务状态流转审计记录。
+- `GET /api/v1/tasks/assets/export-ppt?taskIds=<id1,id2>`：按任务集合导出资产 PPT。导出口径按已确认报价子项层级分组，标题为“基金名称-结算项目”，正文只展示层级标题、原始图片和图片真实名称。
 
 ### 维度字典
 
@@ -154,6 +155,13 @@
 
 ### `GET /roles`
 - 说明：获取角色列表
+
+## 3.3 员工免登录入口
+
+### `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`
+- 说明：执行人通过飞书通知进入的资产登记页。
+- 能力：上传/拖拽/粘贴图片，填写合作链接，点击 `提交交付` 后调用本任务的资产保存接口。
+- 个人任务主页：页面顶部 `个人任务主页` 按钮会使用资产上下文返回的 `assigneeSession` 写入临时会话并跳转 `/?taskSession=1`，只用于查看个人历史任务，不保存、不提交、不改变任务状态。
 
 ## 4. 工作台
 

@@ -100,6 +100,22 @@
       background: #fff;
     }
     .delivery-header p { margin: 5px 0 0; color: #667085; font-size: 13px; line-height: 1.5; }
+    .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+    .personal-home-button {
+      min-height: 42px;
+      padding: 9px 15px;
+      border-color: #1d4ed8;
+      background: #1d4ed8;
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(29, 78, 216, .22);
+    }
+    .personal-home-button::before {
+      content: "↗";
+      display: inline-block;
+      margin-right: 7px;
+      font-weight: 900;
+    }
+    .personal-home-button:hover { background: #1e40af; border-color: #1e40af; }
     .delivery-kicker { color: #2563eb; font-size: 12px; font-weight: 900; margin-bottom: 5px; }
     .delivery-body { display: grid; gap: 0; }
     .delivery-section { padding: 18px; border-bottom: 1px solid #eef1f6; }
@@ -252,6 +268,9 @@
       .asset-grid { max-height: none; }
     }
     @media (max-width: 900px) {
+      .delivery-header { display: grid; }
+      .header-actions { justify-content: stretch; }
+      .personal-home-button { flex: 1 1 180px; }
       .task-overview, .task-meta { grid-template-columns: 1fr; }
       .summary-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .detail-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -299,7 +318,10 @@
             <h2>交付内容登记</h2>
             <p>上传图片资产，填写合作链接后提交。</p>
           </div>
-          <button class="secondary" onclick="reloadContext()">刷新</button>
+          <div class="header-actions">
+            <button class="personal-home-button" onclick="openAssigneeWorkspace()">个人任务主页</button>
+            <button class="secondary" onclick="reloadContext()">刷新</button>
+          </div>
         </div>
 
         <div class="delivery-body">
@@ -811,6 +833,32 @@
         window.close();
         setStatus("已提交成功，可以关闭当前页面。", "ok");
       }, 900);
+    }
+
+    async function openAssigneeWorkspace() {
+      let session = context?.assigneeSession;
+      if (!session && taskId !== "default") {
+        setStatus("正在读取个人任务主页身份...", "");
+        try {
+          const response = await fetch(taskAssetApi("context"));
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.message || "读取任务失败");
+          context = result;
+          renderTaskDetails();
+          syncDeliveryDraft(result.delivery);
+          renderAssets();
+          session = result.assigneeSession;
+        } catch (error) {
+          setStatus(`进入个人任务主页失败：${error.message}`, "error");
+          return;
+        }
+      }
+      const switched = applyAssigneeSession(session);
+      if (!switched) {
+        setStatus("暂时无法进入个人任务主页：未读取到执行人身份。", "error");
+        return;
+      }
+      location.href = "/?taskSession=1";
     }
 
     function applyAssigneeSession(session) {
