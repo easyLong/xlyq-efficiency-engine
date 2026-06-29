@@ -169,12 +169,12 @@ export class NotificationsService {
       title: `新任务：${task.task_name}`,
       content:
         message ??
-        `你收到一个新任务 ${task.task_no}，请点击下方按钮填写项目资产。`,
+        `你收到一个新任务 ${task.task_no}，请进入交付登记页上传图片资产，并补充合作链接。`,
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
       actionUrl: this.buildTaskAssetSheetUrl(task),
-      actionText: '填写项目资产',
+      actionText: '登记交付资产',
     });
   }
 
@@ -200,25 +200,27 @@ export class NotificationsService {
         : Promise.resolve(null),
     ]);
     const fundPlatformLabel = await this.taskFundPlatformLabel(task, project);
+    const taskDetail = await this.taskDetailForNotification(task);
 
     return this.sendToUsers([workspace.assignee_user_id], {
       title: `新任务已指派：${task.task_name}`,
       content: [
         `**任务**：${task.task_name}`,
+        ...(taskDetail ? [`**任务详情**：${taskDetail}`] : []),
         `**基金平台**：${fundPlatformLabel}`,
         `**状态**：${this.taskStatusLabel(task.status)}`,
         `**截止时间**：${this.formatDate(task.planned_end_at)}`,
         `**优先级**：${this.priorityLabel(task.priority)}`,
         `**任务执行人**：${assignee?.display_name ?? '-'}`,
         directoryUrl
-          ? '请点击下方按钮填写项目资产。'
-          : '请在任务详情中填写项目资产。',
+          ? '请进入交付登记页上传图片资产，并补充合作链接。'
+          : '请在任务详情中上传图片资产，并补充合作链接。',
       ].join('\n'),
       objectType: 'task',
       objectId: task.id,
       channels: ['in_app', 'feishu_app'],
       actionUrl: directoryUrl ?? this.buildTaskAssetSheetUrl(task),
-      actionText: '填写项目资产',
+      actionText: '登记交付资产',
     });
   }
 
@@ -286,7 +288,7 @@ export class NotificationsService {
       content: [
         `任务 ${task.task_no} 验收未通过，需要按反馈修改后重新提交。`,
         `退回原因：${reason}`,
-        '请点击下方按钮修改项目资产，完成后重新提交交付。',
+        '请更新交付资产，完成后重新提交。',
       ].join('\n'),
       objectType: 'task',
       objectId: task.id,
@@ -454,15 +456,15 @@ export class NotificationsService {
       }
 
       const messages = await this.sendToUsers([task.assignee_user_id!], {
-        title: `请更新项目资产：${task.task_name}`,
+        title: `请更新交付资产：${task.task_name}`,
         content: [
-          `任务 ${task.task_no} 已开始超过 ${daysAfterStart} 天，请进入项目资产页更新进度或提交交付。`,
+          `任务 ${task.task_no} 已开始超过 ${daysAfterStart} 天，请进入交付登记页更新进度或提交交付。`,
         ].join('\n'),
         objectType: 'task_progress_feedback',
         objectId: task.id,
         channels: ['in_app', 'feishu_app'],
         actionUrl: this.buildTaskAssetSheetUrl(task),
-        actionText: '填写项目资产',
+        actionText: '登记交付资产',
       });
       notificationCount += messages.length;
     }
@@ -613,6 +615,36 @@ export class NotificationsService {
       rows?.[0]?.customerName ?? project?.project_name ?? '未关联基金';
     const businessPlatform = rows?.[0]?.businessPlatform ?? '未关联平台';
     return `${customerName}-${businessPlatform}`;
+  }
+
+  private async taskDetailForNotification(task: TaskEntity) {
+    const directDescription = this.compactNotificationText(task.description);
+    if (directDescription) {
+      return directDescription;
+    }
+    const rows = await this.tasksRepository.manager.query(
+      `
+        SELECT
+          COALESCE(item.item_description, requirement.raw_content, requirement.summary) AS taskDetail
+        FROM tasks task
+        LEFT JOIN requirement_items item ON item.id = task.requirement_item_id
+        LEFT JOIN requirements requirement ON requirement.id = item.requirement_id
+        WHERE task.id = ?
+        LIMIT 1
+      `,
+      [task.id],
+    );
+    return this.compactNotificationText(rows?.[0]?.taskDetail);
+  }
+
+  private compactNotificationText(value: unknown, maxLength = 260) {
+    const text = String(value ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!text) {
+      return '';
+    }
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
   }
 
   private buildTaskProgressFeedbackUrl(task: TaskEntity) {
