@@ -13,6 +13,14 @@ export class CreateQuotationDto {
 
   @IsOptional()
   @IsString()
+  contractStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  contractEndMonth?: string;
+
+  @IsOptional()
+  @IsString()
   pricingBasis?: string;
 
   @IsOptional()

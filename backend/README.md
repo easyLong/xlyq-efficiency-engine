@@ -179,7 +179,7 @@ npm run migrate:project-tables -- --help
 
 - 删除报价单/报价子项会清理相关报价映射和报价子项维度规则。
 - 删除需求会清理需求项、任务、资产记录和报价映射。
-- 报价映射保存会校验需求客户、报价单客户和报价子项归属，避免跨基金挂错报价；同一需求项重复保存会复用当前映射并将旧有效映射标记为 `obsolete`。
+- 报价映射保存会校验需求客户、报价单客户和报价子项归属，避免跨基金或跨合同挂错报价；同一需求项重复保存会复用当前映射并将旧有效映射标记为 `obsolete`。
 - 报价子项状态只按有效映射回算，`rejected`、`obsolete` 不再占用报价子项。
 - 本地交付登记保存、需求删除、报价单删除使用事务，避免资产、任务、映射残留。
 - 资产个数只统计图片资产和人工登记资产；最终交付链接仅用于追踪，不参与结算数量。
@@ -221,4 +221,4 @@ npm run migrate:project-tables -- --execute
 - `common/schema-maintenance.ts`：启动期安全补齐索引。
 - `quote-mappings/quote-mappings.service.ts`：报价映射幂等保存，旧有效映射置为 `obsolete`。
 - `requirements/requirements.service.ts`：历史看板完整拉取最新需求下的子项、任务、报价映射。
-- `quotations/quotations.service.ts`：CSV 合同报价优先按结构化表格解析最细粒度子项、单位和单价。
+- `quotations/quotations.service.ts`：合同报价支持起止月份，CSV 合同报价优先按结构化表格解析最细粒度子项、单位和单价。

@@ -12,6 +12,12 @@ export class QuotationEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 32 })
   customer_code!: string;
 
+  @Column({ type: 'varchar', length: 7, nullable: true })
+  contract_start_month!: string | null;
+
+  @Column({ type: 'varchar', length: 7, nullable: true })
+  contract_end_month!: string | null;
+
   @Column({ type: 'varchar', length: 32 })
   status!: string;
 

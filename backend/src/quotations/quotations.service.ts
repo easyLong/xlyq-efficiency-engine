@@ -73,11 +73,17 @@ export class QuotationsService implements OnModuleInit {
   }
 
   async create(dto: CreateQuotationDto) {
+    const contractMonths = this.normalizeContractMonthRange(
+      dto.contractStartMonth,
+      dto.contractEndMonth,
+    );
     const quotation = this.quotationsRepository.create({
       id: randomUUID(),
       quotation_no: dto.quotationNo ?? (await this.nextQuotationNo()),
       project_id: dto.projectId,
       customer_code: dto.customerCode ?? dto.customerId,
+      contract_start_month: contractMonths.startMonth,
+      contract_end_month: contractMonths.endMonth,
       status: dto.status ?? 'draft',
       pricing_basis: dto.pricingBasis ?? 'manual',
       total_amount: '0.00',
@@ -90,9 +96,20 @@ export class QuotationsService implements OnModuleInit {
 
   async update(id: string, dto: UpdateQuotationDto) {
     const quotation = await this.findOne(id);
+    const contractMonths =
+      dto.contractStartMonth !== undefined || dto.contractEndMonth !== undefined
+        ? this.normalizeContractMonthRange(
+            dto.contractStartMonth ?? quotation.contract_start_month,
+            dto.contractEndMonth ?? quotation.contract_end_month,
+          )
+        : null;
     Object.assign(quotation, {
       status: dto.status ?? quotation.status,
       pricing_basis: dto.pricingBasis ?? quotation.pricing_basis,
+      contract_start_month:
+        contractMonths?.startMonth ?? quotation.contract_start_month,
+      contract_end_month:
+        contractMonths?.endMonth ?? quotation.contract_end_month,
       remark: dto.remark ?? quotation.remark,
     });
     return this.quotationsRepository.save(quotation);
@@ -142,6 +159,8 @@ export class QuotationsService implements OnModuleInit {
     const quotation = await this.create({
       projectId: dto.projectId,
       customerCode: dto.customerCode ?? dto.customerId,
+      contractStartMonth: dto.contractStartMonth,
+      contractEndMonth: dto.contractEndMonth,
       pricingBasis: dto.pricingBasis ?? 'uploaded_text',
       status: 'draft',
       remark:
@@ -941,6 +960,16 @@ export class QuotationsService implements OnModuleInit {
       'fk_qidr_customer',
       false,
     );
+    await this.addColumnIfMissing(
+      'quotations',
+      'contract_start_month',
+      'contract_start_month VARCHAR(7) NULL AFTER customer_code',
+    );
+    await this.addColumnIfMissing(
+      'quotations',
+      'contract_end_month',
+      'contract_end_month VARCHAR(7) NULL AFTER contract_start_month',
+    );
     const rows = await this.dataSource.query(
       `
       SELECT CHARACTER_MAXIMUM_LENGTH AS maxLength
@@ -972,6 +1001,12 @@ export class QuotationsService implements OnModuleInit {
     await ensureIndex(this.dataSource, 'quotations', 'idx_quotations_no', [
       'quotation_no',
     ]);
+    await ensureIndex(
+      this.dataSource,
+      'quotations',
+      'idx_quotations_customer_contract_month',
+      ['customer_code', 'contract_start_month', 'contract_end_month'],
+    );
     await ensureIndex(
       this.dataSource,
       'quotation_items',
@@ -1022,6 +1057,33 @@ export class QuotationsService implements OnModuleInit {
     await ensureIndex(this.dataSource, tableName, `${legacyIndexName}_code`, [
       'customer_code',
     ]);
+  }
+
+  private normalizeContractMonthRange(
+    startMonth?: string | null,
+    endMonth?: string | null,
+  ) {
+    const start = this.normalizeContractMonth(startMonth, '合同开始月份');
+    const end = this.normalizeContractMonth(endMonth, '合同结束月份');
+    if (start && end && start > end) {
+      throw new BadRequestException('合同开始月份不能晚于结束月份');
+    }
+    return { startMonth: start, endMonth: end };
+  }
+
+  private normalizeContractMonth(value: string | null | undefined, label: string) {
+    const month = String(value ?? '').trim();
+    if (!month) return null;
+    if (/^\d{6}$/.test(month)) {
+      const compactMonth = month.slice(4, 6);
+      if (Number(compactMonth) >= 1 && Number(compactMonth) <= 12) {
+        return `${month.slice(0, 4)}-${compactMonth}`;
+      }
+    }
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      throw new BadRequestException(`${label}格式必须为 yyyyMM 或 yyyy-MM`);
+    }
+    return month;
   }
 
   private async addColumnIfMissing(

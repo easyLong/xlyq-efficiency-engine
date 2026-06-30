@@ -697,6 +697,8 @@ business_category_owner_configs maps business category to requirement owner
 | quotation_no | varchar(32) | unique, not null | 报价单编号 |
 | project_id | uuid | fk, not null | 项目ID |
 | customer_code | varchar(32) | not null | 基金简称，关联 `customers.customer_code` |
+| contract_start_month | varchar(7) | null | 合同开始月份，格式 `yyyy-MM` |
+| contract_end_month | varchar(7) | null | 合同结束月份，格式 `yyyy-MM` |
 | status | varchar(32) | not null | `draft/pending_review/pending_customer_confirm/confirmed/rejected/settled` |
 | pricing_basis | varchar(32) | not null | `mapping/manual/mixed` |
 | total_amount | numeric(14,2) | not null default 0 | 总金额 |
@@ -716,6 +718,7 @@ business_category_owner_configs maps business category to requirement owner
 - `uk_quotations_quotation_no`
 - `idx_quotations_project_id`
 - `idx_quotations_customer_code`
+- `idx_quotations_customer_contract_month`
 - `idx_quotations_status`
 
 ## 12.4 `quotation_items`

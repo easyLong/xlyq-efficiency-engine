@@ -528,6 +528,8 @@
 
 ### `POST /quotations`
 - 说明：手工创建合同报价
+- 入参：`projectId`、`customerCode`、`contractStartMonth?`、`contractEndMonth?`、`pricingBasis?`、`remark?`
+- 月份格式兼容 `yyyyMM` 和 `yyyy-MM`，服务端统一保存为 `yyyy-MM`
 
 ### `POST /quotations/parse-text`
 - 说明：预览解析合同报价文本，不落库
@@ -536,7 +538,8 @@
 
 ### `POST /quotations/import-text`
 - 说明：导入合同报价文本并生成合同报价与最细粒度报价子项
-- 入参：`projectId`、`customerId`、`rawContent`、`fileName?`
+- 入参：`projectId`、`customerCode`、`contractStartMonth?`、`contractEndMonth?`、`rawContent`、`fileName?`
+- 月份格式兼容 `yyyyMM` 和 `yyyy-MM`，用于区分同一基金不同期间的多份合同
 - 返回：`quotation`、`items`、`summary`
 
 ### `POST /quotations/from-mappings`

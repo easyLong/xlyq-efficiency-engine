@@ -12,6 +12,14 @@ export class ImportQuotationTextDto {
   @IsString()
   customerId?: string;
 
+  @IsOptional()
+  @IsString()
+  contractStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  contractEndMonth?: string;
+
   @IsString()
   @IsNotEmpty()
   rawContent!: string;

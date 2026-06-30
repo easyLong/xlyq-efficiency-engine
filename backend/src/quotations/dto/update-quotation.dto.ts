@@ -11,5 +11,13 @@ export class UpdateQuotationDto {
 
   @IsOptional()
   @IsString()
+  contractStartMonth?: string;
+
+  @IsOptional()
+  @IsString()
+  contractEndMonth?: string;
+
+  @IsOptional()
+  @IsString()
   remark?: string;
 }

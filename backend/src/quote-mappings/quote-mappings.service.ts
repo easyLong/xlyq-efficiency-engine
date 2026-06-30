@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
-import { DataSource, In, Repository } from 'typeorm';
+import { Brackets, DataSource, In, Repository } from 'typeorm';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { WorklogEntity } from '../common/entities/worklog.entity';
 import { ensureIndex } from '../common/schema-maintenance';
@@ -619,11 +619,40 @@ export class QuoteMappingsService implements OnModuleInit {
       this.quotationsRepository
         .createQueryBuilder('quotation')
         .where('quotation.customer_code = :customerId', { customerId })
-        .andWhere('quotation.created_at >= :startAt', {
+        .andWhere(
+          new Brackets((qb) => {
+            qb.where(
+              new Brackets((periodQb) => {
+                periodQb
+                  .where(
+                    '(quotation.contract_start_month IS NULL OR quotation.contract_start_month <= :endMonth)',
+                  )
+                  .andWhere(
+                    '(quotation.contract_end_month IS NULL OR quotation.contract_end_month >= :startMonth)',
+                  )
+                  .andWhere(
+                    '(quotation.contract_start_month IS NOT NULL OR quotation.contract_end_month IS NOT NULL)',
+                  );
+              }),
+            ).orWhere(
+              new Brackets((legacyQb) => {
+                legacyQb
+                  .where('quotation.contract_start_month IS NULL')
+                  .andWhere('quotation.contract_end_month IS NULL')
+                  .andWhere('quotation.created_at >= :startAt')
+                  .andWhere('quotation.created_at < :endAt');
+              }),
+            );
+          }),
+        )
+        .setParameters({
           startAt: period.startAt,
+          endAt: period.endAt,
+          startMonth: period.startMonth,
+          endMonth: period.endMonth,
         })
-        .andWhere('quotation.created_at < :endAt', { endAt: period.endAt })
-        .orderBy('quotation.created_at', 'DESC')
+        .orderBy('quotation.contract_start_month', 'DESC')
+        .addOrderBy('quotation.created_at', 'DESC')
         .getMany(),
     ]);
     const requirementIds = quarterRequirements.map((item) => item.id);
@@ -894,10 +923,17 @@ export class QuoteMappingsService implements OnModuleInit {
     const quarterNo = Number(match[2]);
     const startAt = new Date(year, (quarterNo - 1) * 3, 1, 0, 0, 0, 0);
     const endAt = new Date(year, quarterNo * 3, 1, 0, 0, 0, 0);
+    const startMonth = `${year}-${String((quarterNo - 1) * 3 + 1).padStart(
+      2,
+      '0',
+    )}`;
+    const endMonth = `${year}-${String(quarterNo * 3).padStart(2, '0')}`;
     return {
       quarter: `${year}-Q${quarterNo}`,
       startAt,
       endAt,
+      startMonth,
+      endMonth,
       label: `${year}年第${quarterNo}季度`,
     };
   }

@@ -396,6 +396,10 @@
     .compact-status .row-sub { margin-top: 0; white-space: nowrap; }
     .quote-action { display: grid; grid-template-columns: auto auto; gap: 6px; align-items: center; min-width: 0; justify-content: start; }
     .quote-action.with-select { grid-template-columns: minmax(170px, 250px) auto; }
+    .quote-action.with-contract {
+      grid-template-columns: minmax(220px, 280px) minmax(190px, 240px) auto;
+      max-width: 590px;
+    }
     .requirement-card-footer .quote-action { grid-column: auto; }
     .requirement-card-footer .quote-action-compact {
       grid-column: auto;
@@ -411,6 +415,7 @@
       background: #fff;
       font-size: 12px;
       line-height: 1.25;
+      text-overflow: ellipsis;
     }
     .quote-action .btn { min-width: 76px; white-space: nowrap; }
     .quote-action-compact .btn { min-width: 72px; }
@@ -515,12 +520,19 @@
     .quotation-import-panel .section-title { margin-bottom: 10px; }
     .quotation-import-grid {
       display: grid;
-      grid-template-columns: minmax(220px, .8fr) minmax(260px, 1fr) auto;
+      grid-template-columns: minmax(180px, .8fr) repeat(2, minmax(150px, 170px)) minmax(220px, 1fr) auto;
       gap: 10px;
       align-items: end;
     }
     .quotation-import-grid .wide { grid-column: 1 / -1; }
     .quotation-import-grid label { margin-bottom: 0; }
+    .quotation-import-grid .month-field,
+    .quotation-import-grid .month-field input { min-width: 0; }
+    .quotation-import-grid .month-field input {
+      height: 42px;
+      text-align: center;
+      letter-spacing: .04em;
+    }
     .quotation-import-grid textarea { min-height: 92px; }
     .quotation-import-actions { display: flex; gap: 8px; align-items: end; flex-wrap: nowrap; }
     .quotation-import-actions .btn { white-space: nowrap; }
@@ -1220,7 +1232,7 @@
     .reject-feedback-toggle input { width: auto; }
     .hidden { display: none !important; }
     @media (max-width: 980px) {
-      .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
+      .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .quote-action.with-contract, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
       .dashboard-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .dashboard-filter-bar.settlement-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .dimension-summary-card { grid-template-columns: 1fr; }
@@ -1436,6 +1448,12 @@
           <div class="quotation-import-grid">
             <label>基金客户
               <select id="quoteCustomerSelect" onchange="syncQuoteProjectSelection(false)"></select>
+            </label>
+            <label class="month-field">开始月份
+              <input id="quotationStartMonth" type="month" />
+            </label>
+            <label class="month-field">结束月份
+              <input id="quotationEndMonth" type="month" />
             </label>
             <label>合同报价文件
               <input id="quotationFile" type="file" accept=".txt,.md,.csv,.json" onchange="loadQuotationFile()" />
@@ -1789,6 +1807,7 @@
       requirementVisibleLimit: 80,
       requirementFilterUiKey: "",
       quoteEditingItemId: null,
+      quoteSelectedQuotationByItemId: {},
       assignmentEditingTaskId: null,
       selectedAiPreviewCandidateId: null,
       lookupMaps: null,
@@ -3516,6 +3535,10 @@
       if (!can("quote.view_all")) return "";
       if (!row.item) return `<span class="muted">需求项生成中</span>`;
       const selectedItem = row.quotationItem || quotationItemById(row.mapping?.quotation_item_id);
+      const selectedQuotation = selectedItem?.quotation_id ? quotationById(selectedItem.quotation_id) : null;
+      const selectedQuoteSummary = selectedItem
+        ? `${selectedQuotation ? `${quotationDisplayName(selectedQuotation)} · ` : ""}${selectedItem.item_code} · ${selectedItem.item_name}`
+        : "已确认报价子项";
       const isBusy = state.busyActionId === `quote-${row.item.id}`;
       const isConfirmed = row.item.quote_scope_status === "matched" || row.mapping?.mapping_status === "matched";
       const isEditingQuote = state.quoteEditingItemId === row.item.id;
@@ -3524,15 +3547,18 @@
           <div class="quote-action quote-action-compact" onclick="event.stopPropagation()">
             <span class="quote-status-pill">报价：${safeText(row.quoteStatus)}</span>
             <button class="btn" ${isBusy ? "disabled" : ""} onclick="loadRequirementQuoteOptions('${row.requirement.id}')">${isBusy ? "加载中..." : "重新选择"}</button>
-            <span class="row-sub">${safeText(selectedItem ? `${selectedItem.item_code} · ${selectedItem.item_name}` : "已确认报价子项")}</span>
+            <span class="row-sub">${safeText(selectedQuoteSummary)}</span>
           </div>
         `;
       }
-      const hasLoadedItems = quotationsForCustomer(row.requirement.customer_code).some(quotation => (state.quotationItemsById[quotation.id] || []).length);
+      const hasLoadedQuotations = quotationsForCustomer(row.requirement.customer_code).some(quotation => state.quotationItemsById[quotation.id]);
       return `
-        <div class="quote-action ${hasLoadedItems || selectedItem ? "with-select" : "quote-action-compact"}" onclick="event.stopPropagation()">
-          ${hasLoadedItems || selectedItem
-            ? `<select id="requirement-quote-item-${row.item.id}" ${isBusy ? "disabled" : ""}>
+        <div class="quote-action ${hasLoadedQuotations || selectedItem ? "with-contract" : "quote-action-compact"}" onclick="event.stopPropagation()">
+          ${hasLoadedQuotations || selectedItem
+            ? `<select id="requirement-quotation-${row.item.id}" ${isBusy ? "disabled" : ""} onchange="setRequirementQuoteContract('${row.item.id}', this.value)">
+                ${requirementQuotationOptions(row)}
+              </select>
+              <select id="requirement-quote-item-${row.item.id}" ${isBusy ? "disabled" : ""}>
                 ${requirementQuoteItemOptions(row)}
               </select>
               <button class="btn ${selectedItem ? "" : "primary"}" ${isBusy ? "disabled" : ""} onclick="saveRequirementQuoteMapping('${row.requirement.id}')">${isBusy ? "保存中..." : "确认"}</button>`
@@ -3541,23 +3567,45 @@
         </div>
       `;
     }
-    function requirementQuoteItemOptions(row) {
+    function requirementSelectedQuotationId(row) {
+      const selectedItem = row.quotationItem || quotationItemById(row.mapping?.quotation_item_id);
       const quotations = quotationsForCustomer(row.requirement.customer_code);
-      const selectedId = row.mapping?.quotation_item_id || "";
-      const options = [`<option value="">选择报价子项</option>`];
+      const storedQuotationId = state.quoteSelectedQuotationByItemId[row.item.id];
+      if (storedQuotationId && quotations.some(item => item.id === storedQuotationId)) return storedQuotationId;
+      if (row.mapping?.quotation_id && quotations.some(item => item.id === row.mapping.quotation_id)) return row.mapping.quotation_id;
+      if (selectedItem?.quotation_id && quotations.some(item => item.id === selectedItem.quotation_id)) return selectedItem.quotation_id;
+      return quotations[0]?.id || "";
+    }
+    function requirementQuotationOptions(row) {
+      const quotations = quotationsForCustomer(row.requirement.customer_code);
+      const selectedQuotationId = requirementSelectedQuotationId(row);
+      const options = [`<option value="">选择合同</option>`];
       for (const quotation of quotations) {
-        const items = state.quotationItemsById[quotation.id] || [];
-        if (!items.length) continue;
-        options.push(`<optgroup label="${escapeAttr(quotation.quotation_no)} · ${escapeAttr(new Date(quotation.created_at).toLocaleDateString())}">`);
-        for (const item of items) {
-          options.push(`<option value="${item.id}" ${item.id === selectedId ? "selected" : ""}>${escapeHtml(item.item_code)} · ${escapeHtml(item.item_name)} · ${formatMoney(item.unit_price)} / ${escapeHtml(item.unit || "项")}</option>`);
-        }
-        options.push(`</optgroup>`);
+        options.push(`<option value="${quotation.id}" ${quotation.id === selectedQuotationId ? "selected" : ""}>${escapeHtml(quotationDisplayName(quotation))}</option>`);
       }
       if (options.length === 1) {
-        options.push(`<option value="" disabled>该基金暂无可选报价子项，请先上传合同报价</option>`);
+        options.push(`<option value="" disabled>该基金暂无合同报价</option>`);
       }
       return options.join("");
+    }
+    function requirementQuoteItemOptions(row) {
+      const selectedQuotationId = requirementSelectedQuotationId(row);
+      const selectedId = row.mapping?.quotation_item_id || "";
+      const items = selectedQuotationId ? (state.quotationItemsById[selectedQuotationId] || []) : [];
+      const options = [`<option value="">选择报价子项</option>`];
+      for (const item of items) {
+        options.push(`<option value="${item.id}" ${item.id === selectedId ? "selected" : ""}>${escapeHtml(item.item_code)} · ${escapeHtml(item.item_name)} · ${formatMoney(item.unit_price)} / ${escapeHtml(item.unit || "项")}</option>`);
+      }
+      if (!selectedQuotationId) {
+        options.push(`<option value="" disabled>请先选择合同</option>`);
+      } else if (options.length === 1) {
+        options.push(`<option value="" disabled>这份合同暂无报价子项</option>`);
+      }
+      return options.join("");
+    }
+    function setRequirementQuoteContract(requirementItemId, quotationId) {
+      state.quoteSelectedQuotationByItemId[requirementItemId] = quotationId || "";
+      renderRequirementBoard();
     }
     function quotationsForCustomer(customerId) {
       return state.quotations
@@ -3579,6 +3627,11 @@
           toast("该基金暂无合同报价，请先上传合同报价");
           return;
         }
+        const selectedItem = row.quotationItem || quotationItemById(row.mapping?.quotation_item_id);
+        state.quoteSelectedQuotationByItemId[row.item.id] =
+          row.mapping?.quotation_id ||
+          selectedItem?.quotation_id ||
+          quotations[0].id;
         await Promise.all(quotations.map(async quotation => {
           if (!state.quotationItemsById[quotation.id]) {
             state.quotationItemsById[quotation.id] = await request(`/quotations/${quotation.id}/items`);
@@ -3599,14 +3652,17 @@
       if (!can("quote.manage_all")) return toast("当前账号没有报价操作权限。");
       const row = requirementRows().find(item => item.requirement.id === requirementId);
       if (!row?.item) return toast("需求项还未生成，暂不能适配报价");
+      const quotationId = qs(`requirement-quotation-${row.item.id}`)?.value || state.quoteSelectedQuotationByItemId[row.item.id] || "";
+      if (!quotationId) return toast("请先选择合同");
       const quotationItemId = qs(`requirement-quote-item-${row.item.id}`)?.value;
       if (!quotationItemId) return toast("请选择报价子项");
       const quotationItem = quotationItemById(quotationItemId);
       if (!quotationItem) return toast("报价子项未加载，请重新打开选择");
+      if (quotationItem.quotation_id !== quotationId) return toast("报价子项不属于当前合同，请重新选择");
       const body = {
         projectId: row.requirement.project_id,
         requirementItemId: row.item.id,
-        quotationId: quotationItem.quotation_id,
+        quotationId,
         quotationItemId,
         mappingStatus: "matched",
         mappingType: "manual",
@@ -3626,6 +3682,7 @@
           item.id === row.item.id ? { ...item, quote_scope_status: "matched" } : item
         );
         state.quoteEditingItemId = null;
+        delete state.quoteSelectedQuotationByItemId[row.item.id];
         invalidateLookupMaps();
         renderRequirementBoard();
         state.busyActionId = null;
@@ -3953,6 +4010,21 @@
         <span>合同报价可覆盖多个业务大类；生成后请在“报价子项维度规则”里为各子项配置适用维度。</span>
       `;
     }
+    function normalizeCompactMonthInput(value, label) {
+      const text = String(value || "").trim();
+      if (!text) return "";
+      if (/^\d{6}$/.test(text)) {
+        const month = text.slice(4, 6);
+        if (Number(month) < 1 || Number(month) > 12) {
+          toast(`${label}月份必须为 01-12`);
+          return false;
+        }
+        return `${text.slice(0, 4)}-${month}`;
+      }
+      if (/^\d{4}-(0[1-9]|1[0-2])$/.test(text)) return text;
+      toast(`${label}请填写 yyyyMM，例如 202601`);
+      return false;
+    }
     async function loadQuotationFile() {
       const file = qs("quotationFile").files?.[0];
       if (!file) return;
@@ -4098,6 +4170,13 @@
       if (!rawContent) return toast("请先上传或粘贴合同报价内容");
       const project = await syncQuoteProjectSelection(true);
       if (!project) return toast("请先选择基金客户");
+      const contractStartMonth = normalizeCompactMonthInput(qs("quotationStartMonth")?.value, "开始月份");
+      if (contractStartMonth === false) return;
+      const contractEndMonth = normalizeCompactMonthInput(qs("quotationEndMonth")?.value, "结束月份");
+      if (contractEndMonth === false) return;
+      if (contractStartMonth && contractEndMonth && contractStartMonth > contractEndMonth) {
+        return toast("合同开始月份不能晚于结束月份");
+      }
       const button = qs("importQuotationButton");
       state.busyActionId = "quotation-import";
       if (button) {
@@ -4110,6 +4189,8 @@
           body: {
             projectId: project.id,
             customerCode: qs("quoteCustomerSelect").value,
+            contractStartMonth,
+            contractEndMonth,
             rawContent,
             fileName: state.loadedQuotationFileName || "手工粘贴合同报价",
           },
@@ -4147,6 +4228,8 @@
     function clearQuotationForm() {
       qs("quotationFile").value = "";
       qs("quotationContent").value = "";
+      if (qs("quotationStartMonth")) qs("quotationStartMonth").value = "";
+      if (qs("quotationEndMonth")) qs("quotationEndMonth").value = "";
       state.loadedQuotationFileName = null;
       renderQuotationPreview([]);
       renderQuotationMetrics([]);
@@ -4174,6 +4257,40 @@
       }
       if (isViewActive("settlement")) loadSettlementStatement(false);
     }
+    function quotationContractPeriodLabel(quotation) {
+      const start = quotation?.contract_start_month;
+      const end = quotation?.contract_end_month;
+      if (start && end) return `${start} 至 ${end}`;
+      if (start) return `${start} 起`;
+      if (end) return `截至 ${end}`;
+      return "未设置";
+    }
+    function quotationContractPeriodCompactLabel(quotation) {
+      const start = quotation?.contract_start_month;
+      const end = quotation?.contract_end_month;
+      const compactStart = compactMonthLabel(start);
+      const compactEnd = compactMonthLabel(end);
+      if (compactStart && compactEnd) return `${compactStart}~${compactEnd}`;
+      if (compactStart) return `${compactStart} 起`;
+      if (compactEnd) return `截至 ${compactEnd}`;
+      return "";
+    }
+    function compactMonthLabel(value) {
+      const match = /^(\d{4})-(\d{2})$/.exec(String(value || ""));
+      return match ? `${match[1]}${match[2]}` : "";
+    }
+    function quotationDisplayName(quotation) {
+      if (!quotation) return "合同报价";
+      const customer = customerName(quotation.customer_code) || quotation.customer_code || "未命名基金";
+      const period = quotationContractPeriodCompactLabel(quotation);
+      return `${customer}合同报价${period ? `(${period})` : ""}`;
+    }
+    function quotationSystemSubtitle(quotation) {
+      if (!quotation) return "";
+      const parts = [`系统编号 ${quotation.quotation_no}`];
+      if (quotation.remark) parts.push(quotation.remark);
+      return parts.join(" · ");
+    }
     function renderQuotationsBoard() {
       const box = qs("quotationsBoard");
       if (!box) return;
@@ -4184,11 +4301,11 @@
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>合同报价</th><th>基金客户</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+          <thead><tr><th>合同名称</th><th>基金客户</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
           <tbody>
             ${state.quotations.map(item => `
               <tr class="${state.selectedQuotationId === item.id ? "requirement-row active" : "requirement-row"}">
-                <td><div class="row-title">${safeText(item.quotation_no)}</div><div class="row-sub">${safeText(item.remark || item.pricing_basis)}</div></td>
+                <td><div class="row-title">${safeText(quotationDisplayName(item))}</div><div class="row-sub">${safeText(quotationSystemSubtitle(item))}</div></td>
                 <td>${safeText(customerName(item.customer_code))}</td>
                 <td><span class="tag">${quotationStatusLabel(item.status)}</span></td>
                 <td>${new Date(item.created_at).toLocaleString()}</td>
@@ -4223,7 +4340,7 @@
       const quotation = state.quotations.find(item => item.id === quotationId);
       const confirmed = await confirmDialog({
         title: "删除合同报价",
-        message: `确认删除合同报价「${quotation?.quotation_no || "这张合同报价"}」吗？报价子项也会一起删除。`,
+        message: `确认删除「${quotation ? quotationDisplayName(quotation) : "这张合同报价"}」吗？报价子项也会一起删除。`,
         okText: "删除",
       });
       if (!confirmed) return;
@@ -4249,7 +4366,7 @@
       const box = qs("quotationItemsBoard");
       if (!box) return;
       const quotation = state.quotations.find(item => item.id === quotationId);
-      qs("selectedQuotationHint").textContent = quotation ? quotation.quotation_no : "请选择合同报价";
+      qs("selectedQuotationHint").textContent = quotation ? quotationDisplayName(quotation) : "请选择合同报价";
       if (!quotationId || !quotation) {
         state.addingQuotationItem = false;
         state.editingQuotationItemId = null;
@@ -4485,7 +4602,7 @@
       if (!select) return;
       const quotations = workbench?.quotations || [];
       select.innerHTML = quotations.length
-        ? quotations.map(item => `<option value="${item.id}">${item.quotation_no} · ${new Date(item.created_at).toLocaleDateString()}</option>`).join("")
+        ? quotations.map(item => `<option value="${item.id}">${quotationDisplayName(item)} · ${item.quotation_no}</option>`).join("")
         : `<option value="">该基金本季度暂无合同报价</option>`;
       select.value = workbench?.selectedQuotation?.id || "";
       qs("quarterSuggestButton").disabled = !workbench?.selectedQuotation;
@@ -4897,6 +5014,7 @@
           contactContextName: contactContext?.contact_name || "-",
           quarter: workbench.quarter,
           quotationNo: workbench.selectedQuotation?.quotation_no || "-",
+          quotationName: workbench.selectedQuotation ? quotationDisplayName(workbench.selectedQuotation) : "-",
           requirementCode: row.requirement?.requirement_code || "-",
           requirementTitle: row.requirement?.title || row.requirementItem.item_title,
           requirementItemTitle: row.requirementItem.item_title,
@@ -5056,7 +5174,7 @@
           <tbody>
             ${rows.map(row => `
               <tr>
-                <td>${safeText(row.customerName)}<br><span class="row-sub">${safeText(row.quarter)} · ${safeText(row.quotationNo)}</span></td>
+                <td>${safeText(row.customerName)}<br><span class="row-sub">${safeText(row.quarter)} · ${safeText(row.quotationName)}${row.quotationNo && row.quotationNo !== "-" ? `<br>系统编号 ${safeText(row.quotationNo)}` : ""}</span></td>
                 <td>${safeText(row.contactContextName)}</td>
                 <td>${safeText(settlementRowDateKey(row) || "-")}</td>
                 <td><div class="row-title">${safeText(row.requirementItemTitle)}</div><div class="row-sub">${safeText(row.requirementCode)}<br>${safeText(row.taskNo)} ${safeText(row.taskName)}</div></td>
@@ -5082,7 +5200,7 @@
         row.customerName,
         row.contactContextName,
         row.quarter,
-        row.quotationNo,
+        row.quotationName,
         settlementRowDateKey(row) || "-",
         row.requirementCode,
         row.requirementTitle,
