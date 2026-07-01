@@ -30,6 +30,10 @@ export class CreateWechatGroupConfigDto {
 
   @IsOptional()
   @IsString()
+  groupNickname?: string;
+
+  @IsOptional()
+  @IsString()
   contactContextConfigId?: string;
 
   @IsOptional()
@@ -37,8 +41,16 @@ export class CreateWechatGroupConfigDto {
   businessPlatform?: string;
 
   @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
   @IsBoolean()
   collectEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  nicknameUpdated?: boolean;
 
   @IsOptional()
   @IsInt()

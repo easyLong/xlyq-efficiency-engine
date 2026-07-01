@@ -29,6 +29,10 @@ export class UpdateWechatGroupConfigDto {
 
   @IsOptional()
   @IsString()
+  groupNickname?: string;
+
+  @IsOptional()
+  @IsString()
   contactContextConfigId?: string;
 
   @IsOptional()
@@ -42,6 +46,10 @@ export class UpdateWechatGroupConfigDto {
   @IsOptional()
   @IsBoolean()
   collectEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  nicknameUpdated?: boolean;
 
   @IsOptional()
   @IsInt()

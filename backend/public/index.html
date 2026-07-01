@@ -268,6 +268,26 @@
       gap: 8px;
     }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .form-grid .wide { grid-column: 1 / -1; }
+    .inline-editor {
+      margin: 12px 0 16px;
+      padding: 14px;
+      border: 1px solid rgba(15,23,42,.08);
+      border-radius: 8px;
+      background: rgba(248,250,252,.78);
+    }
+    .inline-editor-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .inline-editor-head h4 {
+      margin: 0;
+      font-size: 15px;
+      color: #111827;
+    }
     .side-stack { display: grid; gap: 16px; position: sticky; top: 24px; }
     .panel {
       background: rgba(255,255,255,.82);
@@ -1305,6 +1325,7 @@
         <button data-view="quotations" onclick="switchView('quotations')">合同报价录入</button>
         <button data-view="settlement" onclick="switchView('settlement')">结算统计</button>
         <button data-view="dashboard" onclick="switchView('dashboard')">需求面板</button>
+        <button data-view="groups" onclick="switchView('groups')">群管理</button>
         <button data-view="messages" onclick="switchView('messages')">消息记录</button>
       </nav>
       <button id="logoutButton" class="btn warn" onclick="logout()">退出登录</button>
@@ -1712,6 +1733,63 @@
         </div>
       </section>
 
+      <section id="view-groups" class="grid hidden">
+        <div class="panel">
+          <div class="section-title">
+            <div>
+              <div class="kicker">Group Mapping</div>
+              <h3>群映射列表</h3>
+              <p>展示并维护微信群、基金客户、业务平台和对接人的映射关系，可在页面新增、停用或删除群信息。</p>
+            </div>
+            <div class="btns">
+              <button class="btn primary" onclick="openGroupCreatePanel()">新增群信息</button>
+              <button class="btn" onclick="refreshGroupManagement()">刷新</button>
+            </div>
+          </div>
+          <div id="groupDimensionFilters" class="dashboard-filter-bar"></div>
+          <div id="groupCreatePanel" class="inline-editor hidden">
+            <div class="inline-editor-head">
+              <h4>新增群信息</h4>
+              <button class="btn" onclick="closeGroupCreatePanel()">收起</button>
+            </div>
+            <div class="form-grid">
+              <label>群名称
+                <input id="createGroupNameInput" placeholder="例如：【KOC】1029理财通私享会运营" />
+              </label>
+              <label>基金
+                <select id="createGroupCustomerSelect"></select>
+              </label>
+              <label>平台
+                <select id="createGroupBusinessPlatformSelect"></select>
+              </label>
+              <label>群昵称
+                <input id="createGroupNicknameInput" placeholder="用于在微信群中查找成员" />
+              </label>
+              <label>对接人
+                <input id="createGroupContactNameInput" placeholder="对接人真名" />
+              </label>
+              <label>微信备注进度
+                <select id="createGroupNicknameUpdatedSelect">
+                  <option value="0">待处理</option>
+                  <option value="1">已完成</option>
+                </select>
+              </label>
+              <label>是否启用
+                <select id="createGroupStatusSelect">
+                  <option value="active">启用</option>
+                  <option value="inactive">停用</option>
+                </select>
+              </label>
+            </div>
+            <div class="btns">
+              <button id="saveGroupCreateButton" class="btn primary" onclick="saveGroupMapping()">保存群信息</button>
+              <button class="btn" onclick="resetGroupCreateForm()">清空</button>
+            </div>
+          </div>
+          <div id="groupManagementBoard" class="table-wrap"></div>
+        </div>
+      </section>
+
       <section id="view-messages" class="grid hidden">
         <div class="panel">
           <h3>员工消息记录</h3>
@@ -1778,6 +1856,14 @@
       projects: [],
       customers: [],
       contactContexts: [],
+      groupMappings: [],
+      groupCreateOpen: false,
+      groupFilters: {
+        customerCode: "all",
+        businessPlatform: "all",
+        contactName: "all",
+        enabledStatus: "active",
+      },
       businessCategoryRelations: [],
       requirements: [],
       requirementItems: [],
@@ -1879,6 +1965,7 @@
         mappings: "page.quotations",
         settlement: "page.settlement",
         dashboard: "page.dashboard",
+        groups: "page.group_management",
         messages: "page.messages",
       }[view] || null;
     }
@@ -1892,7 +1979,7 @@
       });
       qs("manualIntakePanel")?.classList.toggle("hidden", !can("requirement.create"));
       qs("aiPreviewPanel")?.classList.toggle("hidden", !(can("ai_preview.view_all") || can("ai_preview.view_owned")));
-      if (["quotations", "mappings", "settlement", "dashboard", "messages"].some(view => isViewActive(view) && !canView(view))) {
+      if (["quotations", "mappings", "settlement", "dashboard", "groups", "messages"].some(view => isViewActive(view) && !canView(view))) {
         switchView("requirements");
       }
     }
@@ -2105,6 +2192,7 @@
       renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", true, true);
       renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
       renderContactContextOptions();
+      renderGroupManagement();
       qs("projectTypeSelect").innerHTML = businessCategoryOptions(qs("projectTypeSelect")?.value || projectTypes[0]?.value || "", null);
       qs("businessPlatformInput").innerHTML = businessPlatformOptions("");
       syncProjectSelection(false);
@@ -2175,6 +2263,234 @@
     }
     function syncContactContextPreview(context) {
       if (qs("businessPlatformInput")) qs("businessPlatformInput").value = normalizeBusinessPlatform(context?.business_platform || "");
+    }
+    function groupStatusLabel(status) {
+      return { active: "启用", inactive: "停用", deleted: "已删除" }[status] || status || "-";
+    }
+    function groupNicknameLabel(value) {
+      return Number(value || 0) ? "已完成" : "待处理";
+    }
+    function groupCustomerOptions(selectedCode = "") {
+      return state.customers
+        .filter(customer => customer.customer_code)
+        .map(customer => `<option value="${escapeAttr(customer.customer_code)}" ${customer.customer_code === selectedCode ? "selected" : ""}>${escapeHtml(customer.customer_name || customer.customer_code)}</option>`)
+        .join("");
+    }
+    function renderGroupCreateForm() {
+      if (!qs("groupCreatePanel")) return;
+      const customerSelect = qs("createGroupCustomerSelect");
+      if (customerSelect) {
+        const selected = customerSelect.value || "";
+        customerSelect.innerHTML = groupCustomerOptions(selected);
+      }
+      const platformSelect = qs("createGroupBusinessPlatformSelect");
+      if (platformSelect) {
+        const selected = platformSelect.value || "";
+        platformSelect.innerHTML = businessPlatformOptions(selected);
+      }
+    }
+    function openGroupCreatePanel() {
+      state.groupCreateOpen = true;
+      renderGroupCreateForm();
+      qs("groupCreatePanel")?.classList.remove("hidden");
+    }
+    function closeGroupCreatePanel() {
+      state.groupCreateOpen = false;
+      resetGroupCreateForm();
+      qs("groupCreatePanel")?.classList.add("hidden");
+    }
+    function resetGroupCreateForm() {
+      ["createGroupNameInput", "createGroupNicknameInput", "createGroupContactNameInput"].forEach(id => { if (qs(id)) qs(id).value = ""; });
+      if (qs("createGroupCustomerSelect")) qs("createGroupCustomerSelect").selectedIndex = 0;
+      if (qs("createGroupBusinessPlatformSelect")) qs("createGroupBusinessPlatformSelect").value = "";
+      if (qs("createGroupNicknameUpdatedSelect")) qs("createGroupNicknameUpdatedSelect").value = "0";
+      if (qs("createGroupStatusSelect")) qs("createGroupStatusSelect").value = "active";
+    }
+    function groupCreatePayloadFromForm() {
+      const groupName = qs("createGroupNameInput")?.value.trim();
+      const customerCode = qs("createGroupCustomerSelect")?.value;
+      const businessPlatform = qs("createGroupBusinessPlatformSelect")?.value;
+      const groupNickname = qs("createGroupNicknameInput")?.value.trim();
+      const contactName = qs("createGroupContactNameInput")?.value.trim();
+      const status = qs("createGroupStatusSelect")?.value || "active";
+      if (!groupName) throw new Error("请填写群名称");
+      if (!customerCode) throw new Error("请选择基金");
+      if (!businessPlatform) throw new Error("请选择平台");
+      if (!groupNickname) throw new Error("请填写群昵称");
+      if (!contactName) throw new Error("请填写对接人");
+      return {
+        groupName,
+        customerCode,
+        businessPlatform,
+        groupNickname,
+        contactName,
+        nicknameUpdated: qs("createGroupNicknameUpdatedSelect")?.value === "1",
+        collectEnabled: status === "active",
+        status,
+        remark: groupName,
+      };
+    }
+    async function saveGroupMapping() {
+      let payload;
+      try {
+        payload = groupCreatePayloadFromForm();
+      } catch (error) {
+        toast(error.message);
+        return;
+      }
+      const button = qs("saveGroupCreateButton");
+      if (button) button.disabled = true;
+      try {
+        await request("/contact-contexts/wechat-groups", { method: "POST", body: payload });
+        toast("群信息已新增");
+        closeGroupCreatePanel();
+        await refreshGroupManagement();
+        state.contactContexts = unwrap(await request("/contact-contexts?status=active").catch(() => state.contactContexts));
+        renderContactContextOptions();
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function refreshGroupManagement() {
+      if (!canView("groups")) return;
+      state.groupMappings = unwrap(await request("/contact-contexts/wechat-groups"));
+      renderGroupManagement();
+    }
+    function uniqueGroupOptions(getter) {
+      const seen = new Map();
+      state.groupMappings.forEach(item => {
+        const value = String(getter(item)?.value ?? "").trim();
+        const label = String(getter(item)?.label ?? value).trim();
+        if (value && !seen.has(value)) seen.set(value, label || value);
+      });
+      return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN"));
+    }
+    function groupFilterSelect(label, key, allLabel, options) {
+      const selected = state.groupFilters[key] || "all";
+      return `
+        <label>
+          <span>${label}</span>
+          <select onchange="setGroupDimensionFilter('${key}', this.value)">
+            <option value="all">${allLabel}</option>
+            ${options.map(item => `<option value="${escapeAttr(item.value)}" ${selected === item.value ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}
+          </select>
+        </label>
+      `;
+    }
+    function renderGroupDimensionFilters() {
+      const box = qs("groupDimensionFilters");
+      if (!box) return;
+      const customerOptions = uniqueGroupOptions(item => ({
+        value: item.customer_code,
+        label: item.customer_name || item.customer_code,
+      }));
+      const platformOptions = uniqueGroupOptions(item => ({
+        value: item.business_platform,
+        label: item.business_platform,
+      }));
+      const contactOptions = uniqueGroupOptions(item => ({
+        value: item.contact_name,
+        label: item.contact_name,
+      }));
+      const statusOptions = [
+        { value: "active", label: "启用" },
+        { value: "inactive", label: "停用" },
+      ];
+      box.innerHTML = [
+        groupFilterSelect("基金", "customerCode", "全部基金", customerOptions),
+        groupFilterSelect("平台", "businessPlatform", "全部平台", platformOptions),
+        groupFilterSelect("对接人", "contactName", "全部对接人", contactOptions),
+        groupFilterSelect("是否启用", "enabledStatus", "全部状态", statusOptions),
+        `<label class="filter-action"><button class="btn" onclick="resetGroupDimensionFilters()">清空筛选</button></label>`,
+      ].join("");
+    }
+    function filteredGroupMappings() {
+      const filters = state.groupFilters;
+      return state.groupMappings.filter(item => {
+        if (filters.customerCode !== "all" && item.customer_code !== filters.customerCode) return false;
+        if (filters.businessPlatform !== "all" && item.business_platform !== filters.businessPlatform) return false;
+        if (filters.contactName !== "all" && item.contact_name !== filters.contactName) return false;
+        if (filters.enabledStatus !== "all" && item.status !== filters.enabledStatus) return false;
+        return true;
+      });
+    }
+    function renderGroupManagement() {
+      const board = qs("groupManagementBoard");
+      if (!board) return;
+      renderGroupCreateForm();
+      renderGroupDimensionFilters();
+      const rows = filteredGroupMappings();
+      if (!state.groupMappings.length) {
+        board.innerHTML = `<div class="empty-list">暂无群映射。点击右上角“新增群信息”先添加一个群。</div>`;
+        return;
+      }
+      if (!rows.length) {
+        board.innerHTML = `<div class="empty-list">当前筛选下暂无群映射。</div>`;
+        return;
+      }
+      board.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>群名称</th>
+              <th>基金</th>
+              <th>平台</th>
+              <th>群昵称</th>
+              <th>对接人</th>
+              <th>微信备注进度</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(item => `
+              <tr>
+                <td><div class="row-title">${safeText(item.group_name)}</div><div class="row-sub">${safeText(item.remark || "")}</div></td>
+                <td>${safeText(item.customer_name || item.customer_code || "-")}</td>
+                <td>${safeText(item.business_platform || "-")}</td>
+                <td>${safeText(item.group_nickname || "-")}</td>
+                <td>${safeText(item.contact_name || "-")}</td>
+                <td><span class="tag">${safeText(groupNicknameLabel(item.nickname_updated))}</span></td>
+                <td><span class="tag">${safeText(groupStatusLabel(item.status))}</span></td>
+                <td>
+                  <div class="btns">
+                    <button class="btn" ${Number(item.nickname_updated || 0) ? "disabled" : ""} onclick="completeGroupNicknameStatus('${item.id}')">${Number(item.nickname_updated || 0) ? "已完成" : "备注已完成"}</button>
+                  </div>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+    async function completeGroupNicknameStatus(id) {
+      const item = state.groupMappings.find(row => row.id === id);
+      if (!item || Number(item.nickname_updated || 0)) return;
+      try {
+        await request(`/contact-contexts/wechat-groups/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: { nicknameUpdated: true },
+        });
+        await refreshGroupManagement();
+        toast("微信备注进度已完成");
+      } catch (error) {
+        toast(error.message);
+      }
+    }
+    function setGroupDimensionFilter(key, value) {
+      state.groupFilters[key] = value || "all";
+      renderGroupManagement();
+    }
+    function resetGroupDimensionFilters() {
+      state.groupFilters = {
+        customerCode: "all",
+        businessPlatform: "all",
+        contactName: "all",
+        enabledStatus: "active",
+      };
+      renderGroupManagement();
     }
     async function login() {
       const username = qs("loginUser").value;
@@ -2273,13 +2589,14 @@
         view = "requirements";
       }
       document.querySelectorAll(".nav button").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
-      ["requirements", "quotations", "mappings", "settlement", "dashboard", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
+      ["requirements", "quotations", "mappings", "settlement", "dashboard", "groups", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
       const titles = {
         requirements: ["需求与指派", "录入客户需求后自动生成任务，并在同一页完成员工指派。"],
         quotations: ["合同报价录入", "上传合同报价并拆成最细粒度子项，为后续需求任务挂靠做准备。"],
         mappings: ["报价子项选择", "在历史需求任务中为需求选择对应基金的报价子项。"],
         settlement: ["结算统计", "按基金、平台和业务分类统计结算金额与资产数量。"],
         dashboard: ["需求面板", "按不同维度查看需求进度、任务状态、延期风险和资产交付情况。"],
+        groups: ["群管理", "拉DP入群-->新增群信息-->DP微信号备注客户真名"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
       };
       qs("pageTitle").textContent = titles[view][0];
@@ -2288,6 +2605,7 @@
       if (view === "quotations") renderQuotationsBoard();
       if (view === "mappings") loadQuarterMappingWorkbench(false);
       if (view === "settlement") loadSettlementStatement(false);
+      if (view === "groups") refreshGroupManagement();
       if (view === "messages") refreshMessages();
       applyRoleVisibility();
     }
@@ -4236,17 +4554,23 @@
       toast("合同报价表单已清空");
     }
     async function refreshQuotations() {
-      const quotations = await request("/quotations");
+      const [quotations, projects] = await Promise.all([
+        request("/quotations"),
+        request("/projects"),
+      ]);
       state.quotations = unwrap(quotations);
+      state.projects = unwrap(projects);
       renderQuotationsBoard();
     }
     async function reloadQuotationItems(quotationId) {
       if (!quotationId) return;
-      const [quotations, items] = await Promise.all([
+      const [quotations, projects, items] = await Promise.all([
         request("/quotations"),
+        request("/projects"),
         request(`/quotations/${quotationId}/items`),
       ]);
       state.quotations = unwrap(quotations);
+      state.projects = unwrap(projects);
       state.quotationItemsById[quotationId] = unwrap(items);
       state.selectedQuotationId = quotationId;
       renderQuotationsBoard();
@@ -4280,6 +4604,8 @@
       return match ? `${match[1]}${match[2]}` : "";
     }
     function quotationDisplayName(quotation) {
+      const projectTitle = quotation ? getLookupMaps().projectById.get(quotation.project_id)?.project_name : "";
+      if (projectTitle) return projectTitle;
       if (!quotation) return "合同报价";
       const customer = customerName(quotation.customer_code) || quotation.customer_code || "未命名基金";
       const period = quotationContractPeriodCompactLabel(quotation);

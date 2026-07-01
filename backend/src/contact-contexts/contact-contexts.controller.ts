@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ContactContextsService } from './contact-contexts.service';
 import { CreateContactContextConfigDto } from './dto/create-contact-context-config.dto';
 import { CreateSourceContactContextDto } from './dto/create-source-contact-context.dto';
@@ -44,6 +53,11 @@ export class ContactContextsController {
     @Body() dto: UpdateWechatGroupConfigDto,
   ) {
     return this.contactContextsService.updateWechatGroupConfig(id, dto);
+  }
+
+  @Delete('wechat-groups/:id')
+  deleteWechatGroupConfig(@Param('id') id: string) {
+    return this.contactContextsService.deleteWechatGroupConfig(id);
   }
 
   @Get('sources')

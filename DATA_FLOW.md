@@ -369,3 +369,53 @@ AI 提示词：
 - `group_contact_mappings`：群、群内对接人、基金客户、业务平台、采集状态。
 
 历史需求看板只限制最新需求数量；这些需求下的需求项、任务和报价映射完整拉取，避免全局分页截断导致状态不一致。
+## 2026-07-01 群管理与合同报价整理补充
+
+### 群管理链路
+
+群管理页面直接维护 `group_contact_mappings`，用于让需求录入和 AI 候选需求确认时能根据群、基金、平台和对接人快速定位上下文。
+
+新增群的业务流程为：
+
+```text
+拉 DP 入群 -> 新增群信息 -> DP 微信号备注客户真名
+```
+
+关键字段：
+
+- `group_key`：系统自动生成的群标识，前端不再人工填写。
+- `group_name`：微信群名称。
+- `customer_code`：基金客户编码，关联 `customers.customer_code`。
+- `business_platform`：业务平台。
+- `group_nickname`：微信群里用于定位 DP 微信号的昵称。
+- `contact_name`：真实对接人姓名。
+- `nickname_updated`：是否已经把 DP 微信备注改为客户真名；页面按钮完成后置灰。
+- `status`：是否启用，当前筛选默认查看启用数据。
+
+一行群映射可以表示“某个群中的某个对接人”，同一个微信群如有多个对接人，可维护多行，共用 `group_name` 和 `group_key`，但 `contact_name` 不同。
+
+### 合同报价录入规范
+
+人工录入合同报价时继续写入：
+
+- `projects`
+- `quotations`
+- `quotation_items`
+
+报价子项编码统一使用短格式：
+
+```text
+ITEM-001
+ITEM-002
+...
+```
+
+不要在 `quotation_items.item_code` 中拼接基金简称、年份或合同编号；合同归属由 `quotation_id` 决定，短编码更利于页面展示和人工核对。
+
+报价子项名称建议只保留可匹配层级，例如：
+
+```text
+运营服务 > 线上物料设计 > 长图新设计
+```
+
+长服务说明、字数范围、屏数限制、结算条件等放入 `quotation_items.remark`。区间价、按实际需求定价、询价项统一按可变价处理：`pricing_mode = variable`、`unit_price = 0`、`match_status = price_missing`。

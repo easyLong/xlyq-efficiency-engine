@@ -1083,3 +1083,27 @@ AI 建议采纳记录表。
 2. MySQL 建表 SQL
 3. ORM 实体定义
 4. 核心接口清单
+## 2026-07-01 表结构补充
+
+### `group_contact_mappings` 新增字段
+
+群映射表补充两个字段，用于支撑群管理页面的微信备注维护流程：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `group_nickname` | varchar(128), null | 群内用于查找 DP 微信号的昵称 |
+| `nickname_updated` | tinyint(1), not null default 0 | 是否已经把 DP 微信备注改为客户真名 |
+
+当前群管理页面不要求人工输入 `group_key`，新增时由后端按客户编码生成递增群标识。一个群有多个对接人时，仍按多行维护，每行对应一个 `contact_name`。
+
+### `quotation_items.item_code` 约定
+
+报价子项编码在同一报价单内唯一即可，统一采用短格式：
+
+```text
+ITEM-001
+ITEM-002
+ITEM-003
+```
+
+不要把基金简称、年份或合同号写入 `item_code`。基金和合同归属通过 `quotation_id -> quotations -> projects/customers` 关联表达。

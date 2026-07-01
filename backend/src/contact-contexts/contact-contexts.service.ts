@@ -49,12 +49,13 @@ export class ContactContextsService implements OnModuleInit {
           'mapping.group_name LIKE ?',
           'mapping.group_key LIKE ?',
           'mapping.contact_name LIKE ?',
+          'mapping.group_nickname LIKE ?',
           'mapping.business_platform LIKE ?',
           'customer.customer_name LIKE ?',
         ].join(' OR '),
       );
       const like = `%${keyword}%`;
-      params.push(like, like, like, like, like);
+      params.push(like, like, like, like, like, like);
     }
     return this.dataSource.query(
       `
@@ -63,12 +64,14 @@ export class ContactContextsService implements OnModuleInit {
           mapping.group_key,
           mapping.group_name,
           mapping.contact_name,
+          mapping.group_nickname,
           NULL AS contact_mobile,
           NULL AS contact_email,
           mapping.customer_code AS customer_id,
           mapping.customer_code,
           mapping.business_platform,
           mapping.collect_enabled,
+          mapping.nickname_updated,
           mapping.status,
           mapping.remark,
           mapping.created_at,
@@ -96,12 +99,14 @@ export class ContactContextsService implements OnModuleInit {
           mapping.group_key,
           mapping.group_name,
           mapping.contact_name,
+          mapping.group_nickname,
           NULL AS contact_mobile,
           NULL AS contact_email,
           mapping.customer_code AS customer_id,
           mapping.customer_code,
           mapping.business_platform,
           mapping.collect_enabled,
+          mapping.nickname_updated,
           mapping.status,
           mapping.remark,
           mapping.created_at,
@@ -137,11 +142,12 @@ export class ContactContextsService implements OnModuleInit {
           'mapping.group_name LIKE ?',
           'mapping.group_key LIKE ?',
           'mapping.contact_name LIKE ?',
+          'mapping.group_nickname LIKE ?',
           'customer.customer_name LIKE ?',
         ].join(' OR '),
       );
       const like = `%${keyword}%`;
-      params.push(like, like, like, like);
+      params.push(like, like, like, like, like);
     }
     return this.dataSource.query(
       `
@@ -164,6 +170,7 @@ export class ContactContextsService implements OnModuleInit {
           mapping.updated_at,
           mapping.deleted_at,
           mapping.contact_name,
+          mapping.group_nickname,
           mapping.customer_code AS customer_id,
           mapping.customer_code,
           mapping.business_platform,
@@ -195,11 +202,12 @@ export class ContactContextsService implements OnModuleInit {
           'mapping.group_key LIKE ?',
           'customer.customer_name LIKE ?',
           'mapping.contact_name LIKE ?',
+          'mapping.group_nickname LIKE ?',
           'mapping.business_platform LIKE ?',
         ].join(' OR '),
       );
       const like = `%${keyword}%`;
-      params.push(like, like, like, like, like);
+      params.push(like, like, like, like, like, like);
     }
     return this.dataSource.query(
       `
@@ -208,12 +216,14 @@ export class ContactContextsService implements OnModuleInit {
           mapping.group_key AS group_id,
           mapping.group_name,
           mapping.group_key AS source_key,
+          mapping.group_nickname,
           mapping.customer_code AS customer_id,
           mapping.customer_code,
           mapping.id AS contact_context_config_id,
           mapping.business_platform,
           mapping.status,
           mapping.collect_enabled,
+          mapping.nickname_updated,
           100 AS sort_order,
           mapping.remark,
           mapping.created_at,
@@ -249,19 +259,21 @@ export class ContactContextsService implements OnModuleInit {
     if (!contactName) {
       throw new BadRequestException('Contact name is required');
     }
-    const groupKey = dto.groupId || this.makeGroupKey(dto.groupName);
+    const groupKey = dto.groupId || (await this.nextGroupKey(customerCode));
     const saved = await this.upsertGroupContactMapping({
       id: dto.contactContextConfigId,
       groupKey,
       groupName: dto.groupName,
       contactName,
+      groupNickname: this.normalizeNullableText(dto.groupNickname),
       customerCode,
       businessPlatform:
         dto.businessPlatform ??
         this.normalizeNullableText(existingContext?.business_platform),
       collectEnabled:
         dto.collectEnabled === undefined ? true : dto.collectEnabled,
-      status: 'active',
+      nicknameUpdated: dto.nicknameUpdated === true,
+      status: dto.status ?? 'active',
       remark: dto.remark ?? null,
     });
     return this.toWechatGroupConfigShape(saved);
@@ -270,35 +282,74 @@ export class ContactContextsService implements OnModuleInit {
   async updateWechatGroupConfig(id: string, dto: UpdateWechatGroupConfigDto) {
     await this.ensureGroupContactMappingsSchema();
     const current = await this.findOne(id);
-    const customerCode =
-      dto.customerCode || dto.customerId
-        ? await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId)
-        : String(current.customer_code);
-    let existingContext: Record<string, unknown> | null = null;
-    if (dto.contactContextConfigId) {
-      existingContext = await this.findOne(dto.contactContextConfigId);
+    const updates: string[] = [];
+    const params: unknown[] = [];
+    const assign = (column: string, value: unknown) => {
+      updates.push(`${column} = ?`);
+      params.push(value);
+    };
+
+    if (dto.groupId !== undefined) assign('group_key', dto.groupId);
+    if (dto.groupName !== undefined) assign('group_name', dto.groupName);
+    if (dto.contactName !== undefined) assign('contact_name', dto.contactName);
+    if (dto.groupNickname !== undefined) {
+      assign('group_nickname', this.normalizeNullableText(dto.groupNickname));
     }
-    const saved = await this.upsertGroupContactMapping({
+    if (dto.customerCode !== undefined || dto.customerId !== undefined) {
+      assign(
+        'customer_code',
+        await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId),
+      );
+    }
+    if (dto.businessPlatform !== undefined) {
+      assign('business_platform', this.normalizeNullableText(dto.businessPlatform));
+    }
+    if (dto.collectEnabled !== undefined) {
+      assign('collect_enabled', dto.collectEnabled ? 1 : 0);
+    } else if (dto.status !== undefined) {
+      assign('collect_enabled', dto.status === 'active' ? 1 : 0);
+    }
+    if (dto.nicknameUpdated !== undefined) {
+      assign('nickname_updated', dto.nicknameUpdated ? 1 : 0);
+    }
+    if (dto.status !== undefined) assign('status', dto.status);
+    if (dto.remark !== undefined) assign('remark', dto.remark ?? null);
+
+    if (!updates.length) return this.toWechatGroupConfigShape(current);
+
+    await this.dataSource.query(
+      `
+        UPDATE group_contact_mappings
+        SET ${updates.join(', ')},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND deleted_at IS NULL
+      `,
+      [...params, id],
+    );
+
+    return this.toWechatGroupConfigShape(await this.findOne(id));
+  }
+
+  async deleteWechatGroupConfig(id: string) {
+    await this.ensureGroupContactMappingsSchema();
+    const current = await this.findOne(id);
+    await this.dataSource.query(
+      `
+        UPDATE group_contact_mappings
+        SET deleted_at = CURRENT_TIMESTAMP,
+            status = 'deleted',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND deleted_at IS NULL
+      `,
+      [id],
+    );
+    return {
+      success: true,
       id,
-      groupKey: dto.groupId ?? String(current.group_key),
-      groupName: dto.groupName ?? String(current.group_name),
-      contactName:
-        dto.contactName ??
-        String(existingContext?.contact_name ?? current.contact_name),
-      customerCode,
-      businessPlatform:
-        dto.businessPlatform ??
-        this.normalizeNullableText(
-          existingContext?.business_platform ?? current.business_platform,
-        ),
-      collectEnabled:
-        dto.collectEnabled === undefined
-          ? Boolean(current.collect_enabled)
-          : dto.collectEnabled,
-      status: dto.status ?? String(current.status),
-      remark: dto.remark ?? (current.remark as string | null),
-    });
-    return this.toWechatGroupConfigShape(saved);
+      groupName: current.group_name,
+    };
   }
 
   async createSourceContext(dto: CreateSourceContactContextDto) {
@@ -388,9 +439,11 @@ export class ContactContextsService implements OnModuleInit {
         group_key VARCHAR(255) NOT NULL,
         group_name VARCHAR(255) NOT NULL,
         contact_name VARCHAR(64) NOT NULL,
+        group_nickname VARCHAR(128) NULL,
         customer_code VARCHAR(32) NOT NULL,
         business_platform VARCHAR(64) NULL,
         collect_enabled TINYINT(1) NOT NULL DEFAULT 1,
+        nickname_updated TINYINT(1) NOT NULL DEFAULT 0,
         status VARCHAR(32) NOT NULL DEFAULT 'active',
         remark VARCHAR(255) NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -410,10 +463,20 @@ export class ContactContextsService implements OnModuleInit {
       'VARCHAR(32) NULL',
     );
     await this.backfillGroupContactCustomerCodes();
+    await this.addColumnIfMissing(
+      'group_contact_mappings',
+      'group_nickname',
+      'VARCHAR(128) NULL AFTER contact_name',
+    );
     await this.modifyColumnIfNeeded(
       'group_contact_mappings',
       'customer_code',
       'VARCHAR(32) NOT NULL',
+    );
+    await this.addColumnIfMissing(
+      'group_contact_mappings',
+      'nickname_updated',
+      'TINYINT(1) NOT NULL DEFAULT 0 AFTER collect_enabled',
     );
     await this.dropForeignKeyIfExists(
       'group_contact_mappings',
@@ -437,9 +500,11 @@ export class ContactContextsService implements OnModuleInit {
     groupKey: string;
     groupName: string;
     contactName: string;
+    groupNickname?: string | null;
     customerCode: string;
     businessPlatform?: string | null;
     collectEnabled?: boolean;
+    nicknameUpdated?: boolean;
     status?: string;
     remark?: string | null;
   }) {
@@ -450,6 +515,7 @@ export class ContactContextsService implements OnModuleInit {
       throw new BadRequestException('Group and contact are required');
     }
     await this.ensureCustomerCode(input.customerCode);
+    const nicknameUpdated = await this.resolveNicknameUpdated(input);
     await this.dataSource.query(
       `
         INSERT INTO group_contact_mappings (
@@ -457,18 +523,22 @@ export class ContactContextsService implements OnModuleInit {
           group_key,
           group_name,
           contact_name,
+          group_nickname,
           customer_code,
           business_platform,
           collect_enabled,
+          nickname_updated,
           status,
           remark
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
           group_name = VALUES(group_name),
+          group_nickname = VALUES(group_nickname),
           customer_code = VALUES(customer_code),
           business_platform = VALUES(business_platform),
           collect_enabled = VALUES(collect_enabled),
+          nickname_updated = VALUES(nickname_updated),
           status = VALUES(status),
           remark = VALUES(remark),
           deleted_at = NULL,
@@ -479,9 +549,11 @@ export class ContactContextsService implements OnModuleInit {
         groupKey,
         groupName,
         contactName,
+        input.groupNickname || null,
         input.customerCode,
         input.businessPlatform || null,
         input.collectEnabled === false ? 0 : 1,
+        nicknameUpdated ? 1 : 0,
         input.status || 'active',
         input.remark ?? null,
       ],
@@ -504,6 +576,66 @@ export class ContactContextsService implements OnModuleInit {
       [groupKey, contactName],
     );
     return rows[0];
+  }
+
+  private async resolveNicknameUpdated(input: {
+    id?: string | null;
+    groupKey: string;
+    contactName: string;
+    nicknameUpdated?: boolean;
+  }) {
+    if (input.nicknameUpdated !== undefined) {
+      return input.nicknameUpdated;
+    }
+    const rows = await this.dataSource.query(
+      `
+        SELECT nickname_updated AS nicknameUpdated
+        FROM group_contact_mappings
+        WHERE ${
+          input.id
+            ? 'id = ?'
+            : 'group_key = ? AND contact_name = ?'
+        }
+        LIMIT 1
+      `,
+      input.id ? [input.id] : [input.groupKey, input.contactName],
+    );
+    return Boolean(rows?.[0]?.nicknameUpdated);
+  }
+
+  private async nextGroupKey(customerCode: string) {
+    const code = this.groupKeyCustomerCode(customerCode);
+    const prefix = `group_${code}`;
+    const rows = await this.dataSource.query(
+      `
+        SELECT group_key AS groupKey
+        FROM group_contact_mappings
+        WHERE group_key LIKE ?
+        LIMIT 1000
+      `,
+      [`${prefix}_%`],
+    );
+    const pattern = new RegExp(`^${this.escapeRegExp(prefix)}_(\\d+)$`);
+    const maxNo = rows.reduce((max: number, row: Record<string, unknown>) => {
+      const match = pattern.exec(String(row.groupKey ?? ''));
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+    const nextNo = maxNo + 1;
+    return `${prefix}_${String(nextNo).padStart(3, '0')}`;
+  }
+
+  private groupKeyCustomerCode(customerCode: string) {
+    const normalized = String(customerCode || '')
+      .trim()
+      .toLowerCase()
+      .replace(/基金$/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    return normalized || 'fund';
+  }
+
+  private escapeRegExp(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   private async backfillGroupContactCustomerCodes() {
@@ -588,12 +720,14 @@ export class ContactContextsService implements OnModuleInit {
       business_platform: mapping.business_platform,
       status: mapping.status,
       collect_enabled: mapping.collect_enabled,
+      nickname_updated: mapping.nickname_updated,
       sort_order: 100,
       remark: mapping.remark,
       created_at: mapping.created_at,
       updated_at: mapping.updated_at,
       deleted_at: mapping.deleted_at,
       contact_name: mapping.contact_name,
+      group_nickname: mapping.group_nickname,
       resolved_business_platform: mapping.business_platform,
     };
   }
@@ -618,6 +752,7 @@ export class ContactContextsService implements OnModuleInit {
       updated_at: mapping.updated_at,
       deleted_at: mapping.deleted_at,
       contact_name: mapping.contact_name,
+      group_nickname: mapping.group_nickname,
       customer_id: mapping.customer_code,
       customer_code: mapping.customer_code,
       business_platform: mapping.business_platform,

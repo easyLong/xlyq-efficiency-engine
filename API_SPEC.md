@@ -766,3 +766,19 @@
 ### `POST /notifications/feishu-sync-failure-scan`
 - 说明：扫描飞书同步失败日志并提醒管理员
 - 入参：`hours`
+## 2026-07-01 接口补充
+
+### 群管理
+
+群管理页面复用 `contact-contexts` 模块，底层数据表为 `group_contact_mappings`。
+
+- `GET /api/v1/contact-contexts/wechat-groups`：查询群映射列表，返回群名称、基金客户、业务平台、群昵称、对接人、微信备注进度和状态。
+- `POST /api/v1/contact-contexts/wechat-groups`：新增群信息。前端传入 `groupName`、`customerCode`、`businessPlatform`、`groupNickname`、`contactName`、`nicknameUpdated`、`status`；`group_key` 由后端自动生成。
+- `PATCH /api/v1/contact-contexts/wechat-groups/{id}`：更新群信息或单独更新 `nicknameUpdated`。群管理列表中的“备注已完成”只调用该接口更新当前行。
+- `DELETE /api/v1/contact-contexts/wechat-groups/{id}`：软删除群映射，写入 `deleted_at` 并将 `status` 置为 `deleted`。
+
+### 合同报价录入约定
+
+- `quotation_items.item_code` 在同一报价单内统一使用 `ITEM-001`、`ITEM-002` 这类短编码。
+- 报价项的基金、年份和合同归属通过 `quotation_id` 关联，不写入 `item_code`。
+- 可变价、区间价、按实际需求定价的子项使用 `pricing_mode = variable`、`match_status = price_missing`，原始价格说明写入 `remark`。
