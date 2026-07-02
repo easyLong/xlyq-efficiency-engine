@@ -42,6 +42,8 @@ type AiPreviewRejectDto = {
   useForPromptOptimization?: unknown;
 };
 
+type AiPreviewCopyTarget = 'design' | 'operation';
+
 const AI_PREVIEW_REJECT_REASON_LABELS: Record<string, string> = {
   chat_only: '只是闲聊/讨论',
   duplicate: '已有需求的重复表达',
@@ -524,6 +526,295 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  async copyAiPreviewCandidate(
+    candidateId: string,
+    targetBusinessCategory?: string | null,
+    copiedByUserId: string | null = null,
+  ) {
+    const target = this.normalizeAiPreviewCopyTarget(targetBusinessCategory);
+    const sourceRows = await this.dataSource.query(
+      `
+        SELECT *
+        FROM demand_intake_candidates
+        WHERE deleted_at IS NULL
+          AND (id = ? OR external_candidate_id = ?)
+        LIMIT 1
+      `,
+      [candidateId, candidateId],
+    );
+    const source = sourceRows?.[0] ?? null;
+    if (!source) {
+      throw new NotFoundException('AI preview candidate not found');
+    }
+
+    const sourceCategory = this.normalizeBusinessCategoryCode(
+      source.business_category,
+    );
+    if (sourceCategory !== 'copywriting') {
+      throw new BadRequestException(
+        'Only copywriting preview candidates can be copied',
+      );
+    }
+
+    const [duplicateRows, ownerRows] = await Promise.all([
+      this.dataSource.query(
+        `
+          SELECT id
+          FROM demand_intake_candidates
+          WHERE deleted_at IS NULL
+            AND copied_from_candidate_id = ?
+            AND copy_target_business_category = ?
+          LIMIT 1
+        `,
+        [source.id, target],
+      ),
+      this.dataSource.query(
+        `
+          SELECT owner_config.owner_user_id AS ownerUserId
+          FROM business_category_owner_configs owner_config
+          JOIN users owner_user
+            ON owner_user.id = owner_config.owner_user_id
+           AND owner_user.status = 'active'
+           AND owner_user.deleted_at IS NULL
+          WHERE owner_config.business_category_code = ?
+            AND owner_config.status = 'active'
+            AND owner_config.owner_user_id IS NOT NULL
+          ORDER BY owner_config.created_at ASC
+          LIMIT 1
+        `,
+        [target],
+      ),
+    ]);
+    if (duplicateRows?.[0]?.id) {
+      return {
+        copied: false,
+        reason: 'already_exists',
+        candidateId: duplicateRows[0].id,
+      };
+    }
+
+    const newCandidateId = randomUUID();
+    const ownerUserId = ownerRows?.[0]?.ownerUserId ?? null;
+    const confidence = this.lowerAiPreviewCopyConfidence(source.confidence);
+    const suggestion = [
+      `由文案候选需求复制，来源候选：${source.id}`,
+      `目标业务大类：${this.businessCategoryName(target)}`,
+      '请负责人确认是否需要后续交付。',
+      source.match_suggestion ? `原识别建议：${source.match_suggestion}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        `
+          INSERT INTO demand_intake_candidates (
+            id,
+            source_app,
+            external_candidate_id,
+            external_capture_run_id,
+            external_source_key,
+            external_chat_id,
+            source_chat_name,
+            raw_customer_name,
+            raw_owner_name,
+            raw_business_platform,
+            business_category,
+            secondary_category,
+            tertiary_category,
+            start_time,
+            deadline,
+            business_name,
+            demand_title,
+            demand_content,
+            confidence,
+            status,
+            match_suggestion,
+            matched_customer_code,
+            matched_customer_id,
+            matched_contact_context_id,
+            matched_business_platform,
+            match_confidence,
+            match_reason,
+            review_owner_user_id,
+            review_status,
+            copied_from_candidate_id,
+            copy_target_business_category,
+            copy_source,
+            created_at,
+            updated_at
+          ) VALUES (
+            ?, 'manual_copy', NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL,
+            ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, 'copy_from_copywriting', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+          )
+        `,
+        [
+          newCandidateId,
+          source.external_capture_run_id ?? null,
+          source.external_source_key ?? null,
+          source.external_chat_id ?? null,
+          source.source_chat_name ?? null,
+          source.raw_customer_name ?? null,
+          source.raw_owner_name ?? null,
+          source.raw_business_platform ?? null,
+          target,
+          source.start_time ?? null,
+          source.deadline ?? null,
+          source.business_name ?? null,
+          source.demand_title ?? source.business_name ?? null,
+          source.demand_content ?? null,
+          confidence,
+          suggestion,
+          source.matched_customer_code ?? null,
+          source.matched_customer_id ?? null,
+          source.matched_contact_context_id ?? null,
+          source.matched_business_platform ?? null,
+          source.match_confidence ?? null,
+          `copy_from_candidate:${source.id}`,
+          ownerUserId,
+          ownerUserId ? 'pending_owner_review' : 'unassigned',
+          source.id,
+          target,
+        ],
+      );
+
+      await manager.query(
+        `
+          INSERT INTO demand_candidate_evidence (
+            id,
+            candidate_id,
+            external_evidence_id,
+            evidence_order,
+            message_time,
+            display_time_text,
+            sender_name,
+            message_text,
+            screenshot_path,
+            evidence_reason,
+            created_at
+          )
+          SELECT
+            UUID(),
+            ?,
+            NULL,
+            evidence_order,
+            message_time,
+            display_time_text,
+            sender_name,
+            message_text,
+            screenshot_path,
+            evidence_reason,
+            CURRENT_TIMESTAMP
+          FROM demand_candidate_evidence
+          WHERE candidate_id = ?
+          ORDER BY evidence_order ASC, created_at ASC
+        `,
+        [newCandidateId, source.id],
+      );
+
+      await manager.query(
+        `
+          INSERT INTO demand_candidate_review_logs (
+            id,
+            candidate_id,
+            review_action,
+            reject_note,
+            use_for_prompt_optimization,
+            reviewer_user_id,
+            candidate_snapshot_json,
+            created_at
+          ) VALUES (?, ?, ?, ?, 0, ?, ?, CURRENT_TIMESTAMP)
+        `,
+        [
+          randomUUID(),
+          source.id,
+          `copy_to_${target}`,
+          `Copied to ${target} candidate ${newCandidateId}`,
+          copiedByUserId,
+          JSON.stringify(source),
+        ],
+      );
+    });
+
+    if (ownerUserId) {
+      await this.notifyCopiedAiPreviewCandidate(
+        newCandidateId,
+        ownerUserId,
+        source,
+        target,
+      );
+    }
+
+    const [created] = await this.dataSource.query(
+      `
+        SELECT
+          c.id AS candidate_id,
+          c.business_category,
+          c.demand_title,
+          c.review_owner_user_id,
+          review_owner.display_name AS review_owner_name,
+          c.review_status
+        FROM demand_intake_candidates c
+        LEFT JOIN users review_owner
+          ON review_owner.id = c.review_owner_user_id
+        WHERE c.id = ?
+        LIMIT 1
+      `,
+      [newCandidateId],
+    );
+
+    return {
+      copied: true,
+      sourceCandidateId: source.id,
+      candidate: created?.[0] ?? { candidate_id: newCandidateId },
+    };
+  }
+
+  private normalizeAiPreviewCopyTarget(
+    targetBusinessCategory?: string | null,
+  ): AiPreviewCopyTarget {
+    const target = this.normalizeBusinessCategoryCode(targetBusinessCategory);
+    if (target === 'design' || target === 'operation') {
+      return target;
+    }
+    throw new BadRequestException('Target business category must be design or operation');
+  }
+
+  private lowerAiPreviewCopyConfidence(value: unknown) {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+      return null;
+    }
+    return Math.max(0, Math.min(1, numeric > 1 ? numeric / 100 : numeric) * 0.75);
+  }
+
+  private async notifyCopiedAiPreviewCandidate(
+    candidateId: string,
+    ownerUserId: string,
+    source: Record<string, unknown>,
+    target: AiPreviewCopyTarget,
+  ) {
+      await this.notificationsService.send({
+      recipientUserId: ownerUserId,
+      title: `AI预览需求待确认：${this.businessCategoryName(target)}需求复制`,
+      content: [
+        `需求名称：${source.demand_title ?? source.business_name ?? '-'}`,
+        `客户平台：${[source.raw_customer_name, source.raw_business_platform].filter(Boolean).join('-') || '-'}`,
+        `来源：由文案候选 ${source.id} 复制`,
+        '请进入工作台确认是否转为正式需求。',
+      ].join('\n'),
+      objectType: 'ai_preview_candidate',
+      objectId: candidateId,
+      channels: ['in_app', 'feishu_app'],
+      actionUrl: this.buildWorkbenchUrl(),
+      actionText: '查看并确认',
+    });
+  }
+
   private normalizeAiPreviewRejectFeedback(dto: AiPreviewRejectDto) {
     const rawReasons = Array.isArray(dto?.rejectReasons)
       ? dto.rejectReasons
@@ -610,6 +901,10 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           reviewed_by.display_name AS reviewed_by_name,
           c.reviewed_at,
           c.review_note,
+          c.copied_from_candidate_id,
+          c.copy_target_business_category,
+          c.copy_source,
+          source_candidate.demand_title AS copied_from_candidate_title,
           c.match_suggestion,
           COALESCE(c.matched_customer_code, matched_customer.customer_code) AS matched_customer_code,
           c.matched_customer_id,
@@ -624,6 +919,8 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           ON review_owner.id = c.review_owner_user_id
         LEFT JOIN users reviewed_by
           ON reviewed_by.id = c.reviewed_by_user_id
+        LEFT JOIN demand_intake_candidates source_candidate
+          ON source_candidate.id = c.copied_from_candidate_id
         WHERE ${whereParts.join('\n          AND ')}
         ORDER BY c.created_at DESC
         LIMIT ?
@@ -2313,16 +2610,25 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       return exact.value;
     }
     const lower = normalized.toLowerCase();
-    if (['design', 'designer'].includes(lower)) {
+    if (
+      ['design', 'designer'].includes(lower) ||
+      normalized.includes('设计')
+    ) {
       return 'design';
     }
-    if (['copywriting', 'copy', 'content'].includes(lower)) {
+    if (
+      ['copywriting', 'copy', 'content'].includes(lower) ||
+      normalized.includes('文案')
+    ) {
       return 'copywriting';
     }
-    if (['operation', 'operations', 'ops'].includes(lower)) {
+    if (
+      ['operation', 'operations', 'ops'].includes(lower) ||
+      normalized.includes('运营')
+    ) {
       return 'operation';
     }
-    if (['community'].includes(lower)) {
+    if (['community'].includes(lower) || normalized.includes('社区')) {
       return 'community';
     }
     return normalized;
@@ -2673,6 +2979,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         reviewed_by_user_id CHAR(36) NULL,
         reviewed_at DATETIME NULL,
         review_note TEXT NULL,
+        copied_from_candidate_id CHAR(36) NULL,
+        copy_target_business_category VARCHAR(64) NULL,
+        copy_source VARCHAR(32) NULL,
         confirmed_requirement_id CHAR(36) NULL,
         confirmed_task_id CHAR(36) NULL,
         confirmed_at DATETIME NULL,
@@ -2687,6 +2996,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         KEY idx_demand_intake_external_chat (source_app, external_chat_id),
         KEY idx_demand_intake_matched_contact (matched_contact_context_id),
         KEY idx_demand_intake_review_owner (review_owner_user_id, review_status, created_at),
+        KEY idx_demand_intake_copy_source (copied_from_candidate_id, copy_target_business_category),
         KEY idx_demand_intake_confirmed_requirement (confirmed_requirement_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='候选需求接入表'
     `);
@@ -2736,6 +3046,21 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'review_note',
       'review_note TEXT NULL AFTER reviewed_at',
     );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'copied_from_candidate_id',
+      'copied_from_candidate_id CHAR(36) NULL AFTER review_note',
+    );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'copy_target_business_category',
+      'copy_target_business_category VARCHAR(64) NULL AFTER copied_from_candidate_id',
+    );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'copy_source',
+      'copy_source VARCHAR(32) NULL AFTER copy_target_business_category',
+    );
     if (
       await this.columnExists('demand_intake_candidates', 'matched_customer_id')
     ) {
@@ -2768,6 +3093,12 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'demand_intake_candidates',
       'idx_demand_intake_review_owner',
       ['review_owner_user_id', 'review_status', 'created_at'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'demand_intake_candidates',
+      'idx_demand_intake_copy_source',
+      ['copied_from_candidate_id', 'copy_target_business_category'],
     );
     await this.assignAiPreviewReviewOwners();
 

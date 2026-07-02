@@ -95,6 +95,20 @@ export class RequirementsController {
     );
   }
 
+  @Post('ai-preview-candidates/:candidateId/copy')
+  @Permission('ai_preview.confirm_owned')
+  copyAiPreviewCandidate(
+    @Param('candidateId') candidateId: string,
+    @Body() dto: { targetBusinessCategory?: string },
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.requirementsService.copyAiPreviewCandidate(
+      candidateId,
+      dto?.targetBusinessCategory,
+      request?.user?.id ?? null,
+    );
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.requirementsService.findOne(id);

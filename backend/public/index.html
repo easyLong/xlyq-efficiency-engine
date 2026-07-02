@@ -229,6 +229,18 @@
     .ai-preview-evidence-item strong { display: block; margin-bottom: 3px; color: #41503f; font-size: 12px; }
     .ai-preview-evidence-item p { margin: 0; color: #596657; font-size: 12px; line-height: 1.45; }
     .ai-preview-empty { color: #7b8577; font-size: 13px; }
+    .ai-preview-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .ai-preview-actions .btn {
+      padding: 7px 10px;
+      min-height: 32px;
+      font-size: 12px;
+    }
     #view-requirements .quick-filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     #view-requirements .advanced-filter { width: auto; margin-top: 0; position: relative; }
     #view-requirements .advanced-filter summary {
@@ -3412,6 +3424,33 @@
       if (Number.isNaN(numeric)) return String(value);
       return `${Math.round((numeric > 1 ? numeric / 100 : numeric) * 100)}%`;
     }
+    function normalizedBusinessCategory(value) {
+      const text = String(value || "").trim().toLowerCase();
+      if (!text) return "";
+      if (["copywriting", "copy", "content"].includes(text) || text.includes("文案")) return "copywriting";
+      if (["design", "designer"].includes(text) || text.includes("设计")) return "design";
+      if (["operation", "operations", "ops"].includes(text) || text.includes("运营")) return "operation";
+      if (["community"].includes(text) || text.includes("社区")) return "community";
+      const match = businessCategoryDefinitions().find(item =>
+        String(item.value || "").trim().toLowerCase() === text ||
+        String(item.label || "").trim().toLowerCase() === text
+      );
+      return match?.value || text;
+    }
+    function isCopywritingAiCandidate(candidate) {
+      return normalizedBusinessCategory(candidate?.business_category) === "copywriting";
+    }
+    function aiCopyTargetLabel(target) {
+      return target === "design" ? "设计" : "运营";
+    }
+    function renderAiPreviewCopyActions(candidate) {
+      if (!isCopywritingAiCandidate(candidate)) return "";
+      if (["confirmed", "rejected"].includes(String(candidate.status || candidate.review_status || ""))) return "";
+      return `
+        <button class="btn" onclick="copyAiPreviewCandidate(event, '${escapeAttr(candidate.candidate_id || "")}', 'design')">复制至设计</button>
+        <button class="btn" onclick="copyAiPreviewCandidate(event, '${escapeAttr(candidate.candidate_id || "")}', 'operation')">复制至运营</button>
+      `;
+    }
     function renderAiPreviewBoard() {
       const panel = qs("aiPreviewPanel");
       const board = qs("aiPreviewBoard");
@@ -3427,12 +3466,12 @@
       const scopeLabels = can("ai_preview.view_all") ? {
         mine: "我的待确认",
         all: "全部待确认",
-        processed: "已处理",
+        processed: "历史真实需求",
       } : { mine: "我的待确认" };
       const scopeNote = {
         mine: "只显示分配给当前登录负责人的候选需求。",
         all: "显示所有仍待确认的候选需求，可用于管理员兜底和转派前排查。",
-        processed: "显示已确认或已标记伪需求的候选记录。",
+        processed: "显示已确认入库的真实需求和已标记伪需求的候选记录。",
       }[scope] || "自动读取AI识别到的预览候选，需人工确认后进入真实需求库。";
       if (!rows.length) {
         board.innerHTML = `
@@ -3463,7 +3502,10 @@
               <div class="ai-preview-main">
                 <div class="ai-preview-head">
                   <div class="ai-preview-title">${safeText(row.demand_title || row.business_name || `候选需求 #${row.candidate_id}`)}</div>
-                  <button class="btn danger ai-preview-reject" onclick="rejectAiPreviewCandidate(event, '${escapeAttr(row.candidate_id || "")}')">标记伪需求</button>
+                  <div class="ai-preview-actions">
+                    ${renderAiPreviewCopyActions(row)}
+                    <button class="btn danger ai-preview-reject" onclick="rejectAiPreviewCandidate(event, '${escapeAttr(row.candidate_id || "")}')">标记伪需求</button>
+                  </div>
                 </div>
                 <div class="ai-preview-meta">
                   <span>${safeText(row.chat_name || row.customer_name || "-")}</span>
@@ -3471,6 +3513,7 @@
                   <span>${safeText(row.business_platform || "-")}</span>
                   <span>负责人 ${safeText(row.review_owner_name || "未分配")}</span>
                   <span>置信度 ${safeText(previewConfidenceText(row.confidence))}</span>
+                  ${row.copy_source ? `<span>由文案复制至${safeText(aiCopyTargetLabel(normalizedBusinessCategory(row.business_category)))}</span>` : ""}
                   <span>${safeText(row.review_status || row.status || "pending")}</span>
                 </div>
                 <div class="ai-preview-dims">
@@ -3524,6 +3567,25 @@
         }
         await refreshAiPreviewBoard();
         toast("已标记为伪需求");
+      } catch (error) {
+        toast(error.message);
+      }
+    }
+    async function copyAiPreviewCandidate(event, candidateId, targetBusinessCategory) {
+      event?.stopPropagation();
+      if (!candidateId || !targetBusinessCategory) return;
+      const targetLabel = aiCopyTargetLabel(targetBusinessCategory);
+      try {
+        const result = await request(`/requirements/ai-preview-candidates/${encodeURIComponent(candidateId)}/copy`, {
+          method: "POST",
+          body: { targetBusinessCategory },
+        });
+        if (result?.copied === false && result?.reason === "already_exists") {
+          toast(`已存在复制至${targetLabel}的预览需求`);
+        } else {
+          toast(`已复制至${targetLabel}，等待对应负责人确认`);
+        }
+        await refreshAiPreviewBoard();
       } catch (error) {
         toast(error.message);
       }
