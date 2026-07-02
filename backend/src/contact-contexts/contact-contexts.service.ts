@@ -270,12 +270,16 @@ export class ContactContextsService implements OnModuleInit {
         'Group nickname count must match contact count',
       );
     }
-    const groupKey = dto.groupId || (await this.nextGroupKey(customerCode));
     const businessPlatform =
       contactNames.length > 1
         ? null
         : dto.businessPlatform ??
           this.normalizeNullableText(existingContext?.business_platform);
+    const groupKey =
+      dto.groupId ||
+      (this.isManualContactGroup(dto.groupName)
+        ? this.manualContactGroupKey(customerCode, businessPlatform)
+        : await this.nextGroupKey(customerCode));
     const saved: Array<Record<string, unknown>> = [];
     for (const [index, name] of contactNames.entries()) {
       saved.push(
@@ -653,6 +657,26 @@ export class ContactContextsService implements OnModuleInit {
       .replace(/[^a-z0-9]+/g, '_')
       .replace(/^_+|_+$/g, '');
     return normalized || 'fund';
+  }
+
+  private isManualContactGroup(groupName?: string | null) {
+    return String(groupName ?? '').trim() === '无群手工对接人';
+  }
+
+  private manualContactGroupKey(
+    customerCode: string,
+    businessPlatform?: string | null,
+  ) {
+    const customer = String(customerCode || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    const platformHash = createHash('sha1')
+      .update(String(businessPlatform || 'all'), 'utf8')
+      .digest('hex')
+      .slice(0, 8);
+    return `manual_${customer || 'customer'}_${platformHash}`;
   }
 
   private escapeRegExp(value: string) {

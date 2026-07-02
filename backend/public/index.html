@@ -1263,6 +1263,56 @@
       font-weight: 600;
     }
     .reject-feedback-toggle input { width: auto; }
+    .manual-contact-popover {
+      position: fixed;
+      z-index: 90;
+      width: min(330px, calc(100vw - 28px));
+      padding: 14px;
+      border: 1px solid #d8dfcf;
+      border-radius: 14px;
+      background: #fffdf9;
+      box-shadow: 0 18px 46px rgba(22, 34, 27, .18);
+    }
+    .manual-contact-popover::before {
+      content: "";
+      position: absolute;
+      right: 32px;
+      bottom: -8px;
+      width: 14px;
+      height: 14px;
+      border-right: 1px solid #d8dfcf;
+      border-bottom: 1px solid #d8dfcf;
+      background: #fffdf9;
+      transform: rotate(45deg);
+    }
+    .manual-contact-popover h3 {
+      margin: 0 0 5px;
+      color: #18231d;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    .manual-contact-popover p {
+      margin: 0 0 11px;
+      color: #667163;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .manual-contact-popover input {
+      height: 38px;
+      border-radius: 11px;
+      background: #fff;
+    }
+    .manual-contact-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .manual-contact-actions .btn {
+      min-height: 34px;
+      border-radius: 10px;
+      padding: 7px 12px;
+    }
     .hidden { display: none !important; }
     @media (max-width: 980px) {
       .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .quote-action.with-contract, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
@@ -1851,6 +1901,15 @@
       </div>
     </div>
   </div>
+  <div id="manualContactPopover" class="manual-contact-popover hidden" role="dialog" aria-modal="false" aria-labelledby="manualContactTitle">
+    <h3 id="manualContactTitle">其它对接人</h3>
+    <p>输入后会自动加入当前客户的无群手工对接人，并直接选中。</p>
+    <input id="manualContactInput" type="text" placeholder="请输入对接人姓名" autocomplete="off" />
+    <div class="manual-contact-actions">
+      <button class="btn" type="button" onclick="resolveManualContactPopover(false)">取消</button>
+      <button class="btn primary" type="button" onclick="resolveManualContactPopover(true)">确认</button>
+    </div>
+  </div>
 
   <script src="/js/app-shell.js"></script>
   <script src="/js/api-client.js"></script>
@@ -2008,6 +2067,7 @@
     }
     let pendingConfirmResolve = null;
     let pendingAiRejectResolve = null;
+    let pendingManualContactResolve = null;
     const aiPreviewRejectReasons = [
       { value: "chat_only", label: "只是闲聊/讨论" },
       { value: "duplicate", label: "已有需求的重复表达" },
@@ -2023,6 +2083,15 @@
     document.addEventListener("pointerdown", event => {
       if (!event.target?.closest?.("#confirmBackdrop")) {
         lastPointerPosition = { x: event.clientX, y: event.clientY };
+      }
+      const manualContactPopover = qs("manualContactPopover");
+      if (
+        manualContactPopover &&
+        !manualContactPopover.classList.contains("hidden") &&
+        !manualContactPopover.contains(event.target) &&
+        event.target?.id !== "contactContextSelect"
+      ) {
+        resolveManualContactPopover(false);
       }
     }, true);
     function confirmDialog({
@@ -2128,7 +2197,69 @@
     function handleAiRejectBackdropClick(event) {
       if (event.target?.id === "aiRejectBackdrop") resolveAiRejectDialog(false);
     }
+    function showManualContactPopover() {
+      const popover = qs("manualContactPopover");
+      const input = qs("manualContactInput");
+      if (!popover || !input) return Promise.resolve(null);
+      input.value = "";
+      popover.classList.remove("hidden");
+      positionManualContactPopover();
+      input.focus();
+      return new Promise(resolve => {
+        pendingManualContactResolve = resolve;
+      });
+    }
+    function positionManualContactPopover() {
+      const popover = qs("manualContactPopover");
+      const select = qs("contactContextSelect");
+      if (!popover || !select) return;
+      const margin = 14;
+      const selectRect = select.getBoundingClientRect();
+      const popoverRect = popover.getBoundingClientRect();
+      const left = Math.min(
+        Math.max(selectRect.right - popoverRect.width + 28, margin),
+        Math.max(margin, window.innerWidth - popoverRect.width - margin),
+      );
+      const preferredTop = selectRect.top - popoverRect.height - 10;
+      const fallbackTop = selectRect.bottom + 10;
+      const top = preferredTop >= margin
+        ? preferredTop
+        : Math.min(fallbackTop, Math.max(margin, window.innerHeight - popoverRect.height - margin));
+      popover.style.left = `${left}px`;
+      popover.style.top = `${top}px`;
+    }
+    function resolveManualContactPopover(confirmed) {
+      const popover = qs("manualContactPopover");
+      const input = qs("manualContactInput");
+      if (!popover || !pendingManualContactResolve) return;
+      if (!confirmed) {
+        popover.classList.add("hidden");
+        pendingManualContactResolve(null);
+        pendingManualContactResolve = null;
+        return;
+      }
+      const contactName = input?.value.trim() || "";
+      if (!contactName) {
+        toast("请输入对接人姓名");
+        input?.focus();
+        return;
+      }
+      popover.classList.add("hidden");
+      pendingManualContactResolve(contactName);
+      pendingManualContactResolve = null;
+    }
     document.addEventListener("keydown", event => {
+      if (!qs("manualContactPopover")?.classList.contains("hidden")) {
+        if (event.key === "Enter" && event.target?.id === "manualContactInput") {
+          event.preventDefault();
+          resolveManualContactPopover(true);
+          return;
+        }
+        if (event.key === "Escape") {
+          resolveManualContactPopover(false);
+          return;
+        }
+      }
       if (event.key === "Escape") {
         if (!qs("aiRejectBackdrop")?.classList.contains("hidden")) {
           resolveAiRejectDialog(false);
@@ -2275,6 +2406,7 @@
       select.innerHTML = [
         `<option value="">手动选择客户和平台</option>`,
         ...activeContexts.map(item => `<option value="${escapeAttr(item.id)}" data-option-key="${escapeAttr(item.optionKey)}">${escapeHtml(item.contact_name || "对接人")}</option>`),
+        `<option value="__manual_contact__">其它对接人</option>`,
       ].join("");
       syncContactContextPreview(null);
     }
@@ -2288,6 +2420,7 @@
     }
     function selectedContactContext() {
       const select = qs("contactContextSelect");
+      if (select?.value === "__manual_contact__") return null;
       const optionKey = select?.selectedOptions?.[0]?.dataset?.optionKey;
       if (optionKey) {
         return expandedContactContexts().find(item => item.optionKey === optionKey) || null;
@@ -2307,7 +2440,14 @@
         select.value = context.id || "";
       }
     }
+    function isManualContactSelected() {
+      return qs("contactContextSelect")?.value === "__manual_contact__";
+    }
     async function applyContactContextSelection() {
+      if (isManualContactSelected()) {
+        await createAndSelectManualContact();
+        return;
+      }
       const context = selectedContactContext();
       if (!context) {
         syncContactContextPreview(null);
@@ -2317,6 +2457,55 @@
       if (context.customer_code && qs("customerSelect")) qs("customerSelect").value = context.customer_code;
       syncContactContextPreview(context);
       await syncProjectSelection(false);
+    }
+    async function createAndSelectManualContact() {
+      const select = qs("contactContextSelect");
+      const contactName = await showManualContactPopover();
+      if (!contactName) {
+        if (select) select.value = "";
+        syncContactContextPreview(null);
+        return;
+      }
+      const customerCode = qs("customerSelect")?.value;
+      if (!customerCode) {
+        toast("请先选择客户");
+        if (select) select.value = "";
+        return;
+      }
+      const businessPlatform = normalizeBusinessPlatform(qs("businessPlatformInput")?.value || "");
+      try {
+        const saved = await request("/contact-contexts/wechat-groups", {
+          method: "POST",
+          body: {
+            groupName: "无群手工对接人",
+            customerCode,
+            businessPlatform: businessPlatform || undefined,
+            contactName,
+            collectEnabled: false,
+            nicknameUpdated: true,
+            status: "active",
+            remark: "需求录入手工新增",
+          },
+        });
+        const savedRow = Array.isArray(saved) ? saved[0] : (Array.isArray(saved?.value) ? saved.value[0] : saved);
+        state.contactContexts = unwrap(await request("/contact-contexts?status=active").catch(() => state.contactContexts));
+        renderContactContextOptions();
+        const createdContext = expandedContactContexts().find(item => String(item.id) === String(savedRow?.id))
+          || expandedContactContexts().find(item =>
+            item.contact_name === contactName &&
+            item.customer_code === customerCode &&
+            normalizeBusinessPlatform(item.business_platform || "") === businessPlatform
+          );
+        if (createdContext) {
+          selectContactContextOption(createdContext);
+          syncContactContextPreview(createdContext);
+          await syncProjectSelection(false);
+          toast(`已新增并选中对接人：${contactName}`);
+        }
+      } catch (error) {
+        if (select) select.value = "";
+        toast(error.message);
+      }
     }
     function syncContactContextPreview(context) {
       if (qs("businessPlatformInput")) qs("businessPlatformInput").value = normalizeBusinessPlatform(context?.business_platform || "");

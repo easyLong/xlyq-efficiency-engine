@@ -1202,12 +1202,19 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async createWithTask(dto: CreateRequirementWithTaskDto) {
-    const contactContext = dto.contactContextId
+    let contactContext = dto.contactContextId
       ? await this.resolveContactContext(dto.contactContextId)
       : null;
     const customerCode = contactContext?.customer_code
       ? String(contactContext.customer_code)
       : await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId);
+    if (!contactContext && this.normalizeNullableText(dto.manualContactName)) {
+      contactContext = await this.resolveManualContactContext({
+        contactName: dto.manualContactName,
+        customerCode,
+        businessPlatform: dto.businessPlatform,
+      });
+    }
 
     return this.createRequirementTaskBundle({
       ...dto,
@@ -1898,6 +1905,100 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Contact context config not found');
     }
     return config;
+  }
+
+  private async resolveManualContactContext(input: {
+    contactName?: string | null;
+    customerCode: string;
+    businessPlatform?: string | null;
+  }) {
+    const contactName = this.normalizeNullableText(input.contactName)?.slice(
+      0,
+      64,
+    );
+    if (!contactName) {
+      throw new BadRequestException('Manual contact name is required');
+    }
+    const customerCode = this.normalizeNullableText(input.customerCode);
+    if (!customerCode) {
+      throw new BadRequestException('Customer code is required');
+    }
+    const businessPlatform = this.normalizeNullableText(
+      input.businessPlatform,
+    )?.slice(0, 64);
+    const groupKey = this.manualContactGroupKey(customerCode, businessPlatform);
+
+    await this.dataSource.query(
+      `
+        INSERT INTO group_contact_mappings (
+          id,
+          group_key,
+          group_name,
+          contact_name,
+          group_nickname,
+          customer_code,
+          business_platform,
+          collect_enabled,
+          nickname_updated,
+          status,
+          remark
+        )
+        VALUES (?, ?, '无群手工对接人', ?, NULL, ?, ?, 0, 1, 'active', '需求录入手工新增')
+        ON DUPLICATE KEY UPDATE
+          group_name = VALUES(group_name),
+          customer_code = VALUES(customer_code),
+          business_platform = VALUES(business_platform),
+          collect_enabled = 0,
+          nickname_updated = 1,
+          status = 'active',
+          deleted_at = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      `,
+      [randomUUID(), groupKey, contactName, customerCode, businessPlatform],
+    );
+
+    const rows = await this.dataSource.query(
+      `
+        SELECT
+          id,
+          contact_name,
+          NULL AS contact_mobile,
+          NULL AS contact_email,
+          customer_code,
+          business_platform,
+          status,
+          remark
+        FROM group_contact_mappings
+        WHERE group_key = ?
+          AND contact_name = ?
+          AND status = 'active'
+          AND deleted_at IS NULL
+        LIMIT 1
+      `,
+      [groupKey, contactName],
+    );
+    return rows?.[0] ?? null;
+  }
+
+  private manualContactGroupKey(
+    customerCode: string,
+    businessPlatform?: string | null,
+  ) {
+    const customer = String(customerCode || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    const platformHash = createHash('sha1')
+      .update(String(businessPlatform || 'all'), 'utf8')
+      .digest('hex')
+      .slice(0, 8);
+    return `manual_${customer || 'customer'}_${platformHash}`;
+  }
+
+  private normalizeNullableText(value: unknown) {
+    const normalized = String(value ?? '').trim();
+    return normalized || null;
   }
 
   private async tableExists(tableName: string) {
