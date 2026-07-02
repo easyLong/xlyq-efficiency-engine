@@ -83,7 +83,7 @@ export class ContactContextsService implements OnModuleInit {
           ON customer.customer_code = mapping.customer_code
          AND customer.deleted_at IS NULL
         WHERE ${where.map((item) => `(${item})`).join(' AND ')}
-        ORDER BY mapping.group_name ASC, mapping.contact_name ASC, mapping.updated_at DESC
+        ORDER BY mapping.created_at DESC, mapping.id DESC
         LIMIT 500
       `,
       params,
@@ -180,7 +180,7 @@ export class ContactContextsService implements OnModuleInit {
           ON customer.customer_code = mapping.customer_code
          AND customer.deleted_at IS NULL
         WHERE ${where.map((item) => `(${item})`).join(' AND ')}
-        ORDER BY mapping.group_name ASC, mapping.contact_name ASC, mapping.updated_at DESC
+        ORDER BY mapping.created_at DESC, mapping.id DESC
         LIMIT 500
       `,
       params,
@@ -237,7 +237,7 @@ export class ContactContextsService implements OnModuleInit {
           ON customer.customer_code = mapping.customer_code
          AND customer.deleted_at IS NULL
         WHERE ${where.map((item) => `(${item})`).join(' AND ')}
-        ORDER BY mapping.group_name ASC, mapping.contact_name ASC, mapping.updated_at DESC
+        ORDER BY mapping.created_at DESC, mapping.id DESC
         LIMIT 500
       `,
       params,
@@ -256,27 +256,48 @@ export class ContactContextsService implements OnModuleInit {
     }
     const contactName =
       dto.contactName ?? String(existingContext?.contact_name ?? '').trim();
-    if (!contactName) {
+    const contactNames = this.splitDelimitedText(contactName);
+    if (!contactNames.length) {
       throw new BadRequestException('Contact name is required');
     }
+    const groupNicknames = this.splitDelimitedText(dto.groupNickname);
+    if (
+      contactNames.length > 1 &&
+      groupNicknames.length > 0 &&
+      groupNicknames.length !== contactNames.length
+    ) {
+      throw new BadRequestException(
+        'Group nickname count must match contact count',
+      );
+    }
     const groupKey = dto.groupId || (await this.nextGroupKey(customerCode));
-    const saved = await this.upsertGroupContactMapping({
-      id: dto.contactContextConfigId,
-      groupKey,
-      groupName: dto.groupName,
-      contactName,
-      groupNickname: this.normalizeNullableText(dto.groupNickname),
-      customerCode,
-      businessPlatform:
-        dto.businessPlatform ??
-        this.normalizeNullableText(existingContext?.business_platform),
-      collectEnabled:
-        dto.collectEnabled === undefined ? true : dto.collectEnabled,
-      nicknameUpdated: dto.nicknameUpdated === true,
-      status: dto.status ?? 'active',
-      remark: dto.remark ?? null,
-    });
-    return this.toWechatGroupConfigShape(saved);
+    const businessPlatform =
+      contactNames.length > 1
+        ? null
+        : dto.businessPlatform ??
+          this.normalizeNullableText(existingContext?.business_platform);
+    const saved: Array<Record<string, unknown>> = [];
+    for (const [index, name] of contactNames.entries()) {
+      saved.push(
+        await this.upsertGroupContactMapping({
+          id:
+            contactNames.length === 1 ? dto.contactContextConfigId : undefined,
+          groupKey,
+          groupName: dto.groupName,
+          contactName: name,
+          groupNickname: this.normalizeNullableText(groupNicknames[index]),
+          customerCode,
+          businessPlatform,
+          collectEnabled:
+            dto.collectEnabled === undefined ? true : dto.collectEnabled,
+          nicknameUpdated: dto.nicknameUpdated === true,
+          status: dto.status ?? 'active',
+          remark: dto.remark ?? null,
+        }),
+      );
+    }
+    const shaped = saved.map((item) => this.toWechatGroupConfigShape(item));
+    return shaped.length === 1 ? shaped[0] : shaped;
   }
 
   async updateWechatGroupConfig(id: string, dto: UpdateWechatGroupConfigDto) {
@@ -706,6 +727,13 @@ export class ContactContextsService implements OnModuleInit {
   private normalizeNullableText(value: unknown) {
     const normalized = String(value ?? '').trim();
     return normalized || null;
+  }
+
+  private splitDelimitedText(value: unknown) {
+    return String(value ?? '')
+      .split(/[,，、;；|]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
 
   private toWechatGroupConfigShape(mapping: Record<string, unknown>) {

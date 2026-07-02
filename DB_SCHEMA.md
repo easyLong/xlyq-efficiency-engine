@@ -1094,7 +1094,9 @@ AI 建议采纳记录表。
 | `group_nickname` | varchar(128), null | 群内用于查找 DP 微信号的昵称 |
 | `nickname_updated` | tinyint(1), not null default 0 | 是否已经把 DP 微信备注改为客户真名 |
 
-当前群管理页面不要求人工输入 `group_key`，新增时由后端按客户编码生成递增群标识。一个群有多个对接人时，仍按多行维护，每行对应一个 `contact_name`。
+当前群管理页面不要求人工输入 `group_key`，新增时由后端按客户编码生成递增群标识。一个群有多个对接人时，数据库仍按多行维护，每行对应一个 `contact_name`；页面展示层按 `group_name` 聚合为“一群一行”。
+
+新增群时 `contactName` 和 `groupNickname` 可使用中英文逗号、顿号、分号或 `|` 分隔多个值，后端会 trim 每个分隔项并拆成多行保存。不要直接把数据库改成“一群一行 + 拼接对接人”，因为 `requirements.source_ref_id` 和 `demand_intake_candidates.matched_contact_context_id` 可能引用具体映射行的 `id`。
 
 ### `quotation_items.item_code` 约定
 

@@ -1751,7 +1751,7 @@
           <div class="section-title">
             <div>
               <div class="kicker">Group Mapping</div>
-              <h3>群映射列表</h3>
+              <h3 id="groupMappingTitle">群映射列表</h3>
               <p>展示并维护微信群、基金客户、业务平台和对接人的映射关系，可在页面新增、停用或删除群信息。</p>
             </div>
             <div class="btns">
@@ -2244,13 +2244,37 @@
       ].join("");
       select.value = state.analyticsCustomerId;
     }
+    function splitDelimitedText(value) {
+      return String(value || "")
+        .split(/[,，、;；|]+/)
+        .map(item => item.trim())
+        .filter(Boolean);
+    }
+    function expandedContactContexts() {
+      const rows = [];
+      (state.contactContexts || []).forEach(context => {
+        const names = splitDelimitedText(context.contact_name);
+        const nicknames = splitDelimitedText(context.group_nickname);
+        const contactNames = names.length ? names : [context.contact_name || ""];
+        contactNames.forEach((name, index) => {
+          rows.push({
+            ...context,
+            id: context.id,
+            optionKey: `${context.id}:${index}`,
+            contact_name: name,
+            group_nickname: nicknames[index] || "",
+          });
+        });
+      });
+      return rows;
+    }
     function renderContactContextOptions() {
       const select = qs("contactContextSelect");
       if (!select) return;
-      const activeContexts = state.contactContexts.filter(item => item.status !== "inactive");
+      const activeContexts = expandedContactContexts().filter(item => item.status !== "inactive");
       select.innerHTML = [
         `<option value="">手动选择客户和平台</option>`,
-        ...activeContexts.map(item => `<option value="${item.id}">${escapeHtml(item.contact_name || "对接人")}</option>`),
+        ...activeContexts.map(item => `<option value="${escapeAttr(item.id)}" data-option-key="${escapeAttr(item.optionKey)}">${escapeHtml(item.contact_name || "对接人")}</option>`),
       ].join("");
       syncContactContextPreview(null);
     }
@@ -2263,8 +2287,25 @@
       ].filter(Boolean).join(" · ");
     }
     function selectedContactContext() {
-      const contextId = qs("contactContextSelect")?.value;
+      const select = qs("contactContextSelect");
+      const optionKey = select?.selectedOptions?.[0]?.dataset?.optionKey;
+      if (optionKey) {
+        return expandedContactContexts().find(item => item.optionKey === optionKey) || null;
+      }
+      const contextId = select?.value;
       return state.contactContexts.find(item => item.id === contextId) || null;
+    }
+    function selectContactContextOption(context) {
+      const select = qs("contactContextSelect");
+      if (!select || !context) return;
+      const optionKey = context.optionKey || `${context.id}:0`;
+      const option = [...select.options].find(item => item.dataset.optionKey === optionKey);
+      if (option) {
+        select.value = option.value;
+        option.selected = true;
+      } else {
+        select.value = context.id || "";
+      }
     }
     async function applyContactContextSelection() {
       const context = selectedContactContext();
@@ -2329,15 +2370,18 @@
       const groupNickname = qs("createGroupNicknameInput")?.value.trim();
       const contactName = qs("createGroupContactNameInput")?.value.trim();
       const status = qs("createGroupStatusSelect")?.value || "active";
+      const contactNames = splitDelimitedText(contactName);
+      const groupNicknames = splitDelimitedText(groupNickname);
       if (!groupName) throw new Error("请填写群名称");
       if (!customerCode) throw new Error("请选择基金");
-      if (!businessPlatform) throw new Error("请选择平台");
+      if (contactNames.length <= 1 && !businessPlatform) throw new Error("请选择平台");
       if (!groupNickname) throw new Error("请填写群昵称");
       if (!contactName) throw new Error("请填写对接人");
+      if (contactNames.length > 1 && groupNicknames.length !== contactNames.length) throw new Error("多个对接人时，群昵称数量需要和对接人数量一致");
       return {
         groupName,
         customerCode,
-        businessPlatform,
+        businessPlatform: contactNames.length > 1 ? undefined : businessPlatform,
         groupNickname,
         contactName,
         nicknameUpdated: qs("createGroupNicknameUpdatedSelect")?.value === "1",
@@ -2377,11 +2421,71 @@
     function uniqueGroupOptions(getter) {
       const seen = new Map();
       state.groupMappings.forEach(item => {
-        const value = String(getter(item)?.value ?? "").trim();
-        const label = String(getter(item)?.label ?? value).trim();
-        if (value && !seen.has(value)) seen.set(value, label || value);
+        const rawOptions = getter(item);
+        const options = Array.isArray(rawOptions) ? rawOptions : [rawOptions];
+        options.forEach(option => {
+          const value = String(option?.value ?? "").trim();
+          const label = String(option?.label ?? value).trim();
+          if (value && !seen.has(value)) seen.set(value, label || value);
+        });
       });
       return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN"));
+    }
+    function groupMappingKey(item) {
+      return String(item.group_name || item.group_key || item.group_id || item.id || "").trim();
+    }
+    function aggregateGroupMappings(rows) {
+      const grouped = new Map();
+      [...rows]
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+        .forEach(item => {
+          const key = groupMappingKey(item);
+          if (!grouped.has(key)) {
+            grouped.set(key, {
+              ...item,
+              child_ids: [],
+              customer_codes: [],
+              customers: [],
+              contacts: [],
+              nicknames: [],
+              platforms: [],
+              collect_enabled_any: false,
+              nickname_updated_all: true,
+              created_at: item.created_at,
+            });
+          }
+          const group = grouped.get(key);
+          group.child_ids.push(item.id);
+          if (item.customer_code && !group.customer_codes.includes(item.customer_code)) {
+            group.customer_codes.push(item.customer_code);
+          }
+          const customerLabel = item.customer_name || item.customer_code;
+          if (customerLabel && !group.customers.includes(customerLabel)) {
+            group.customers.push(customerLabel);
+          }
+          splitDelimitedText(item.contact_name).forEach(name => {
+            if (name && !group.contacts.includes(name)) group.contacts.push(name);
+          });
+          splitDelimitedText(item.group_nickname).forEach(name => {
+            if (name && !group.nicknames.includes(name)) group.nicknames.push(name);
+          });
+          if (item.business_platform && !group.platforms.includes(item.business_platform)) {
+            group.platforms.push(item.business_platform);
+          }
+          group.collect_enabled_any = group.collect_enabled_any || Number(item.collect_enabled ?? 1) === 1;
+          group.nickname_updated_all = group.nickname_updated_all && Number(item.nickname_updated || 0) === 1;
+          if (item.status === "active") group.status = "active";
+        });
+      return Array.from(grouped.values()).map(group => ({
+        ...group,
+        customer_code: group.customer_codes.join("，") || group.customer_code,
+        customer_name: group.customers.join("，") || group.customer_name,
+        contact_name: group.contacts.join("，") || group.contact_name,
+        group_nickname: group.nicknames.join("，") || group.group_nickname,
+        business_platform: group.contacts.length > 1 ? "全部平台" : (group.platforms[0] || "全部平台"),
+        collect_enabled: group.collect_enabled_any ? 1 : 0,
+        nickname_updated: group.nickname_updated_all ? 1 : 0,
+      }));
     }
     function groupFilterSelect(label, key, allLabel, options) {
       const selected = state.groupFilters[key] || "all";
@@ -2406,10 +2510,9 @@
         value: item.business_platform,
         label: item.business_platform,
       }));
-      const contactOptions = uniqueGroupOptions(item => ({
-        value: item.contact_name,
-        label: item.contact_name,
-      }));
+      const contactOptions = uniqueGroupOptions(item =>
+        splitDelimitedText(item.contact_name).map(name => ({ value: name, label: name }))
+      );
       const statusOptions = [
         { value: "active", label: "启用" },
         { value: "inactive", label: "停用" },
@@ -2424,10 +2527,10 @@
     }
     function filteredGroupMappings() {
       const filters = state.groupFilters;
-      return state.groupMappings.filter(item => {
-        if (filters.customerCode !== "all" && item.customer_code !== filters.customerCode) return false;
-        if (filters.businessPlatform !== "all" && item.business_platform !== filters.businessPlatform) return false;
-        if (filters.contactName !== "all" && item.contact_name !== filters.contactName) return false;
+      return aggregateGroupMappings(state.groupMappings).filter(item => {
+        if (filters.customerCode !== "all" && !(item.customer_codes || []).includes(filters.customerCode)) return false;
+        if (filters.businessPlatform !== "all" && !(item.platforms || []).includes(filters.businessPlatform)) return false;
+        if (filters.contactName !== "all" && !(item.contacts || []).includes(filters.contactName)) return false;
         if (filters.enabledStatus !== "all" && item.status !== filters.enabledStatus) return false;
         return true;
       });
@@ -2438,6 +2541,10 @@
       renderGroupCreateForm();
       renderGroupDimensionFilters();
       const rows = filteredGroupMappings();
+      const monitoredCount = rows.filter(item => item.status === "active" && Number(item.collect_enabled || 0) === 1).length;
+      if (qs("groupMappingTitle")) {
+        qs("groupMappingTitle").textContent = `群映射列表（${monitoredCount} 个群已经加入监控）`;
+      }
       if (!state.groupMappings.length) {
         board.innerHTML = `<div class="empty-list">暂无群映射。点击右上角“新增群信息”先添加一个群。</div>`;
         return;
@@ -2482,13 +2589,20 @@
       `;
     }
     async function completeGroupNicknameStatus(id) {
-      const item = state.groupMappings.find(row => row.id === id);
-      if (!item || Number(item.nickname_updated || 0)) return;
+      const group = aggregateGroupMappings(state.groupMappings).find(row => row.id === id || (row.child_ids || []).includes(id));
+      if (!group || Number(group.nickname_updated || 0)) return;
+      const targetIds = (group.child_ids || [id]).filter(childId => {
+        const child = state.groupMappings.find(row => row.id === childId);
+        return child && !Number(child.nickname_updated || 0);
+      });
+      if (!targetIds.length) return;
       try {
-        await request(`/contact-contexts/wechat-groups/${encodeURIComponent(id)}`, {
-          method: "PATCH",
-          body: { nicknameUpdated: true },
-        });
+        await Promise.all(targetIds.map(childId =>
+          request(`/contact-contexts/wechat-groups/${encodeURIComponent(childId)}`, {
+            method: "PATCH",
+            body: { nicknameUpdated: true },
+          })
+        ));
         await refreshGroupManagement();
         toast("微信备注进度已完成");
       } catch (error) {
@@ -3667,10 +3781,7 @@
       }) || null;
     }
     function splitCandidateContactNames(candidate) {
-      return String(candidate.owner_name || candidate.contact_name || candidate.contact_names || "")
-        .split(/[,，、;；/|]+/)
-        .map(item => item.trim())
-        .filter(Boolean);
+      return splitDelimitedText(candidate.owner_name || candidate.contact_name || candidate.contact_names || "");
     }
     function platformMatchScore(left, right) {
       const a = normalizePreviewText(left);
@@ -3690,7 +3801,7 @@
     }
     function matchContactContextForCandidate(candidate, matchedCustomer = null) {
       const ownerNames = splitCandidateContactNames(candidate);
-      const activeContexts = state.contactContexts.filter(item => item.status !== "inactive");
+      const activeContexts = expandedContactContexts().filter(item => item.status !== "inactive");
       const scored = [];
       for (const context of activeContexts) {
         let bestNameScore = 0;
@@ -3752,7 +3863,7 @@
       const customer = matchCustomerForCandidate(candidate);
       const contactContext = matchContactContextForCandidate(candidate, customer);
       if (contactContext && qs("contactContextSelect")) {
-        qs("contactContextSelect").value = contactContext.id;
+        selectContactContextOption(contactContext);
         syncContactContextPreview(contactContext);
       }
       if ((contactContext?.customer_code || customer?.customer_code) && qs("customerSelect")) {

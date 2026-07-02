@@ -781,8 +781,8 @@
 群管理页面复用 `contact-contexts` 模块，底层数据表为 `group_contact_mappings`。
 
 - `GET /api/v1/contact-contexts/wechat-groups`：查询群映射列表，返回群名称、基金客户、业务平台、群昵称、对接人、微信备注进度和状态。
-- `POST /api/v1/contact-contexts/wechat-groups`：新增群信息。前端传入 `groupName`、`customerCode`、`businessPlatform`、`groupNickname`、`contactName`、`nicknameUpdated`、`status`；`group_key` 由后端自动生成。
-- `PATCH /api/v1/contact-contexts/wechat-groups/{id}`：更新群信息或单独更新 `nicknameUpdated`。群管理列表中的“备注已完成”只调用该接口更新当前行。
+- `POST /api/v1/contact-contexts/wechat-groups`：新增群信息。前端传入 `groupName`、`customerCode`、`businessPlatform`、`groupNickname`、`contactName`、`nicknameUpdated`、`status`；`group_key` 由后端自动生成。`contactName` 和 `groupNickname` 支持中英文逗号、顿号、分号和 `|` 分隔多个值，后端会拆成多条 `group_contact_mappings` 保存；多个对接人时平台保存为空。
+- `PATCH /api/v1/contact-contexts/wechat-groups/{id}`：更新群信息或单独更新 `nicknameUpdated`。群管理列表展示为一群一行，点击“备注已完成”时前端会对该群下未完成的映射逐条调用该接口。
 - `DELETE /api/v1/contact-contexts/wechat-groups/{id}`：软删除群映射，写入 `deleted_at` 并将 `status` 置为 `deleted`。
 
 ### 合同报价录入约定
