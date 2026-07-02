@@ -1,6 +1,6 @@
 # 向量引擎管理工作台后端接口设计 API 清单
 
-更新时间：2026-06-26
+更新时间：2026-07-02
 
 ## 当前重点接口
 
@@ -21,7 +21,7 @@
 - `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务。
 - `GET /api/v1/requirements/business-category-owners`：查询业务大类负责人配置，返回大类编码、名称、负责人用户和状态。
 - `PATCH /api/v1/requirements/business-category-owners/{categoryCode}`：更新某个业务大类的负责人；更新后会回填该业务大类历史任务的 `reporter_user_id`。
-- `GET /api/v1/requirements/ai-preview-candidates?limit=12`：读取 AI 已识别但未确认的候选需求，并返回证据链。
+- `GET /api/v1/requirements/ai-preview-candidates?limit=12&scope=mine|all|processed&reviewOwnerId=<userId>`：读取 AI 已识别候选需求并返回证据链；管理员可按负责人过滤全部待确认候选。
 - `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/confirm`：将候选需求标记为已确认，避免正式录入后重复展示。
 - `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/reject`：将候选需求标记为伪需求，状态置为 `rejected`，AI 预览区不再展示；支持提交 `rejectReasons`、`rejectNote`、`useForPromptOptimization`，后端写入复核日志。
 - `POST /api/v1/requirements/ai-match-context`：根据文件内容匹配客户和业务大类。
@@ -272,6 +272,14 @@
 - 说明：更新业务大类负责人配置，并立即回填该大类历史任务的 `reporter_user_id`。
 - 入参：`ownerUserId`
 - 约束：`ownerUserId` 为空表示未配置负责人；非空时必须是 active 用户。
+
+### `GET /requirements/ai-preview-candidates`
+- 说明：读取 AI 候选需求和证据链。
+- 查询参数：
+  - `limit`：返回数量，默认 12，范围 1-100。
+  - `scope`：`mine` 当前负责人待确认；`all` 全部待确认；`processed` 历史真实需求。
+  - `reviewOwnerId`：管理员在 `scope=all` 时可传，用于只查看某个负责人名下待确认候选。
+- 权限口径：管理员或具备 `ai_preview.view_all` / `*` 权限可查看全量并按负责人筛选；业务负责人只返回自己的待确认候选。
 
 ### `POST /requirements/ai-split-with-tasks`
 - 说明：加载需求文件内容后，自动拆分为多条需求，并为每条需求生成一个待指派任务

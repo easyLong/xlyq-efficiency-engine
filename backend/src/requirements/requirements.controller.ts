@@ -39,12 +39,14 @@ export class RequirementsController {
   aiPreviewCandidates(
     @Query('limit') limit?: string,
     @Query('scope') scope?: string,
+    @Query('reviewOwnerId') reviewOwnerId?: string,
     @Req() request?: Request & { user?: UserEntity },
   ) {
     return this.requirementsService.listAiPreviewCandidates(
       limit ? Number(limit) : 12,
       scope,
       request?.user ?? null,
+      reviewOwnerId,
     );
   }
 

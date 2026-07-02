@@ -12,6 +12,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { getAiPrompt } from '../ai-prompts/prompt-registry';
 import {
   buildAccessProfile,
+  hasPermission,
   normalizeAccessBusinessCategory,
 } from '../common/access-control';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
@@ -412,6 +413,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     limit = 12,
     scope = 'mine',
     currentUser: UserEntity | null = null,
+    reviewOwnerId?: string | null,
   ) {
     const normalizedLimit = Math.max(1, Math.min(100, Number(limit) || 12));
     await this.assignAiPreviewReviewOwners();
@@ -419,14 +421,22 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     const profile = currentUser
       ? await buildAccessProfile(this.dataSource, currentUser)
       : null;
-    const normalizedScope =
-      profile?.dataScope.requirements === 'all'
-        ? this.normalizeAiPreviewScope(scope)
-        : 'mine';
+    const canViewAll =
+      Boolean(profile) &&
+      (profile!.dataScope.requirements === 'all' ||
+        hasPermission(profile!, 'ai_preview.view_all'));
+    const normalizedScope = canViewAll
+      ? this.normalizeAiPreviewScope(scope)
+      : 'mine';
+    const normalizedReviewOwnerId =
+      canViewAll && normalizedScope === 'all'
+        ? this.normalizeAiPreviewReviewOwnerId(reviewOwnerId)
+        : null;
     return this.listOpsAiPreviewCandidates(
       normalizedLimit,
       normalizedScope,
       currentUser?.id ?? null,
+      normalizedReviewOwnerId,
     );
   }
 
@@ -850,10 +860,19 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       : 'mine';
   }
 
+  private normalizeAiPreviewReviewOwnerId(value?: string | null) {
+    const normalized = String(value ?? '').trim();
+    if (!normalized || normalized === 'all') {
+      return null;
+    }
+    return normalized;
+  }
+
   private async listOpsAiPreviewCandidates(
     limit: number,
     scope: string,
     currentUserId: string | null,
+    reviewOwnerId: string | null = null,
   ) {
     const whereParts = ['c.deleted_at IS NULL'];
     const params: Array<string | number> = [];
@@ -868,6 +887,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       if (scope === 'mine' && currentUserId) {
         whereParts.push('c.review_owner_user_id = ?');
         params.push(currentUserId);
+      } else if (scope === 'all' && reviewOwnerId) {
+        whereParts.push('c.review_owner_user_id = ?');
+        params.push(reviewOwnerId);
       }
     }
     params.push(limit);

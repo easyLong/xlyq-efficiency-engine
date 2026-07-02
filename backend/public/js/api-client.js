@@ -41,6 +41,7 @@
         aiPreviewCandidates,
         quotations,
         businessCategoryRelations,
+        businessCategoryOwners,
         health,
       ] = await Promise.all([
         request("/projects"),
@@ -53,6 +54,7 @@
           : Promise.resolve([]),
         quoteVisible ? request("/quotations") : Promise.resolve([]),
         request("/dimensions/business-category-relations").catch(() => []),
+        aiPreviewVisible ? request("/requirements/business-category-owners").catch(() => []) : Promise.resolve([]),
         request("/health"),
       ]);
 
@@ -68,6 +70,7 @@
         quoteMappings: unwrap(historyBoard?.quoteMappings),
         aiPreviewCandidates: unwrap(aiPreviewCandidates),
         businessCategoryRelations: unwrap(businessCategoryRelations),
+        businessCategoryOwners: unwrap(businessCategoryOwners),
         health,
       };
     }

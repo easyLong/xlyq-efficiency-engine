@@ -129,6 +129,20 @@ npm run test:e2e -- --runInBand
 - `npm run build`：通过。
 - `/api/v1/health`：正常，数据库连接正常。
 
+## 2026-07-02 最新状态
+
+### 已完成优化
+
+- AI 预览需求管理员视图新增负责人筛选下拉框，支持在 `全部待确认` 和各业务负责人之间切换。
+- `GET /api/v1/requirements/ai-preview-candidates` 新增 `reviewOwnerId` 查询参数；管理员在 `scope=all` 时可按 `review_owner_user_id` 过滤候选。
+- 后端全量筛选权限口径统一为 `ai_preview.view_all` / `*`，普通负责人即使传入全量参数也会被收敛为 `mine`。
+
+### 最新验证结果
+
+- `npm run build`：通过。
+- `npm test -- --runInBand`：通过。
+- 本地 `9001` 健康检查正常；接口验证全量待确认 2 条，筛选陈奕浩后返回 1 条且负责人 ID 匹配。
+
 ## 2026-06-22 最新状态
 
 ### 已完成优化

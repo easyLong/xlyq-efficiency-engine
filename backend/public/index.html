@@ -333,6 +333,7 @@
     .status-filter button { border: 1px solid #d8dfcf; border-radius: 999px; padding: 7px 11px; background: #fffdf7; color: #50604e; }
     .status-filter button.active { background: #2f6b45; border-color: #2f6b45; color: #fff; }
     .status-filter .filter-select { width: auto; min-width: 190px; border-radius: 999px; padding: 7px 11px; background: #fffdf7; }
+    .status-filter .filter-select.active { border-color: #2f6b45; color: #2f6b45; font-weight: 700; }
     .intake-tabs { display: inline-flex; gap: 7px; padding: 6px; background: #edf3e8; border: 1px solid #d8dfcf; border-radius: 16px; }
     .intake-tabs button { border: 0; border-radius: 12px; padding: 9px 13px; background: transparent; color: #50604e; font-weight: 800; }
     .intake-tabs button.active { background: #2f6b45; color: #fff; box-shadow: 0 8px 18px rgba(47,107,69,.18); }
@@ -1877,11 +1878,13 @@
         enabledStatus: "active",
       },
       businessCategoryRelations: [],
+      businessCategoryOwners: [],
       requirements: [],
       requirementItems: [],
       tasks: [],
       aiPreviewCandidates: [],
       aiPreviewScope: "mine",
+      aiPreviewOwnerId: "all",
       quotations: [],
       quoteMappings: [],
       quotationItemsById: {},
@@ -2162,6 +2165,7 @@
       state.customers = appData.customers;
       state.contactContexts = appData.contactContexts;
       state.businessCategoryRelations = appData.businessCategoryRelations || [];
+      state.businessCategoryOwners = appData.businessCategoryOwners || [];
       state.users = appData.users;
       const refreshedUser = state.users.find(user => user.id === state.user?.id || user.username === state.user?.username);
       if (refreshedUser) {
@@ -3405,7 +3409,12 @@
         return;
       }
       try {
-        state.aiPreviewCandidates = unwrap(await request(`/requirements/ai-preview-candidates?limit=12&scope=${encodeURIComponent(state.aiPreviewScope || "mine")}`));
+        const scope = state.aiPreviewScope || "mine";
+        const params = new URLSearchParams({ limit: "12", scope });
+        if (scope === "all" && can("ai_preview.view_all") && state.aiPreviewOwnerId && state.aiPreviewOwnerId !== "all") {
+          params.set("reviewOwnerId", state.aiPreviewOwnerId);
+        }
+        state.aiPreviewCandidates = unwrap(await request(`/requirements/ai-preview-candidates?${params.toString()}`));
       } catch (error) {
         console.warn("AI preview refresh failed", error);
         state.aiPreviewCandidates = state.aiPreviewCandidates || [];
@@ -3443,6 +3452,41 @@
     function aiCopyTargetLabel(target) {
       return target === "design" ? "设计" : "运营";
     }
+    function aiPreviewOwnerOptions() {
+      const options = new Map();
+      (state.businessCategoryOwners || []).forEach(row => {
+        if (!row?.ownerUserId || row.status === "inactive") return;
+        const categoryName = row.businessCategoryName || projectTypeLabel(row.businessCategoryCode);
+        const ownerName = row.ownerName || row.ownerUsername || row.ownerUserId;
+        if (!options.has(row.ownerUserId)) {
+          options.set(row.ownerUserId, { value: row.ownerUserId, ownerName, categories: [] });
+        }
+        const option = options.get(row.ownerUserId);
+        if (categoryName && !option.categories.includes(categoryName)) option.categories.push(categoryName);
+      });
+      return Array.from(options.values()).map(item => ({
+        value: item.value,
+        label: `${item.ownerName}${item.categories.length ? `（${item.categories.join("、")}）` : ""}`,
+      }));
+    }
+    function aiPreviewOwnerLabel() {
+      if (!state.aiPreviewOwnerId || state.aiPreviewOwnerId === "all") return "全部待确认";
+      return aiPreviewOwnerOptions().find(item => item.value === state.aiPreviewOwnerId)?.label || "全部待确认";
+    }
+    function renderAiPreviewScopeControls(scope) {
+      const canViewAll = can("ai_preview.view_all");
+      const ownerOptions = aiPreviewOwnerOptions();
+      return `
+        <button class="${scope === "mine" ? "active" : ""}" onclick="setAiPreviewScope('mine')">我的待确认</button>
+        ${canViewAll ? `
+          <select class="filter-select ${scope === "all" ? "active" : ""}" onchange="setAiPreviewOwnerFilter(this.value)" title="按负责人筛选待确认需求">
+            <option value="all" ${state.aiPreviewOwnerId === "all" ? "selected" : ""}>全部待确认</option>
+            ${ownerOptions.map(item => `<option value="${escapeAttr(item.value)}" ${state.aiPreviewOwnerId === item.value ? "selected" : ""}>${safeText(item.label)}</option>`).join("")}
+          </select>
+          <button class="${scope === "processed" ? "active" : ""}" onclick="setAiPreviewScope('processed')">历史真实需求</button>
+        ` : ""}
+      `;
+    }
     function renderAiPreviewCopyActions(candidate) {
       if (!isCopywritingAiCandidate(candidate)) return "";
       if (["confirmed", "rejected"].includes(String(candidate.status || candidate.review_status || ""))) return "";
@@ -3465,18 +3509,20 @@
       const scope = state.aiPreviewScope || "mine";
       const scopeLabels = can("ai_preview.view_all") ? {
         mine: "我的待确认",
-        all: "全部待确认",
+        all: aiPreviewOwnerLabel(),
         processed: "历史真实需求",
       } : { mine: "我的待确认" };
       const scopeNote = {
         mine: "只显示分配给当前登录负责人的候选需求。",
-        all: "显示所有仍待确认的候选需求，可用于管理员兜底和转派前排查。",
+        all: state.aiPreviewOwnerId && state.aiPreviewOwnerId !== "all"
+          ? `只显示 ${aiPreviewOwnerLabel()} 名下仍待确认的候选需求。`
+          : "显示所有仍待确认的候选需求，可用于管理员兜底和转派前排查。",
         processed: "显示已确认入库的真实需求和已标记伪需求的候选记录。",
       }[scope] || "自动读取AI识别到的预览候选，需人工确认后进入真实需求库。";
       if (!rows.length) {
         board.innerHTML = `
           <div class="status-filter ai-preview-tabs">
-            ${Object.entries(scopeLabels).map(([key, label]) => `<button class="${scope === key ? "active" : ""}" onclick="setAiPreviewScope('${key}')">${label}</button>`).join("")}
+            ${renderAiPreviewScopeControls(scope)}
           </div>
           <div class="panel-note">${safeText(scopeNote)}</div>
           <div class="ai-preview-empty">暂无${safeText(scopeLabels[scope] || "候选需求")}</div>
@@ -3485,7 +3531,7 @@
       }
       board.innerHTML = `
         <div class="status-filter ai-preview-tabs">
-          ${Object.entries(scopeLabels).map(([key, label]) => `<button class="${scope === key ? "active" : ""}" onclick="setAiPreviewScope('${key}')">${label}</button>`).join("")}
+          ${renderAiPreviewScopeControls(scope)}
         </div>
         <div class="panel-note">${safeText(scopeNote)}</div>
         <div class="ai-preview-list">${
@@ -3545,6 +3591,17 @@
         scope = "mine";
       }
       state.aiPreviewScope = scope || "mine";
+      if (state.aiPreviewScope !== "all") {
+        state.aiPreviewOwnerId = "all";
+      }
+      state.selectedAiPreviewCandidateId = null;
+      updateCreateRequirementButtonLabel();
+      await refreshAiPreviewBoard();
+    }
+    async function setAiPreviewOwnerFilter(ownerId) {
+      if (!can("ai_preview.view_all")) return;
+      state.aiPreviewScope = "all";
+      state.aiPreviewOwnerId = ownerId || "all";
       state.selectedAiPreviewCandidateId = null;
       updateCreateRequirementButtonLabel();
       await refreshAiPreviewBoard();
