@@ -90,7 +90,7 @@ AI预览需求卡片
 | 二级分类 | `requirements.secondary_category`，受业务大类约束 |
 | 员工/执行人 | `tasks.assignee_user_id` |
 
-业务平台固定选项：
+业务平台来自维度字典 `dimension_dictionaries.dimension_type = business_platform`，默认种子：
 
 - 招行
 - 工行
@@ -98,6 +98,7 @@ AI预览需求卡片
 - 理财通
 - 蚂蚁
 - 天天基金
+- 京东金融
 
 业务大类和二级分类：
 
@@ -343,7 +344,8 @@ todo -> assigned -> in_progress -> pending_review -> completed
 - 表：`dimension_dictionaries`
 - 大类二级关系表：`business_category_secondary_categories`
 - 接口：`GET /api/v1/dimensions`、`GET /api/v1/dimensions/grouped`
-- 默认种子：业务平台、业务大类、二级分类，以及大类与二级分类的固定关系。
+- 默认种子：业务平台、业务大类、二级分类，以及大类与二级分类的固定关系；字典默认种子只补缺失项，不覆盖已有字典配置。
+- 需求录入的业务平台下拉优先读取 `GET /api/v1/dimensions?type=business_platform`，表内 `status = active` 才会显示；接口失败时回退到前端默认平台。
 
 AI 提示词：
 

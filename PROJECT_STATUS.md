@@ -233,7 +233,7 @@ npm run test:e2e -- --runInBand
 - 任务流程快照：新增 `task-workflow.ts`，看板、任务 workflow 接口、资产登记上下文、提交交付结果都会返回统一的 `workflow`。
 - 飞书解耦：`FeishuService` 变为门面，OpenAPI token、表格创建/读写/授权、员工同步、卡片模板、卡片回调处理都拆到独立模块。
 - 模型提示词：需求上下文识别、需求拆分、报价单解析提示词从 service 中移出，集中在 `ai-prompts/prompt-registry.ts` 做版本管理。
-- 维度字典：新增 `dimension_dictionaries`，支持业务平台、业务大类、二级分类的统一后端维护和默认种子。
+- 维度字典：新增 `dimension_dictionaries`，支持业务平台、业务大类、二级分类的统一后端维护和默认种子；需求录入的业务平台下拉已改为优先读取 `business_platform` 字典项。
 - 前端模块化起步：管理端开始抽离 app shell、API client、业务配置，不再把所有基础能力都堆在 `index.html`。
 - 员工提醒流程：进度提醒扫描覆盖已指派未开始任务，并支持 `repeatDays` 冷却周期，避免永远只提醒一次。
 

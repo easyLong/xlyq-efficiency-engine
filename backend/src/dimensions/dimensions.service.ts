@@ -162,6 +162,15 @@ export class DimensionsService implements OnModuleInit {
 
   private async seedDefaults() {
     for (const item of this.defaultDimensions()) {
+      const existing = await this.dimensionsRepository.findOne({
+        where: {
+          dimension_type: item.dimensionType,
+          dimension_code: item.dimensionCode,
+        },
+      });
+      if (existing) {
+        continue;
+      }
       await this.upsert({
         dimensionType: item.dimensionType,
         dimensionCode: item.dimensionCode,
@@ -206,7 +215,7 @@ export class DimensionsService implements OnModuleInit {
 
   private defaultDimensions(): SeedDimension[] {
     return [
-      ...['招行', '工行', '交行', '理财通', '蚂蚁', '天天基金'].map(
+      ...['招行', '工行', '交行', '理财通', '蚂蚁', '天天基金', '京东金融'].map(
         (name, index) => ({
           dimensionType: 'business_platform',
           dimensionCode: this.slug(name),
@@ -301,6 +310,7 @@ export class DimensionsService implements OnModuleInit {
       理财通: 'licaitong',
       蚂蚁: 'ant',
       天天基金: 'eastmoney',
+      京东金融: 'jd_finance',
       设计: 'design',
       文案: 'copywriting',
       运营: 'operation',

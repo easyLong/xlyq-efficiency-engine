@@ -40,6 +40,7 @@
         historyBoard,
         aiPreviewCandidates,
         quotations,
+        businessPlatformDimensions,
         businessCategoryRelations,
         businessCategoryOwners,
         health,
@@ -53,6 +54,7 @@
           ? request("/requirements/ai-preview-candidates?limit=12&scope=mine").catch(() => [])
           : Promise.resolve([]),
         quoteVisible ? request("/quotations") : Promise.resolve([]),
+        request("/dimensions?type=business_platform").catch(() => []),
         request("/dimensions/business-category-relations").catch(() => []),
         aiPreviewVisible ? request("/requirements/business-category-owners").catch(() => []) : Promise.resolve([]),
         request("/health"),
@@ -69,6 +71,7 @@
         quotations: unwrap(quotations),
         quoteMappings: unwrap(historyBoard?.quoteMappings),
         aiPreviewCandidates: unwrap(aiPreviewCandidates),
+        businessPlatformDimensions: unwrap(businessPlatformDimensions),
         businessCategoryRelations: unwrap(businessCategoryRelations),
         businessCategoryOwners: unwrap(businessCategoryOwners),
         health,

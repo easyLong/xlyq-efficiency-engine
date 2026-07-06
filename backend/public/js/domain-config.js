@@ -6,6 +6,7 @@
     '理财通',
     '蚂蚁',
     '天天基金',
+    '京东金融',
   ];
 
   const businessCategories = [

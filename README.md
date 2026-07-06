@@ -35,7 +35,7 @@
 
 - 基金客户
 - 对接人
-- 业务平台：招行、工行、交行、理财通、蚂蚁、天天基金
+- 业务平台：默认包含招行、工行、交行、理财通、蚂蚁、天天基金、京东金融；实际下拉优先读取 `dimension_dictionaries.dimension_type = business_platform`
 - 业务大类：设计、文案、运营、社区
 - 二级分类
 - 员工
@@ -188,7 +188,7 @@ npm run migrate:project-tables -- --execute
 - 任务流程快照集中到 `backend/src/tasks/task-workflow.ts`，接口会返回当前阶段、下一步动作、可用操作和进度。
 - 飞书集成已拆分为 OpenAPI client、表格 client、卡片模板、回调解析、任务卡片动作处理、员工同步 service。
 - AI 提示词已迁移到 `backend/src/ai-prompts/prompt-registry.ts`，按 key 和 version 管理。
-- 维度字典新增 `dimension_dictionaries` 表和 `/api/v1/dimensions` 接口，业务平台/大类/二级分类由后端统一种子和维护。
+- 维度字典新增 `dimension_dictionaries` 表和 `/api/v1/dimensions` 接口，业务平台/大类/二级分类由后端统一种子和维护；业务平台下拉优先读取字典表，新增平台可直接写入 `business_platform` 类型。
 - 前端静态页已开始模块化，新增 `public/js/app-shell.js`、`public/js/api-client.js`、`public/js/domain-config.js`。
 - 员工资产登记页会展示任务“下一步”，提交图片资产或交付链接后任务进入 `pending_review`，统计口径同步使用资产文件表。
 

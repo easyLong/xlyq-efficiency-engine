@@ -46,7 +46,7 @@
 - `GET /api/v1/contact-contexts`：查询群内对接人映射，底层按 `customer_code` 存储基金简称；兼容字段 `customer_id` 也返回基金简称。
 - `POST /api/v1/contact-contexts`：新增群内对接人映射。
 - `PATCH /api/v1/contact-contexts/{id}`：更新群内对接人映射。
-- `GET /api/v1/dimensions`：查询维度字典，支持按 `dimensionType`、`parentValue`、`status` 过滤。
+- `GET /api/v1/dimensions`：查询维度字典，支持按 `type`、`parentCode`、`status` 过滤；业务平台使用 `GET /api/v1/dimensions?type=business_platform`。
 - `GET /api/v1/dimensions/grouped`：按类型分组返回业务平台、业务大类、二级分类等字典。
 - `GET /api/v1/dimensions/business-category-relations`：返回业务大类与二级分类关系，用于需求录入二级分类联动。
 - `POST /api/v1/dimensions`：新增或更新字典项。

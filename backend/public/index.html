@@ -1916,7 +1916,7 @@
   <script src="/js/domain-config.js"></script>
   <script>
     const apiBase = "/api/v1";
-    const businessPlatforms = window.XlyqDomainConfig.businessPlatforms;
+    let businessPlatforms = [...window.XlyqDomainConfig.businessPlatforms];
     const businessCategoryDefs = window.XlyqDomainConfig.businessCategories;
     const projectTypes = window.XlyqDomainConfig.projectTypes;
     const state = {
@@ -1936,6 +1936,7 @@
         contactName: "all",
         enabledStatus: "active",
       },
+      businessPlatformDimensions: [],
       businessCategoryRelations: [],
       businessCategoryOwners: [],
       requirements: [],
@@ -2290,11 +2291,26 @@
       renderLoginConfig();
       qs("loginHint").textContent = loginConfig?.emergencyLoginEnabled ? "请选择账号并输入密码登录；应急入口已开启。" : "请选择账号并输入密码登录。";
     }
+    function applyBusinessPlatformDimensions(rows = []) {
+      const configuredPlatforms = (rows || [])
+        .filter(item => !item.status || item.status === "active")
+        .sort((a, b) => {
+          const leftOrder = Number(a.sortOrder ?? a.sort_order ?? 100);
+          const rightOrder = Number(b.sortOrder ?? b.sort_order ?? 100);
+          if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+          return String(a.dimensionName || a.dimension_name || "").localeCompare(String(b.dimensionName || b.dimension_name || ""), "zh-CN");
+        })
+        .map(item => String(item.dimensionName || item.dimension_name || item.dimensionCode || item.dimension_code || "").trim())
+        .filter(Boolean);
+      businessPlatforms = [...new Set(configuredPlatforms.length ? configuredPlatforms : window.XlyqDomainConfig.businessPlatforms)];
+    }
     async function loadAppData() {
       const appData = await api.loadAppData();
       state.projects = appData.projects;
       state.customers = appData.customers;
       state.contactContexts = appData.contactContexts;
+      state.businessPlatformDimensions = appData.businessPlatformDimensions || [];
+      applyBusinessPlatformDimensions(state.businessPlatformDimensions);
       state.businessCategoryRelations = appData.businessCategoryRelations || [];
       state.businessCategoryOwners = appData.businessCategoryOwners || [];
       state.users = appData.users;
