@@ -278,6 +278,42 @@ export class NotificationsService {
     });
   }
 
+  async notifyTaskAssetsSubmittedForReview(
+    task: TaskEntity,
+    assetCount: number,
+  ) {
+    const reviewerUserId = await this.getTaskReviewerUserId(task);
+    if (!reviewerUserId) {
+      return null;
+    }
+    const [project, assignee] = await Promise.all([
+      this.projectsRepository.findOne({ where: { id: task.project_id } }),
+      task.assignee_user_id
+        ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
+        : Promise.resolve(null),
+    ]);
+    const fundPlatformLabel = await this.taskFundPlatformLabel(task, project);
+    const taskDetail = await this.taskDetailForNotification(task);
+
+    return this.sendToUsers([reviewerUserId], {
+      title: `任务待验收：${task.task_name}`,
+      content: [
+        `任务：${task.task_name}`,
+        ...(taskDetail ? [`任务详情：${taskDetail}`] : []),
+        `基金平台：${fundPlatformLabel}`,
+        `执行人：${assignee?.display_name ?? '-'}`,
+        `交付资产：${assetCount} 项`,
+        `当前状态：${this.taskStatusLabel(task.status)}`,
+        '请查看交付内容并完成验收。',
+      ].join('\n'),
+      objectType: 'task_asset_review',
+      objectId: task.id,
+      channels: ['in_app', 'feishu_app'],
+      actionUrl: this.buildTaskAssetReviewUrl(task, reviewerUserId),
+      actionText: '查看交付资产',
+    });
+  }
+
   async notifyTaskReturnedForRevision(task: TaskEntity, reason: string) {
     if (!task.assignee_user_id) {
       return null;
@@ -659,6 +695,12 @@ export class NotificationsService {
     return `${baseUrl.replace(/\/$/, '')}/asset-sheet.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}&token=${encodeURIComponent(token)}`;
   }
 
+  private buildTaskAssetReviewUrl(task: TaskEntity, reviewerUserId: string) {
+    const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
+    const token = this.taskReviewAccessToken(task, reviewerUserId);
+    return `${baseUrl.replace(/\/$/, '')}/asset-review.html?taskId=${task.id}&token=${encodeURIComponent(token)}`;
+  }
+
   private taskAccessToken(task: TaskEntity) {
     const secret =
       process.env.TASK_ACCESS_TOKEN_SECRET ??
@@ -667,6 +709,17 @@ export class NotificationsService {
       'xlyq-efficiency-engine-local-secret';
     return createHmac('sha256', secret)
       .update(`${task.id}:${task.task_no}`)
+      .digest('hex');
+  }
+
+  private taskReviewAccessToken(task: TaskEntity, reviewerUserId: string) {
+    const secret =
+      process.env.TASK_ACCESS_TOKEN_SECRET ??
+      process.env.APP_SECRET ??
+      process.env.DB_PASSWORD ??
+      'xlyq-efficiency-engine-local-secret';
+    return createHmac('sha256', secret)
+      .update(`asset-review:${task.id}:${task.task_no}:${reviewerUserId}`)
       .digest('hex');
   }
 
@@ -736,13 +789,23 @@ export class NotificationsService {
     if (task.assignee_user_id) {
       recipients.push(task.assignee_user_id);
     }
-
-    const ownerUserId = await this.getProjectOwnerUserId(task.project_id);
-    if (ownerUserId) {
-      recipients.push(ownerUserId);
+    if (task.reporter_user_id) {
+      recipients.push(task.reporter_user_id);
+    } else {
+      const ownerUserId = await this.getProjectOwnerUserId(task.project_id);
+      if (ownerUserId) {
+        recipients.push(ownerUserId);
+      }
     }
 
     return [...new Set(recipients)];
+  }
+
+  private async getTaskReviewerUserId(task: TaskEntity) {
+    if (task.reporter_user_id) {
+      return task.reporter_user_id;
+    }
+    return this.getProjectOwnerUserId(task.project_id);
   }
 
   private async getProjectOwnerUserId(projectId: string) {

@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>交付资产查看</title>
+  <style>
+    :root {
+      --bg: #f5f7f3;
+      --panel: #fffdf8;
+      --line: #dfe6d8;
+      --text: #1e2a22;
+      --muted: #657064;
+      --primary: #2f6b4f;
+      --danger: #b4422d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    a { color: inherit; }
+    .shell { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .kicker { color: var(--primary); font-size: 12px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+    h1 { margin: 5px 0 0; font-size: 24px; line-height: 1.25; }
+    .subtitle { margin: 7px 0 0; color: var(--muted); line-height: 1.55; font-size: 13px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 5px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: #405041;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.5fr); gap: 14px; align-items: start; }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: 0 12px 32px rgba(31, 46, 35, .06);
+      overflow: hidden;
+    }
+    .panel-head { padding: 15px 16px 12px; border-bottom: 1px solid #edf1e9; }
+    .panel-head h2 { margin: 0; font-size: 16px; }
+    .panel-body { padding: 15px 16px; display: grid; gap: 12px; }
+    .field { display: grid; gap: 4px; }
+    .field span { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .field strong, .field p { margin: 0; line-height: 1.55; font-size: 14px; }
+    .info-list { display: grid; gap: 9px; }
+    .asset-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .asset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .asset-card {
+      border: 1px solid #e4e9dd;
+      border-radius: 12px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .asset-preview {
+      aspect-ratio: 1.25;
+      display: grid;
+      place-items: center;
+      background: #f0f4ee;
+      color: #7b8679;
+      font-size: 12px;
+      overflow: hidden;
+      cursor: zoom-in;
+    }
+    .asset-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .asset-meta { padding: 9px 10px; display: grid; gap: 6px; }
+    .asset-name { font-size: 13px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .asset-url { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .link-list { display: grid; gap: 8px; }
+    .link-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 11px;
+      border: 1px solid #e4e9dd;
+      border-radius: 11px;
+      background: #fff;
+    }
+    .btn {
+      min-height: 36px;
+      border: 1px solid #cdd8c8;
+      border-radius: 10px;
+      background: #fff;
+      color: #263426;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 13px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .btn.danger { background: #fff3ef; border-color: #edc5ba; color: var(--danger); }
+    .btn:disabled { opacity: .58; cursor: not-allowed; }
+    .actions { display: flex; gap: 9px; flex-wrap: wrap; }
+    textarea {
+      width: 100%;
+      min-height: 86px;
+      border: 1px solid #cfd8c9;
+      border-radius: 11px;
+      padding: 10px;
+      resize: vertical;
+      font: inherit;
+      background: #fff;
+    }
+    .empty {
+      padding: 22px;
+      border: 1px dashed #cfd8c9;
+      border-radius: 12px;
+      color: var(--muted);
+      text-align: center;
+      background: #fbfcf8;
+    }
+    .error {
+      max-width: 620px;
+      margin: 80px auto;
+      padding: 22px;
+      border: 1px solid #edc5ba;
+      border-radius: 16px;
+      background: #fff8f5;
+    }
+    .image-viewer {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: none;
+      place-items: center;
+      padding: 28px;
+      background: rgba(17, 27, 21, .76);
+    }
+    .image-viewer.show { display: grid; }
+    .image-viewer img { max-width: 96vw; max-height: 92vh; border-radius: 10px; background: #fff; }
+    @media (max-width: 860px) {
+      .shell { padding: 16px; }
+      .grid { grid-template-columns: 1fr; }
+      .topbar { display: grid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div id="app">
+      <div class="empty">正在加载交付资产...</div>
+    </div>
+  </main>
+  <div id="imageViewer" class="image-viewer" onclick="hideImageViewer()">
+    <img id="imageViewerImg" alt="资产预览" />
+  </div>
+
+  <script src="/js/app-shell.js"></script>
+  <script>
+    const apiBase = "/api/v1";
+    const params = new URLSearchParams(location.search);
+    const taskId = params.get("taskId");
+    const token = params.get("token") || "";
+    let context = null;
+    let busy = false;
+
+    function escapeHtml(value) {
+      return window.XlyqAppShell.escapeHtml(value ?? "");
+    }
+    function escapeAttr(value) {
+      return window.XlyqAppShell.escapeAttr(value ?? "");
+    }
+    function sessionToken() {
+      if (token) return "";
+      try {
+        const session = JSON.parse(window.XlyqAppShell.session.read() || "null");
+        return session?.accessToken || "";
+      } catch {
+        return "";
+      }
+    }
+    async function request(path, options = {}) {
+      const accessToken = sessionToken();
+      return window.XlyqAppShell.request({
+        apiBase,
+        path,
+        options: {
+          ...options,
+          headers: {
+            ...(options.headers || {}),
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+        },
+      });
+    }
+    function tokenQuery() {
+      return token ? `?token=${encodeURIComponent(token)}` : "";
+    }
+    function fileUrl(url) {
+      if (!url) return "";
+      return /^https?:\/\//i.test(url) || url.startsWith("/") ? url : `/${url}`;
+    }
+    function openUrl(url) {
+      window.open(fileUrl(url), "_blank", "noopener");
+    }
+    function showImageViewer(url) {
+      const img = document.getElementById("imageViewerImg");
+      img.src = fileUrl(url);
+      document.getElementById("imageViewer").classList.add("show");
+    }
+    function hideImageViewer() {
+      document.getElementById("imageViewer").classList.remove("show");
+      document.getElementById("imageViewerImg").src = "";
+    }
+    function formatDate(value) {
+      if (!value) return "-";
+      return new Date(value).toLocaleString();
+    }
+    function renderError(message) {
+      const loginAction = token ? "" : `<a class="btn primary" href="/index.html">进入管理后台登录</a>`;
+      document.getElementById("app").innerHTML = `
+        <section class="error">
+          <div class="kicker">Asset Review</div>
+          <h1>无法打开交付资产</h1>
+          <p class="subtitle">${escapeHtml(message || "链接无效或当前账号无权限。")}</p>
+          <div class="actions" style="margin-top:14px;">
+            ${loginAction}
+            <a class="btn" href="/index.html">返回管理后台</a>
+          </div>
+        </section>
+      `;
+    }
+    function renderAssetCard(file) {
+      return `
+        <article class="asset-card">
+          <div class="asset-preview" onclick="showImageViewer('${escapeAttr(file.file_url)}')">
+            <img src="${escapeAttr(fileUrl(file.file_url))}" alt="${escapeAttr(file.display_name || file.file_name || "资产图片")}" loading="lazy" />
+          </div>
+          <div class="asset-meta">
+            <div class="asset-name" title="${escapeAttr(file.display_name || file.file_name || "")}">${escapeHtml(file.display_name || file.file_name || "未命名图片")}</div>
+            <div class="asset-url" title="${escapeAttr(file.file_url || "")}">${escapeHtml(file.file_url || "")}</div>
+          </div>
+        </article>
+      `;
+    }
+    function renderLinkItem(file) {
+      return `
+        <div class="link-item">
+          <div>
+            <div class="asset-name">${escapeHtml(file.display_name || file.file_name || "合作链接")}</div>
+            <div class="asset-url">${escapeHtml(file.file_url || "")}</div>
+          </div>
+          <button class="btn" onclick="openUrl('${escapeAttr(file.file_url)}')">打开</button>
+        </div>
+      `;
+    }
+    function render() {
+      const data = context;
+      const task = data.task || {};
+      const requirement = data.requirement || {};
+      const assets = data.assets || { images: [], links: [], others: [] };
+      const canReview = Boolean(data.canReview);
+      document.getElementById("app").innerHTML = `
+        <div class="topbar">
+          <div>
+            <div class="kicker">Asset Review</div>
+            <h1>${escapeHtml(task.task_name || "交付资产查看")}</h1>
+            <p class="subtitle">${escapeHtml(requirement.customer_name || "-")} · ${escapeHtml(requirement.business_platform || "-")} · 执行人：${escapeHtml(data.assignee?.display_name || "-")}</p>
+          </div>
+          <span class="badge">${escapeHtml(task.status_label || task.status || "-")}</span>
+        </div>
+        <section class="grid">
+          <div class="panel">
+            <div class="panel-head"><h2>任务信息</h2></div>
+            <div class="panel-body info-list">
+              <div class="field"><span>任务编号</span><strong>${escapeHtml(task.task_no || "-")}</strong></div>
+              <div class="field"><span>负责人</span><strong>${escapeHtml(data.reporter?.display_name || "-")}</strong></div>
+              <div class="field"><span>执行人</span><strong>${escapeHtml(data.assignee?.display_name || "-")}</strong></div>
+              <div class="field"><span>截止时间</span><strong>${escapeHtml(formatDate(task.planned_end_at))}</strong></div>
+              <div class="field"><span>需求标题</span><strong>${escapeHtml(requirement.title || "-")}</strong></div>
+              <div class="field"><span>需求内容</span><p>${escapeHtml(requirement.content || "-")}</p></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head asset-toolbar">
+              <h2>交付资产</h2>
+              <span class="badge">${Number(assets.billableCount || 0)} 项资产 / ${Number(assets.totalCount || 0)} 条记录</span>
+            </div>
+            <div class="panel-body">
+              ${assets.images?.length ? `<div class="asset-grid">${assets.images.map(renderAssetCard).join("")}</div>` : `<div class="empty">暂无图片资产</div>`}
+              ${assets.links?.length ? `<div class="link-list">${assets.links.map(renderLinkItem).join("")}</div>` : ""}
+              ${assets.others?.length ? `<div class="link-list">${assets.others.map(renderLinkItem).join("")}</div>` : ""}
+            </div>
+          </div>
+        </section>
+        <section class="panel" style="margin-top:14px;">
+          <div class="panel-head"><h2>验收操作</h2></div>
+          <div class="panel-body">
+            ${canReview ? `
+              <textarea id="returnReason" placeholder="退回修改时填写原因，例如：请补充源文件或替换第 2 张图片。"></textarea>
+              <div class="actions">
+                <button class="btn primary" ${busy ? "disabled" : ""} onclick="approveReview()">${busy ? "处理中..." : "通过验收"}</button>
+                <button class="btn danger" ${busy ? "disabled" : ""} onclick="returnReview()">${busy ? "处理中..." : "退回修改"}</button>
+                <a class="btn" href="/index.html">返回管理后台</a>
+              </div>
+            ` : `
+              <div class="empty">当前任务不是待验收状态，只能查看交付资产。</div>
+              <div class="actions"><a class="btn" href="/index.html">返回管理后台</a></div>
+            `}
+          </div>
+        </section>
+      `;
+    }
+    async function load() {
+      if (!taskId) {
+        renderError("缺少 taskId 参数。");
+        return;
+      }
+      try {
+        context = await request(`/tasks/${encodeURIComponent(taskId)}/asset-review/context${tokenQuery()}`);
+        render();
+      } catch (error) {
+        renderError(error.message);
+      }
+    }
+    async function approveReview() {
+      if (busy) return;
+      busy = true;
+      render();
+      try {
+        const result = await request(`/tasks/${encodeURIComponent(taskId)}/asset-review/approve${tokenQuery()}`, {
+          method: "POST",
+          body: token ? { token } : {},
+        });
+        context.task = result.task;
+        context.canReview = false;
+        render();
+      } catch (error) {
+        busy = false;
+        render();
+        alert(error.message);
+      }
+    }
+    async function returnReview() {
+      const reason = document.getElementById("returnReason")?.value.trim();
+      if (!reason) {
+        alert("请填写退回修改原因");
+        return;
+      }
+      if (busy) return;
+      busy = true;
+      render();
+      try {
+        const result = await request(`/tasks/${encodeURIComponent(taskId)}/asset-review/return${tokenQuery()}`, {
+          method: "POST",
+          body: { token, reason },
+        });
+        context.task = result.task;
+        context.canReview = false;
+        render();
+      } catch (error) {
+        busy = false;
+        render();
+        alert(error.message);
+      }
+    }
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") hideImageViewer();
+    });
+    load();
+  </script>
+</body>
+</html>

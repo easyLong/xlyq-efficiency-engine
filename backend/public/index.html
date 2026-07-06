@@ -4531,7 +4531,14 @@
         return `<span class="done-text">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>`;
       }
       if (row.taskStatus === "待验收") return renderReviewAction(row);
-      if (row.taskStatus === "已验收") return `<span class="done-text">已验收</span>`;
+      if (row.taskStatus === "已验收") {
+        return `
+          <div class="assign-action compact" onclick="event.stopPropagation()">
+            <span class="done-text">已验收</span>
+            <button class="btn" onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
+          </div>
+        `;
+      }
       const isBusy = state.busyActionId === row.task.id;
       const hasAssignee = Boolean(row.task.assignee_user_id);
       const isEditingAssignment = !hasAssignee || state.assignmentEditingTaskId === row.task.id;
@@ -4563,10 +4570,15 @@
       }
       return `
         <div class="assign-action" onclick="event.stopPropagation()">
+          <button class="btn" ${isBusy ? "disabled" : ""} onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
           ${can("task.accept_owned") ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "通过验收"}</button>` : ""}
           ${can("task.return_owned") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>` : ""}
         </div>
       `;
+    }
+    function openTaskAssetReview(taskId) {
+      if (!taskId) return;
+      window.open(`/asset-review.html?taskId=${encodeURIComponent(taskId)}`, "_blank", "noopener");
     }
     function startEditRequirement(requirementId) {
       state.editingRequirementId = requirementId;

@@ -2,10 +2,11 @@
 
 ## 当前通知口径
 
-- 任务指派并开通资产入口：发送一条飞书卡片消息给任务负责人，标题为“新任务已指派”，按钮为“填写项目资产”。
-- 仅指派、不开通资产入口：发送普通任务通知，提示负责人按资产表入口填写项目资产。
-- 任务状态变化：通知负责人和项目负责人，说明当前状态和补充说明。
-- 任务退回修改：通知负责人退回原因。
+- 任务指派并开通资产入口：发送一条飞书卡片消息给任务执行人，标题为“新任务已指派”，按钮为“登记交付资产”。
+- 仅指派、不开通资产入口：发送普通任务通知，提示执行人进入交付登记页上传图片资产并补充合作链接。
+- 执行人提交资产：任务进入 `pending_review` 后，通知任务负责人查看交付资产，飞书卡片按钮为“查看交付资产”。
+- 任务状态变化：通知执行人和任务负责人，说明当前状态和补充说明；负责人优先取 `tasks.reporter_user_id`。
+- 任务退回修改：通知执行人退回原因。
 - 资产地址缺失扫描：可手动扫描待验收/已完成但没有资产地址的任务，并提醒负责人补充资产 URL。
 
 ## 暂不启用
@@ -36,13 +37,14 @@
 
 | 场景 | 触发方式 | 接收人 | 渠道 |
 | --- | --- | --- | --- |
-| 任务分配 | 调用 `POST /tasks/{id}/assign` | 任务负责人 | `in_app`、`feishu_app` |
-| 在线资产表开通 | 指派任务时 `provisionWorkspace=true`，或调用 `POST /tasks/{id}/workspace/provision` | 任务负责人 | `in_app`、`feishu_app`，飞书卡片含“填写项目资产”按钮 |
-| 任务状态变更 | 调用 `POST /tasks/{id}/status` | 任务负责人、项目经理 | `in_app`、`feishu_app` |
-| 任务阻塞 | 状态变更为 `blocked` | 任务负责人、项目经理 | `in_app`、`feishu_app` |
-| 任务待验收 | 状态变更为 `pending_review` | 任务负责人、项目经理 | `in_app`、`feishu_app` |
-| 任务完成 | 状态变更为 `completed` | 任务负责人、项目经理 | `in_app`、`feishu_app` |
-| 任务退回修改 | 调用 `POST /tasks/{id}/return-revision` | 任务负责人 | `in_app`、`feishu_app` |
+| 任务分配 | 调用 `POST /tasks/{id}/assign` | 执行人 | `in_app`、`feishu_app` |
+| 在线资产表开通 | 指派任务时 `provisionWorkspace=true`，或调用 `POST /tasks/{id}/workspace/provision` | 执行人 | `in_app`、`feishu_app`，飞书卡片含“登记交付资产”按钮 |
+| 执行人提交资产 | 调用 `POST /tasks/{id}/asset-sheet/local-assets`，或同步飞书资产表后进入 `pending_review` | 任务负责人 | `in_app`、`feishu_app`，飞书卡片含“查看交付资产”按钮 |
+| 任务状态变更 | 调用 `POST /tasks/{id}/status` | 执行人、任务负责人 | `in_app`、`feishu_app` |
+| 任务阻塞 | 状态变更为 `blocked` | 执行人、任务负责人 | `in_app`、`feishu_app` |
+| 任务待验收 | 状态变更为 `pending_review` | 任务负责人 | `in_app`、`feishu_app` |
+| 任务完成 | 状态变更为 `completed` | 执行人、任务负责人 | `in_app`、`feishu_app` |
+| 任务退回修改 | 调用 `POST /tasks/{id}/return-revision` 或资产查看页退回 | 执行人 | `in_app`、`feishu_app` |
 
 ## P0 扫描通知
 

@@ -141,6 +141,51 @@ export class TasksController {
     return this.tasksService.listResultFiles(id);
   }
 
+  @Public()
+  @Get(':id/asset-review/context')
+  getAssetReviewContext(
+    @Param('id') id: string,
+    @Query('token') token: string | undefined,
+    @Req() request: Request,
+  ) {
+    return this.tasksService.getAssetReviewContext(
+      id,
+      token,
+      request.headers.authorization,
+    );
+  }
+
+  @Public()
+  @Post(':id/asset-review/approve')
+  approveAssetReview(
+    @Param('id') id: string,
+    @Query('token') token: string | undefined,
+    @Body() body: { token?: string },
+    @Req() request: Request,
+  ) {
+    return this.tasksService.approveAssetReview(
+      id,
+      token ?? body?.token,
+      request.headers.authorization,
+    );
+  }
+
+  @Public()
+  @Post(':id/asset-review/return')
+  returnAssetReview(
+    @Param('id') id: string,
+    @Query('token') token: string | undefined,
+    @Body() body: { token?: string; reason?: string },
+    @Req() request: Request,
+  ) {
+    return this.tasksService.returnAssetReview(
+      id,
+      body?.reason ?? '',
+      token ?? body?.token,
+      request.headers.authorization,
+    );
+  }
+
   @Post(':id/asset-sheet/sync')
   @Permission('task.accept_owned')
   syncAssetSheet(@Param('id') id: string) {

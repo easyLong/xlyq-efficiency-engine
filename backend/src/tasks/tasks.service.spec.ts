@@ -71,6 +71,11 @@ describe('TasksService delivery flow', () => {
         }),
       ),
     };
+    const notificationsService = {
+      notifyTaskAssetsSubmittedForReview: jest.fn().mockResolvedValue({
+        id: 'notification-1',
+      }),
+    };
     const noopRepository = {};
     const service = new TasksService(
       tasksRepository as never,
@@ -84,7 +89,7 @@ describe('TasksService delivery flow', () => {
       usersRepository as never,
       dataSource as never,
       {} as never,
-      {} as never,
+      notificationsService as never,
     );
 
     return {
@@ -93,6 +98,7 @@ describe('TasksService delivery flow', () => {
       taskStatusHistoriesRepository,
       fileRepositoryInTx,
       usersRepository,
+      notificationsService,
       savedFiles,
     };
   }
@@ -117,6 +123,7 @@ describe('TasksService delivery flow', () => {
       taskRepositoryInTx,
       taskStatusHistoriesRepository,
       fileRepositoryInTx,
+      notificationsService,
       savedFiles,
     } = buildService();
 
@@ -140,6 +147,10 @@ describe('TasksService delivery flow', () => {
     expect(result.task.status).toBe(TaskStatus.PendingReview);
     expect(result.assetCount).toBe(1);
     expect(result.syncedCount).toBe(2);
+    expect(notificationsService.notifyTaskAssetsSubmittedForReview).toHaveBeenCalledWith(
+      expect.objectContaining({ status: TaskStatus.PendingReview }),
+      1,
+    );
     expect(result.assigneeSession).toEqual(
       expect.objectContaining({
         accessToken: 'mvp-user-1',

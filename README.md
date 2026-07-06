@@ -1,6 +1,6 @@
 # 向量引擎管理工作台
 
-更新时间：2026-06-26
+更新时间：2026-07-06
 
 向量引擎管理工作台是一套面向基金客户服务团队的项目效能系统，用来把“需求录入、任务指派、资产登记、合同报价录入、报价子项选择、结算统计、需求面板”串成一条可追踪的数据链路。
 
@@ -12,6 +12,7 @@
 - 后端 API：`http://localhost:3000/api/v1`
 - 健康检查：`GET /api/v1/health`
 - 员工本地交付登记页：`GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`，页面顶部提供“个人任务主页”入口，可切回执行人的历史任务视图但不触发提交。
+- 负责人交付资产查看页：`GET /asset-review.html?taskId=<taskId>&token=<token>`，执行人提交资产后由飞书卡片直达；管理后台历史需求任务状态也提供“查看资产”入口。
 - 当前默认数据库：`ops_platform`
 - 登录与接口：管理后台使用员工姓名下拉选择 + 密码登录，下拉账号使用 `display_name`，密码直接读取 `users.passwd` 明文字段；登录下拉默认只展示管理员和负责人，其它员工需设置 `users.login_enabled = 1` 后才可显示和登录。飞书通知链接使用任务 token 免登录直达，开发/应急选择用户入口生产默认关闭；受保护接口使用 `Authorization: Bearer <accessToken>`，登录结果会返回角色、权限点和数据范围。
 
@@ -161,6 +162,13 @@ npm run migrate:project-tables -- --execute
 - 确认后复用正式需求录入链路创建需求、需求项和待指派任务，并将候选需求状态回写为 `confirmed`。
 - 管理员可在 AI 预览面板通过负责人下拉框筛选全部待确认候选；业务负责人仍只看自己的待确认候选。
 - 后端启动支持 `HOST` 环境变量，局域网访问时可设置 `HOST=0.0.0.0`。
+
+## 2026-07-06 负责人资产查看与验收入口
+
+- 执行人提交本地资产或同步飞书资产后，任务进入 `pending_review` 并通知 `tasks.reporter_user_id` 对应负责人；负责人为空时才兜底项目负责人。
+- 新增 `asset-review.html`，负责人可通过飞书卡片“查看交付资产”免登录进入，也可从管理后台历史需求任务状态点击“查看资产”进入。
+- 资产查看页展示任务、需求内容、执行人、图片资产、合作链接，并支持通过验收或退回修改；不复用执行人的资产提交页。
+- 新增 `GET /tasks/{id}/asset-review/context`、`POST /tasks/{id}/asset-review/approve`、`POST /tasks/{id}/asset-review/return` 三个接口。
 
 ## 2026-06-15 数据架构与页面口径更新
 

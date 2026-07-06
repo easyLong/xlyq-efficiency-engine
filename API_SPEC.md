@@ -33,6 +33,9 @@
 - `POST /api/v1/tasks/{id}/asset-sheet/upload-image?token=<token>`：上传本地图片，返回可保存的图片 URL。
 - `POST /api/v1/tasks/{id}/asset-sheet/local-assets?token=<token>`：保存图片资产 URL 和单个合作链接，图片资产去重统计，并将任务推进到待验收。
 - `POST /api/v1/tasks/{id}/asset-sheet/sync`：读取飞书在线表资产 URL 并同步统计。
+- `GET /api/v1/tasks/{id}/asset-review/context?token=<token>`：负责人查看交付资产上下文；飞书 token 入口免登录，管理后台入口使用当前登录态。
+- `POST /api/v1/tasks/{id}/asset-review/approve?token=<token>`：负责人通过资产查看页验收任务。
+- `POST /api/v1/tasks/{id}/asset-review/return?token=<token>`：负责人通过资产查看页退回修改，必须填写退回原因。
 - `GET /api/v1/tasks/board?liveAssetCount=true&customerCode=<customerCode>`：任务看板，支持实时资产数和基金客户筛选；`customerId` 仅保留兼容。
 - `GET /api/v1/tasks/{id}/workflow`：返回任务、资产数、工作目录、最近状态历史和统一 workflow 快照。
 - `GET /api/v1/tasks/{id}/status-history`：返回任务状态流转审计记录。
@@ -162,6 +165,12 @@
 - 说明：执行人通过飞书通知进入的资产登记页。
 - 能力：上传/拖拽/粘贴图片，填写合作链接，点击 `提交交付` 后调用本任务的资产保存接口。
 - 个人任务主页：页面顶部 `个人任务主页` 按钮会使用资产上下文返回的 `assigneeSession` 写入临时会话并跳转 `/?taskSession=1`，只用于查看个人历史任务，不保存、不提交、不改变任务状态。
+
+### `GET /asset-review.html?taskId=<taskId>&token=<token>`
+- 说明：负责人查看交付资产和完成验收的只读资产页。
+- 入口：执行人提交资产后，飞书卡片按钮 `查看交付资产` 会携带负责人专用 token 进入；管理后台历史需求任务状态中的 `查看资产` 会使用登录态进入。
+- 能力：展示任务信息、需求内容、负责人、执行人、图片资产、合作链接，并支持 `通过验收` / `退回修改`。
+- 权限：管理员可查看全部；负责人只能查看自己负责的任务；飞书 token 只绑定对应任务和负责人。
 
 ## 4. 工作台
 

@@ -13,6 +13,7 @@ import pptxgen from 'pptxgenjs';
 import { DataSource, In, Repository } from 'typeorm';
 import {
   buildAccessProfile,
+  hasPermission,
   normalizeAccessBusinessCategory,
 } from '../common/access-control';
 import { ensureIndex } from '../common/schema-maintenance';
@@ -80,6 +81,11 @@ type ExportAssetQuotationSection = {
   groups: ExportAssetTaskGroup[];
   imageCount: number;
   loadedImageCount: number;
+};
+
+type AssetReviewAccess = {
+  mode: 'token' | 'session';
+  userId: string | null;
 };
 
 @Injectable()
@@ -963,14 +969,23 @@ export class TasksService implements OnModuleInit {
     );
     workspace.last_synced_at = new Date();
     const savedWorkspace = await this.taskDirectoriesRepository.save(workspace);
+    const assetCount = this.billableAssetCount(created);
+    const reviewNotification =
+      savedTask.status === TaskStatus.PendingReview && assetCount > 0
+        ? await this.notificationsService.notifyTaskAssetsSubmittedForReview(
+            savedTask,
+            assetCount,
+          )
+        : null;
 
     return {
       task: savedTask,
       workflow: buildTaskWorkflowSnapshot(savedTask),
       workspace: savedWorkspace,
-      assetCount: this.billableAssetCount(created),
+      assetCount,
       syncedCount: created.length,
       created,
+      reviewNotification,
     };
   }
 
@@ -1084,14 +1099,23 @@ export class TasksService implements OnModuleInit {
       'local_asset_submitted',
       null,
     );
+    const assetCount = this.billableAssetCount(created);
+    const reviewNotification =
+      savedTask.status === TaskStatus.PendingReview && assetCount > 0
+        ? await this.notificationsService.notifyTaskAssetsSubmittedForReview(
+            savedTask,
+            assetCount,
+          )
+        : null;
 
     return {
       task: savedTask,
       workflow: buildTaskWorkflowSnapshot(savedTask),
       assigneeSession: await this.publicAssigneeSession(savedTask),
-      assetCount: this.billableAssetCount(created),
+      assetCount,
       syncedCount: created.length,
       created,
+      reviewNotification,
     };
   }
 
@@ -2258,6 +2282,120 @@ export class TasksService implements OnModuleInit {
     });
   }
 
+  async getAssetReviewContext(
+    id: string,
+    token?: string,
+    authorizationHeader?: string,
+  ) {
+    const task = await this.findOne(id);
+    await this.assertAssetReviewAccess(task, token, authorizationHeader);
+    const [project, requirementItem, assignee, reporter, files, detailRows] =
+      await Promise.all([
+        this.projectsRepository.findOne({ where: { id: task.project_id } }),
+        task.requirement_item_id
+          ? this.requirementItemsRepository.findOne({
+              where: { id: task.requirement_item_id },
+            })
+          : Promise.resolve(null),
+        task.assignee_user_id
+          ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
+          : Promise.resolve(null),
+        task.reporter_user_id
+          ? this.usersRepository.findOne({ where: { id: task.reporter_user_id } })
+          : Promise.resolve(null),
+        this.taskResultFilesRepository.find({
+          where: { task_id: id },
+          order: { created_at: 'ASC' },
+        }),
+        this.dataSource.query(
+          `
+            SELECT
+              requirement.id AS requirementId,
+              requirement.requirement_code AS requirementCode,
+              requirement.title AS requirementTitle,
+              requirement.raw_content AS requirementContent,
+              requirement.summary AS requirementSummary,
+              requirement.business_name AS businessName,
+              requirement.business_platform AS businessPlatform,
+              customer.customer_name AS customerName
+            FROM tasks task
+            LEFT JOIN requirement_items item ON item.id = task.requirement_item_id
+            LEFT JOIN requirements requirement ON requirement.id = item.requirement_id
+            LEFT JOIN customers customer ON customer.customer_code = requirement.customer_code
+            WHERE task.id = ?
+            LIMIT 1
+          `,
+          [task.id],
+        ),
+      ]);
+    const detail = detailRows?.[0] ?? {};
+    const imageFiles = files.filter((file) => this.isReviewImageFile(file));
+    const linkFiles = files.filter((file) => this.isReviewLinkFile(file));
+    const otherFiles = files.filter(
+      (file) => !this.isReviewImageFile(file) && !this.isReviewLinkFile(file),
+    );
+
+    return {
+      task: {
+        ...task,
+        status_label: taskStatusLabel(task.status),
+      },
+      project,
+      requirement: {
+        id: detail.requirementId ?? null,
+        requirement_code: detail.requirementCode ?? null,
+        title: detail.requirementTitle ?? task.task_name,
+        content:
+          detail.requirementContent ??
+          detail.requirementSummary ??
+          task.description ??
+          '',
+        business_name: detail.businessName ?? null,
+        business_platform: detail.businessPlatform ?? null,
+        customer_name: detail.customerName ?? project?.project_name ?? null,
+      },
+      requirementItem,
+      assignee: assignee
+        ? this.publicUserSummary(assignee)
+        : null,
+      reporter: reporter ? this.publicUserSummary(reporter) : null,
+      assets: {
+        images: imageFiles.map((file) => this.assetReviewFile(file)),
+        links: linkFiles.map((file) => this.assetReviewFile(file)),
+        others: otherFiles.map((file) => this.assetReviewFile(file)),
+        imageCount: imageFiles.length,
+        totalCount: files.length,
+        billableCount: this.billableAssetCount(files),
+      },
+      canReview: task.status === TaskStatus.PendingReview,
+    };
+  }
+
+  async approveAssetReview(
+    id: string,
+    token?: string,
+    authorizationHeader?: string,
+  ) {
+    const task = await this.findOne(id);
+    await this.assertAssetReviewAccess(task, token, authorizationHeader, true);
+    return this.updateStatus(id, { status: TaskStatus.Completed });
+  }
+
+  async returnAssetReview(
+    id: string,
+    reason: string,
+    token?: string,
+    authorizationHeader?: string,
+  ) {
+    const task = await this.findOne(id);
+    await this.assertAssetReviewAccess(task, token, authorizationHeader, true);
+    const trimmedReason = String(reason ?? '').trim();
+    if (!trimmedReason) {
+      throw new BadRequestException('请填写退回修改原因');
+    }
+    return this.returnRevision(id, { reason: trimmedReason });
+  }
+
   async registerResultFile(id: string, dto: RegisterTaskResultFileDto) {
     const task = await this.findOne(id);
     const file = this.taskResultFilesRepository.create({
@@ -2282,5 +2420,137 @@ export class TasksService implements OnModuleInit {
       file: saved,
       notification,
     };
+  }
+
+  private assetReviewFile(file: TaskResultFileEntity) {
+    return {
+      id: file.id,
+      file_name: file.file_name,
+      file_url: file.file_url,
+      source: file.source,
+      remark: file.remark,
+      uploaded_by_user_id: file.uploaded_by_user_id,
+      created_at: file.created_at,
+      is_image: this.isReviewImageFile(file),
+      is_link: this.isReviewLinkFile(file),
+      display_name: this.assetReviewFileName(file),
+    };
+  }
+
+  private assetReviewFileName(file: TaskResultFileEntity) {
+    const parsedName = this.assetImageNameFromUrl(file.file_url);
+    if (!file.file_name || /^图片-\d+$/i.test(file.file_name)) {
+      return parsedName || file.file_name || '未命名资产';
+    }
+    return file.file_name;
+  }
+
+  private isReviewImageFile(file: TaskResultFileEntity) {
+    return this.isExportableImageFile(file);
+  }
+
+  private isReviewLinkFile(file: TaskResultFileEntity) {
+    const source = String(file.source ?? '').toLowerCase();
+    return source.includes('link') && !this.isReviewImageFile(file);
+  }
+
+  private publicUserSummary(user: UserEntity) {
+    return {
+      id: user.id,
+      username: user.username,
+      display_name: user.display_name,
+      source: user.source,
+      feishu_open_id: user.feishu_open_id,
+    };
+  }
+
+  private async assertAssetReviewAccess(
+    task: TaskEntity,
+    token?: string,
+    authorizationHeader?: string,
+    requireReviewPermission = false,
+  ): Promise<AssetReviewAccess> {
+    const reviewerIds = await this.assetReviewReviewerIds(task);
+    const matchedReviewerId = reviewerIds.find((reviewerId) =>
+      this.safeTokenEqual(
+        token,
+        this.assetReviewToken(task, reviewerId),
+      ),
+    );
+    if (matchedReviewerId) {
+      return { mode: 'token', userId: matchedReviewerId };
+    }
+
+    const currentUser = await this.userFromAuthorizationHeader(
+      authorizationHeader,
+    );
+    if (!currentUser) {
+      throw new UnauthorizedException('Invalid asset review access token');
+    }
+    const profile = await buildAccessProfile(this.dataSource, currentUser);
+    const canReview = hasPermission(profile, 'task.accept_owned');
+    const isOwner = task.reporter_user_id === currentUser.id;
+    const fallbackOwnerId = task.reporter_user_id
+      ? null
+      : await this.projectOwnerUserId(task.project_id);
+    const isFallbackOwner = fallbackOwnerId === currentUser.id;
+
+    if (
+      profile.isAdmin ||
+      ((isOwner || isFallbackOwner) &&
+        (!requireReviewPermission || canReview))
+    ) {
+      return { mode: 'session', userId: currentUser.id };
+    }
+
+    throw new UnauthorizedException('No permission to view task assets');
+  }
+
+  private async assetReviewReviewerIds(task: TaskEntity) {
+    const ids = [task.reporter_user_id];
+    if (!task.reporter_user_id) {
+      ids.push(await this.projectOwnerUserId(task.project_id));
+    }
+    return [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  }
+
+  private async projectOwnerUserId(projectId: string) {
+    const project = await this.projectsRepository.findOne({
+      where: { id: projectId },
+    });
+    return project?.owner_user_id ?? null;
+  }
+
+  private async userFromAuthorizationHeader(authorizationHeader?: string) {
+    const match = /^Bearer\s+mvp-(.+)$/i.exec(authorizationHeader ?? '');
+    if (!match?.[1]) {
+      return null;
+    }
+    return this.usersRepository.findOne({
+      where: { id: match[1], status: 'active' },
+    });
+  }
+
+  private assetReviewToken(task: TaskEntity, reviewerUserId: string) {
+    const secret =
+      process.env.TASK_ACCESS_TOKEN_SECRET ??
+      process.env.APP_SECRET ??
+      process.env.DB_PASSWORD ??
+      'xlyq-efficiency-engine-local-secret';
+    return createHmac('sha256', secret)
+      .update(`asset-review:${task.id}:${task.task_no}:${reviewerUserId}`)
+      .digest('hex');
+  }
+
+  private safeTokenEqual(left?: string, right?: string) {
+    if (!left || !right) {
+      return false;
+    }
+    const leftBuffer = Buffer.from(left);
+    const rightBuffer = Buffer.from(right);
+    return (
+      leftBuffer.length === rightBuffer.length &&
+      timingSafeEqual(leftBuffer, rightBuffer)
+    );
   }
 }

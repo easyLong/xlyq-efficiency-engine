@@ -122,6 +122,8 @@ AI预览需求卡片
 - 员工可上传、拖拽、粘贴图片，也可粘贴图片 URL；同时支持填写一个合作链接。
 - 资产登记页顶部提供 `个人任务主页`，仅写入执行人临时会话并跳转个人任务视图，不触发资产保存或提交。
 - 后台统一写入 `task_result_files`。
+- 员工提交资产或服务端同步飞书资产表后，任务进入 `pending_review`，系统按 `tasks.reporter_user_id` 通知负责人查看交付资产；如果任务负责人为空，才兜底使用项目负责人。
+- 负责人通过飞书卡片或管理后台进入 `asset-review.html` 查看资产。该页面只展示交付资产、需求信息和验收动作，不复用执行人的资产提交页。
 
 资产统计口径：
 
@@ -142,6 +144,7 @@ WHERE source IN (
 - `local_asset_sheet_image` / `feishu_asset_sheet_image`：图片资产，计入结算资产个数。
 - `local_asset_sheet_link` / `feishu_asset_sheet_link`：合作链接，只用于交付追踪，不计入结算资产个数。
 - 本地交付登记保存使用事务，保存成功后任务进入 `pending_review`。
+- 资产查看页支持两种访问方式：飞书通知携带负责人专用 token 免登录进入；管理后台已登录负责人/管理员点击“查看资产”进入。
 
 资产 PPT 导出口径：
 
@@ -320,6 +323,7 @@ todo -> assigned -> in_progress -> pending_review -> completed
 - 后台指派任务：`todo/pending/returned -> assigned`。
 - 员工打开项目资产页：`todo/pending/assigned/returned -> in_progress`，带 `reopen=1` 时允许 `completed -> in_progress`。
 - 员工提交本地资产或服务端同步飞书资产表：`assigned/in_progress/returned -> pending_review`。
+- 系统发送“任务待验收”通知给任务负责人，飞书卡片按钮为“查看交付资产”。
 - 管理者验收：`pending_review -> completed`。
 - 管理者退回：`pending_review -> in_progress`，并记录退回说明。
 
