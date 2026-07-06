@@ -119,7 +119,7 @@ AI预览需求卡片
 - 系统尝试创建飞书在线资产表。
 - 飞书权限不足或本地兜底时，生成 `public/asset-sheet.html` 入口。
 - 本地交付入口会携带任务访问 token：`asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`。
-- 员工可上传、拖拽、粘贴图片，也可粘贴图片 URL；同时支持填写一个合作链接。
+- 员工可上传、拖拽、粘贴图片，也可粘贴图片 URL；同时支持添加多条合作链接，合作链接可以不填。
 - 资产登记页顶部提供 `个人任务主页`，仅写入执行人临时会话并跳转个人任务视图，不触发资产保存或提交。
 - 后台统一写入 `task_result_files`。
 - 员工提交资产或服务端同步飞书资产表后，任务进入 `pending_review`，系统按 `tasks.reporter_user_id` 通知负责人查看交付资产；如果任务负责人为空，才兜底使用项目负责人。
@@ -142,7 +142,7 @@ WHERE source IN (
 说明：
 
 - `local_asset_sheet_image` / `feishu_asset_sheet_image`：图片资产，计入结算资产个数。
-- `local_asset_sheet_link` / `feishu_asset_sheet_link`：合作链接，只用于交付追踪，不计入结算资产个数。
+- `local_asset_sheet_link` / `feishu_asset_sheet_link`：合作链接，可多条，只用于交付追踪，不计入结算资产个数。
 - 本地交付登记保存使用事务，保存成功后任务进入 `pending_review`。
 - 资产查看页支持两种访问方式：飞书通知携带负责人专用 token 免登录进入；管理后台已登录负责人/管理员点击“查看资产”进入。
 

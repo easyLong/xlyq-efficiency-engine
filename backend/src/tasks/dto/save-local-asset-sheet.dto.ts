@@ -32,4 +32,10 @@ export class SaveLocalAssetSheetDto {
   @IsString()
   @MaxLength(500)
   linkUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(500, { each: true })
+  linkUrls?: string[];
 }

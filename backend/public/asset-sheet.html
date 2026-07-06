@@ -200,6 +200,25 @@
     button.danger { background: #fff7f5; color: #b42318; border-color: #ffd1c8; min-height: 30px; padding: 5px 8px; font-size: 12px; }
     button:disabled { opacity: .55; cursor: not-allowed; }
     .link-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .link-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .link-list { display: grid; gap: 8px; }
+    .link-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid #e5e9f0;
+      border-radius: 10px;
+      background: #fff;
+      padding: 9px 10px;
+    }
+    .link-item-url {
+      color: #475467;
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .save-bar {
       display: flex;
       justify-content: space-between;
@@ -380,7 +399,11 @@
               </div>
             </div>
             <div class="link-section">
-              <input id="linkUrl" placeholder="粘贴合作链接" oninput="saveDraft()" />
+              <div class="link-input-row">
+                <input id="linkUrlInput" placeholder="粘贴合作链接，可添加多条" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); addLinkFromInput(); }" />
+                <button class="secondary" onclick="addLinkFromInput()">添加链接</button>
+              </div>
+              <div id="linkList" class="link-list"></div>
             </div>
           </div>
 
@@ -490,7 +513,7 @@
     });
 
     function emptyDraft() {
-      return { imageUrls: [], linkUrl: "" };
+      return { imageUrls: [], linkUrls: [] };
     }
 
     function loadDraft() {
@@ -498,16 +521,19 @@
       if (current) return normalizeDraft(JSON.parse(current));
       const legacyRows = JSON.parse(localStorage.getItem(legacyStorageKey) || "[]");
       if (legacyRows.length) {
-        return normalizeDraft({ imageUrls: legacyRows.map(row => row.assetUrl), linkUrl: "" });
+        return normalizeDraft({ imageUrls: legacyRows.map(row => row.assetUrl), linkUrls: [] });
       }
       return emptyDraft();
     }
 
     function normalizeDraft(value) {
       const imageUrls = Array.isArray(value?.imageUrls) ? value.imageUrls : [];
+      const linkUrls = Array.isArray(value?.linkUrls)
+        ? value.linkUrls
+        : (value?.linkUrl ? [value.linkUrl] : []);
       return {
         imageUrls: unique(imageUrls.map(item => String(item || "").trim()).filter(isPersistableImageUrl)),
-        linkUrl: String(value?.linkUrl || ""),
+        linkUrls: unique(linkUrls.map(item => String(item || "").trim()).filter(Boolean)),
       };
     }
 
@@ -518,11 +544,6 @@
 
     function saveDraft() {
       const draft = loadDraft();
-      draft.linkUrl = document.getElementById("linkUrl").value.trim();
-      if (draft.linkUrl.length > maxUrlLength) {
-        setStatus("合作链接不能超过 500 个字符。", "error");
-        return;
-      }
       localStorage.setItem(storageKey, JSON.stringify(draft));
       renderAssets();
     }
@@ -534,9 +555,9 @@
 
     function renderAssets() {
       const draft = loadDraft();
-      document.getElementById("linkUrl").value = draft.linkUrl;
       document.getElementById("imageCount").textContent = draft.imageUrls.length + pendingImagePreviews.length;
-      document.getElementById("linkCount").textContent = draft.linkUrl ? "1" : "0";
+      document.getElementById("linkCount").textContent = draft.linkUrls.length;
+      renderLinks(draft);
       const grid = document.getElementById("assetGrid");
       const imageEntries = [
         ...draft.imageUrls.map(url => ({ url, pending: false })),
@@ -566,6 +587,54 @@
         </article>
       `;
       }).join("");
+    }
+
+    function renderLinks(draft = loadDraft()) {
+      const list = document.getElementById("linkList");
+      if (!list) return;
+      if (!draft.linkUrls.length) {
+        list.innerHTML = `<div class="empty" style="min-height:72px;">暂无合作链接，可以不填写。</div>`;
+        return;
+      }
+      list.innerHTML = draft.linkUrls.map((url, index) => `
+        <div class="link-item">
+          <div class="link-item-url" title="${escapeAttr(url)}">${escapeHtml(url)}</div>
+          <button class="ghost" onclick="copyText('${escapeAttr(url)}')">复制</button>
+          <button class="danger" onclick="removeLink(${index})">删除</button>
+        </div>
+      `).join("");
+    }
+
+    function addLinkFromInput() {
+      const input = document.getElementById("linkUrlInput");
+      const linkUrl = input.value.trim();
+      if (!linkUrl) return;
+      if (linkUrl.length > maxUrlLength) {
+        setStatus(`合作链接不能超过 ${maxUrlLength} 个字符。`, "error");
+        return;
+      }
+      if (!/^https?:\/\//i.test(linkUrl)) {
+        setStatus("合作链接必须以 http:// 或 https:// 开头。", "error");
+        return;
+      }
+      const draft = loadDraft();
+      draft.linkUrls = unique([...draft.linkUrls, linkUrl]);
+      input.value = "";
+      persistDraft(draft);
+      setStatus("已添加合作链接。", "ok");
+    }
+
+    async function removeLink(index) {
+      const draft = loadDraft();
+      if (!draft.linkUrls[index]) return;
+      const confirmed = await confirmDialog({
+        title: "删除合作链接",
+        message: "确认删除这条合作链接吗？提交后后台记录也会同步更新。",
+        okText: "删除",
+      });
+      if (!confirmed) return;
+      draft.linkUrls.splice(index, 1);
+      persistDraft(draft);
     }
 
     function imageDisplayName(index) {
@@ -766,8 +835,12 @@
       }
       const draft = loadDraft();
       const imageUrls = unique(draft.imageUrls.map(url => url.trim()).filter(Boolean));
-      const linkUrl = draft.linkUrl.trim();
-      if (!imageUrls.length && !linkUrl) {
+      const pendingLink = document.getElementById("linkUrlInput")?.value.trim();
+      const linkUrls = unique([
+        ...draft.linkUrls.map(url => url.trim()).filter(Boolean),
+        ...(pendingLink ? [pendingLink] : []),
+      ]);
+      if (!imageUrls.length && !linkUrls.length) {
         setStatus("请至少上传一张图片或填写一个合作链接后再提交交付。", "error");
         return;
       }
@@ -780,8 +853,14 @@
         setStatus("图片地址异常，请刷新页面后重新上传这张图片。", "error");
         return;
       }
-      if (linkUrl.length > maxUrlLength) {
+      const tooLongLinkUrl = linkUrls.find(url => url.length > maxUrlLength);
+      if (tooLongLinkUrl) {
         setStatus(`合作链接不能超过 ${maxUrlLength} 个字符。`, "error");
+        return;
+      }
+      const invalidLinkUrl = linkUrls.find(url => !/^https?:\/\//i.test(url));
+      if (invalidLinkUrl) {
+        setStatus("合作链接必须以 http:// 或 https:// 开头。", "error");
         return;
       }
       const button = document.getElementById("saveButton");
@@ -791,15 +870,17 @@
         const response = await fetch(taskAssetApi("local-assets"), {
           method: "POST",
           headers: { "Content-Type": "application/json; charset=utf-8" },
-          body: JSON.stringify({ imageUrls, linkUrl }),
+          body: JSON.stringify({ imageUrls, linkUrls }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || "同步失败");
-        localStorage.setItem(storageKey, JSON.stringify(normalizeDraft({ imageUrls, linkUrl })));
+        localStorage.setItem(storageKey, JSON.stringify(normalizeDraft({ imageUrls, linkUrls })));
+        const input = document.getElementById("linkUrlInput");
+        if (input) input.value = "";
         renderAssets();
         context = { ...(context || {}), task: result.task || context?.task, workflow: result.workflow || context?.workflow };
         renderTaskDetails();
-        setStatus(`已提交 ${imageUrls.length} 张图片${linkUrl ? "和 1 个链接" : ""}，任务已进入待验收。正在返回执行人工作台...`, "ok");
+        setStatus(`已提交 ${imageUrls.length} 张图片${linkUrls.length ? `和 ${linkUrls.length} 个链接` : ""}，任务已进入待验收。正在返回执行人工作台...`, "ok");
         returnToAssigneeWorkspace(result.assigneeSession || context?.assigneeSession);
       } catch (error) {
         setStatus(`提交失败：${error.message}`, "error");
@@ -811,7 +892,7 @@
     function syncDeliveryDraft(delivery) {
       const serverDraft = normalizeDraft(delivery);
       const cachedRaw = localStorage.getItem(storageKey);
-      if (!cachedRaw || serverDraft.imageUrls.length || serverDraft.linkUrl) {
+      if (!cachedRaw || serverDraft.imageUrls.length || serverDraft.linkUrls.length) {
         localStorage.setItem(storageKey, JSON.stringify(serverDraft));
       }
     }

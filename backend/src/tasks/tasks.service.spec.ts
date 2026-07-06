@@ -131,13 +131,16 @@ describe('TasksService delivery flow', () => {
       task.id,
       {
         imageUrls: ['http://example.com/asset.png'],
-        linkUrl: 'http://example.com/delivery',
+        linkUrls: [
+          'http://example.com/delivery',
+          'http://example.com/source-file',
+        ],
       },
       tokenForTask(),
     );
 
     expect(fileRepositoryInTx.softDelete).toHaveBeenCalled();
-    expect(savedFiles).toHaveLength(2);
+    expect(savedFiles).toHaveLength(3);
     expect(taskRepositoryInTx.save).toHaveBeenCalledWith(
       expect.objectContaining({
         status: TaskStatus.PendingReview,
@@ -146,7 +149,21 @@ describe('TasksService delivery flow', () => {
     );
     expect(result.task.status).toBe(TaskStatus.PendingReview);
     expect(result.assetCount).toBe(1);
-    expect(result.syncedCount).toBe(2);
+    expect(result.syncedCount).toBe(3);
+    expect(savedFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          file_name: '合作链接-1',
+          file_url: 'http://example.com/delivery',
+          source: 'local_asset_sheet_link',
+        }),
+        expect.objectContaining({
+          file_name: '合作链接-2',
+          file_url: 'http://example.com/source-file',
+          source: 'local_asset_sheet_link',
+        }),
+      ]),
+    );
     expect(notificationsService.notifyTaskAssetsSubmittedForReview).toHaveBeenCalledWith(
       expect.objectContaining({ status: TaskStatus.PendingReview }),
       1,

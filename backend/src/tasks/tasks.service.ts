@@ -647,7 +647,7 @@ export class TasksService implements OnModuleInit {
     const localImages = files.filter(
       (file) => file.source === 'local_asset_sheet_image',
     );
-    const localLink = files.find(
+    const localLinks = files.filter(
       (file) => file.source === 'local_asset_sheet_link',
     );
     const legacyLocalAssets = files.filter(
@@ -675,7 +675,8 @@ export class TasksService implements OnModuleInit {
         imageUrls: (localImages.length ? localImages : legacyLocalAssets).map(
           (file) => file.file_url,
         ),
-        linkUrl: localLink?.file_url ?? '',
+        linkUrl: localLinks[0]?.file_url ?? '',
+        linkUrls: localLinks.map((file) => file.file_url),
       },
     };
   }
@@ -1005,9 +1006,12 @@ export class TasksService implements OnModuleInit {
       ),
     );
     const imageUrls = this.uniqueTextValues(dto.imageUrls ?? []);
-    const linkUrl = (dto.linkUrl ?? '').trim();
-    this.assertDeliveryUrls(assetUrls, imageUrls, linkUrl);
-    if (!assetUrls.length && !imageUrls.length && !linkUrl) {
+    const linkUrls = this.uniqueTextValues([
+      ...(dto.linkUrls ?? []),
+      dto.linkUrl ?? '',
+    ]);
+    this.assertDeliveryUrls(assetUrls, imageUrls, linkUrls);
+    if (!assetUrls.length && !imageUrls.length && !linkUrls.length) {
       throw new BadRequestException(
         '请至少上传一张图片或填写一个交付链接后再提交交付',
       );
@@ -1063,12 +1067,12 @@ export class TasksService implements OnModuleInit {
             remark: `来自本地任务通知页图片区第 ${index + 1} 张`,
           });
         }
-        if (linkUrl) {
+        for (const [index, linkUrl] of linkUrls.entries()) {
           await createFile({
-            fileName: '交付链接',
+            fileName: linkUrls.length > 1 ? `合作链接-${index + 1}` : '合作链接',
             fileUrl: linkUrl,
             source: 'local_asset_sheet_link',
-            remark: '来自本地任务通知页单链接区',
+            remark: `来自本地任务通知页合作链接区第 ${index + 1} 条`,
           });
         }
 
@@ -1178,7 +1182,7 @@ export class TasksService implements OnModuleInit {
   private assertDeliveryUrls(
     assetUrls: string[],
     imageUrls: string[],
-    linkUrl: string,
+    linkUrls: string[],
   ) {
     if (assetUrls.length > this.maxLocalAssetCount) {
       throw new BadRequestException(
@@ -1190,7 +1194,7 @@ export class TasksService implements OnModuleInit {
         `Image URL count cannot exceed ${this.maxLocalImageCount}`,
       );
     }
-    const allUrls = [...assetUrls, ...imageUrls, linkUrl].filter(Boolean);
+    const allUrls = [...assetUrls, ...imageUrls, ...linkUrls].filter(Boolean);
     for (const url of allUrls) {
       if (url.length > 500) {
         throw new BadRequestException(

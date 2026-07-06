@@ -7,7 +7,7 @@
 ### 静态页面
 
 - `GET /`：登录、需求录入、任务指派、合同报价录入、报价子项选择、结算统计、需求面板页面。
-- `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`：本地交付登记页，员工上传/粘贴图片资产并填写一个合作链接；页面内 `个人任务主页` 只切换到执行人临时视图，不触发提交。
+- `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`：本地交付登记页，员工上传/粘贴图片资产并添加可选的多条合作链接；页面内 `个人任务主页` 只切换到执行人临时视图，不触发提交。
 
 ### 认证
 
@@ -31,7 +31,7 @@
 - `POST /api/v1/tasks/{id}/assign`：指派任务；`provisionWorkspace=true` 时创建资产入口并发送一条带按钮的飞书消息。
 - `GET /api/v1/tasks/{id}/asset-sheet/context?token=<token>`：员工交付登记页加载任务上下文。
 - `POST /api/v1/tasks/{id}/asset-sheet/upload-image?token=<token>`：上传本地图片，返回可保存的图片 URL。
-- `POST /api/v1/tasks/{id}/asset-sheet/local-assets?token=<token>`：保存图片资产 URL 和单个合作链接，图片资产去重统计，并将任务推进到待验收。
+- `POST /api/v1/tasks/{id}/asset-sheet/local-assets?token=<token>`：保存图片资产 URL 和多条可选合作链接，图片资产去重统计，并将任务推进到待验收；兼容旧字段 `linkUrl`。
 - `POST /api/v1/tasks/{id}/asset-sheet/sync`：读取飞书在线表资产 URL 并同步统计。
 - `GET /api/v1/tasks/{id}/asset-review/context?token=<token>`：负责人查看交付资产上下文；飞书 token 入口免登录，管理后台入口使用当前登录态。
 - `POST /api/v1/tasks/{id}/asset-review/approve?token=<token>`：负责人通过资产查看页验收任务。
@@ -163,7 +163,7 @@
 
 ### `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`
 - 说明：执行人通过飞书通知进入的资产登记页。
-- 能力：上传/拖拽/粘贴图片，填写合作链接，点击 `提交交付` 后调用本任务的资产保存接口。
+- 能力：上传/拖拽/粘贴图片，添加多条可选合作链接，点击 `提交交付` 后调用本任务的资产保存接口。
 - 个人任务主页：页面顶部 `个人任务主页` 按钮会使用资产上下文返回的 `assigneeSession` 写入临时会话并跳转 `/?taskSession=1`，只用于查看个人历史任务，不保存、不提交、不改变任务状态。
 
 ### `GET /asset-review.html?taskId=<taskId>&token=<token>`
