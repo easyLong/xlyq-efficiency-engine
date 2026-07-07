@@ -35,7 +35,7 @@
 
 - 基金客户
 - 对接人
-- 业务平台：默认包含招行、工行、交行、理财通、蚂蚁、天天基金、京东金融；实际下拉优先读取 `dimension_dictionaries.dimension_type = business_platform`
+- 业务平台：默认包含招行、工行、交行、理财通、蚂蚁、天天基金、京东金融、其它；实际下拉优先读取 `dimension_dictionaries.dimension_type = business_platform`
 - 业务大类：设计、文案、运营、社区
 - 二级分类
 - 员工

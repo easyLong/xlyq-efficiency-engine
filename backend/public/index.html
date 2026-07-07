@@ -124,6 +124,18 @@
       padding: 10px 12px;
       background: #f7faf4;
     }
+    .requirements-compose .copy-source-note {
+      display: none;
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #c9ddf7;
+      background: #f4f8ff;
+      color: #2f5f9a;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .requirements-compose .copy-source-note.active { display: block; }
     .requirements-compose .btns { margin-top: 2px; }
     #view-requirements .intake-tabs {
       display: grid;
@@ -438,6 +450,10 @@
       grid-column: auto;
       grid-template-columns: auto auto;
       justify-content: start;
+      max-width: 320px;
+    }
+    .requirement-card-footer .quote-action-compact.has-summary {
+      grid-template-columns: auto auto minmax(0, 140px);
     }
     .quote-action select {
       min-width: 0;
@@ -452,6 +468,14 @@
     }
     .quote-action .btn { min-width: 76px; white-space: nowrap; }
     .quote-action-compact .btn { min-width: 72px; }
+    .quote-action-compact .row-sub {
+      min-width: 0;
+      max-width: 140px;
+      margin-top: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .quote-selected { min-width: 0; }
     .quote-selected .row-sub { word-break: break-word; }
     .assign-action { display: grid; grid-template-columns: minmax(112px, 148px) auto; gap: 5px; align-items: center; justify-content: start; min-width: 0; }
@@ -1415,6 +1439,7 @@
           <div class="grid">
             <input type="hidden" id="projectSelect" />
             <div id="manualIntakePanel" class="tab-panel">
+              <div id="copySourceNote" class="copy-source-note"></div>
               <div class="form-grid">
                 <label>对接人
                   <select id="contactContextSelect" onchange="applyContactContextSelection()"></select>
@@ -1941,6 +1966,7 @@
       businessCategoryOwners: [],
       requirements: [],
       requirementItems: [],
+      copiedRequirementSource: null,
       tasks: [],
       aiPreviewCandidates: [],
       aiPreviewScope: "mine",
@@ -3394,8 +3420,18 @@
       qs("manualIntakePanel")?.classList.toggle("hidden", false);
       qs("aiIntakePanel")?.classList.toggle("hidden", true);
     }
+    function renderCopySourceNote() {
+      const note = qs("copySourceNote");
+      if (!note) return;
+      const source = state.copiedRequirementSource;
+      note.classList.toggle("active", Boolean(source));
+      note.textContent = source
+        ? `已从历史需求「${source.title || source.requirementCode || "未命名需求"}」复制，可修改后提交为一条新需求。负责人、执行人、任务状态和交付资产不会复制。`
+        : "";
+    }
     function clearRequirementForm() {
       state.selectedAiPreviewCandidateId = null;
+      state.copiedRequirementSource = null;
       if (state.intakeMode === "ai") {
         qs("aiRequirementTitle").value = "";
         qs("aiRequirementContent").value = "";
@@ -3417,6 +3453,7 @@
         syncContactContextPreview(null);
       }
       syncProjectSelection(false);
+      renderCopySourceNote();
       toast("表单已清空");
     }
     function updateCreateRequirementButtonLabel(isBusy = false) {
@@ -4057,6 +4094,31 @@
       const day = String(date.getDate()).padStart(2, "0");
       return `${date.getFullYear()}-${month}-${day}`;
     }
+    function todayInputValue() {
+      return dateInputValue(new Date());
+    }
+    function addMonthsToDateInput(value, months = 1) {
+      const input = dateInputValue(value);
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
+      if (!match) return "";
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      const target = new Date(year, month - 1 + months, 1);
+      const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+      target.setDate(Math.min(day, lastDay));
+      return dateInputValue(target);
+    }
+    function nextMonthlyDateInput(value) {
+      const today = todayInputValue();
+      let nextValue = addMonthsToDateInput(value, 1);
+      let guard = 0;
+      while (nextValue && nextValue < today && guard < 24) {
+        nextValue = addMonthsToDateInput(nextValue, 1);
+        guard += 1;
+      }
+      return nextValue;
+    }
     function aiPreviewContent(candidate) {
       return candidate.demand_content || "";
     }
@@ -4064,6 +4126,8 @@
       const candidate = (state.aiPreviewCandidates || []).find(item => String(item.candidate_id) === String(candidateId));
       if (!candidate) return;
       state.selectedAiPreviewCandidateId = candidate.candidate_id;
+      state.copiedRequirementSource = null;
+      renderCopySourceNote();
       switchIntakeMode("manual");
       const customer = matchCustomerForCandidate(candidate);
       const contactContext = matchContactContextForCandidate(candidate, customer);
@@ -4094,6 +4158,53 @@
       renderAiPreviewBoard();
       qs("manualIntakePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
       toast(contactContext ? `已识别对接人：${contactContext.contact_name}` : (customer ? "已填充 AI 预览需求，可修改后确认" : "已填充 AI 预览需求，请确认客户后再保存"));
+    }
+    async function copyRequirementAsNew(event, requirementId) {
+      event?.stopPropagation();
+      if (!can("requirement.create")) return toast("当前账号没有新建需求权限。");
+      const row = requirementRows().find(item => item.requirement.id === requirementId);
+      if (!row) return toast("未找到可复制的需求，请刷新后重试");
+      const requirement = row.requirement;
+      const task = row.task;
+      const context = contactContextForRequirement(requirement);
+      state.selectedAiPreviewCandidateId = null;
+      state.copiedRequirementSource = {
+        requirementId: requirement.id,
+        requirementCode: requirement.requirement_code,
+        title: requirement.title,
+      };
+      switchIntakeMode("manual");
+      if (context && qs("contactContextSelect")) {
+        selectContactContextOption(context);
+        syncContactContextPreview(context);
+      } else if (qs("contactContextSelect")) {
+        qs("contactContextSelect").value = "";
+        syncContactContextPreview(null);
+      }
+      if (requirement.customer_code && qs("customerSelect")) {
+        qs("customerSelect").value = requirement.customer_code;
+      }
+      const project = projectForRequirement(requirement);
+      const categoryValue = matchBusinessCategoryValue(requirement.business_category || project?.project_type || "");
+      ensureSelectOption(qs("projectTypeSelect"), categoryValue);
+      if (categoryValue && qs("projectTypeSelect")) qs("projectTypeSelect").value = categoryValue;
+      await syncProjectSelection(false);
+      const businessPlatform = normalizeBusinessPlatform(requirement.business_platform || context?.business_platform || "");
+      if (qs("businessPlatformInput")) qs("businessPlatformInput").value = businessPlatform;
+      renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", requirement.secondary_category || "");
+      if (qs("tertiaryCategoryInput")) qs("tertiaryCategoryInput").value = requirement.tertiary_category || "";
+      if (qs("businessNameInput")) qs("businessNameInput").value = requirement.business_name || "";
+      if (qs("requirementTitle")) qs("requirementTitle").value = requirement.title || row.item?.item_title || task?.task_name || "";
+      if (qs("requirementContent")) qs("requirementContent").value = requirement.raw_content || requirement.summary || row.item?.item_description || "";
+      if (qs("plannedStartAtInput")) qs("plannedStartAtInput").value = todayInputValue();
+      const sourceDeadline = task?.planned_end_at || task?.plannedEndAt || "";
+      if (qs("plannedEndAtInput")) qs("plannedEndAtInput").value = sourceDeadline ? nextMonthlyDateInput(sourceDeadline) : "";
+      updateRequirementPriorityFromDeadline();
+      if (qs("requirementUrgencyInput")) qs("requirementUrgencyInput").value = requirement.urgency_level || "normal";
+      updateCreateRequirementButtonLabel();
+      renderCopySourceNote();
+      qs("manualIntakePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      toast("已复制到手动录入，可修改后创建新需求");
     }
     function renderRequirementBoard() {
       const rows = activeDimensionRows();
@@ -4275,10 +4386,11 @@
       renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
     }
     function renderRequirementEditAction(row) {
-      if (!can("requirement.edit_owned") && !can("requirement.delete_all")) return "";
+      if (!can("requirement.create") && !can("requirement.edit_owned") && !can("requirement.delete_all")) return "";
       const isBusy = state.busyActionId === row.requirement.id;
       return `
         <div class="card-edit-actions" onclick="event.stopPropagation()">
+          ${can("requirement.create") ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="copyRequirementAsNew(event, '${escapeAttr(row.requirement.id)}')">复制创建</button>` : ""}
           ${can("requirement.edit_owned") ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="startEditRequirement('${row.requirement.id}')">编辑</button>` : ""}
           ${can("requirement.delete_all") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="deleteRequirementBundle('${row.requirement.id}')">${isBusy ? "处理中..." : "删除"}</button>` : ""}
         </div>
@@ -4291,16 +4403,16 @@
       const selectedQuotation = selectedItem?.quotation_id ? quotationById(selectedItem.quotation_id) : null;
       const selectedQuoteSummary = selectedItem
         ? `${selectedQuotation ? `${quotationDisplayName(selectedQuotation)} · ` : ""}${selectedItem.item_code} · ${selectedItem.item_name}`
-        : "已确认报价子项";
+        : "";
       const isBusy = state.busyActionId === `quote-${row.item.id}`;
       const isConfirmed = row.item.quote_scope_status === "matched" || row.mapping?.mapping_status === "matched";
       const isEditingQuote = state.quoteEditingItemId === row.item.id;
       if (isConfirmed && !isEditingQuote) {
         return `
-          <div class="quote-action quote-action-compact" onclick="event.stopPropagation()">
+          <div class="quote-action quote-action-compact ${selectedQuoteSummary ? "has-summary" : ""}" onclick="event.stopPropagation()">
             <span class="quote-status-pill">报价：${safeText(row.quoteStatus)}</span>
             <button class="btn" ${isBusy ? "disabled" : ""} onclick="loadRequirementQuoteOptions('${row.requirement.id}')">${isBusy ? "加载中..." : "重新选择"}</button>
-            <span class="row-sub">${safeText(selectedQuoteSummary)}</span>
+            ${selectedQuoteSummary ? `<span class="row-sub" title="${escapeAttr(selectedQuoteSummary)}">${safeText(selectedQuoteSummary)}</span>` : ""}
           </div>
         `;
       }
@@ -6158,6 +6270,8 @@
         qs("requirementTitle").value = "";
         qs("requirementContent").value = "";
         state.selectedAiPreviewCandidateId = null;
+        state.copiedRequirementSource = null;
+        renderCopySourceNote();
         updateCreateRequirementButtonLabel();
         renderAiPreviewBoard();
         toast("需求已进入历史需求任务列表，状态为待指派");
