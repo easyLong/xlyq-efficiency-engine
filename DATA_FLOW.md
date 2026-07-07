@@ -29,6 +29,8 @@ group_contact_mappings
 - 基金客户：`customer_code`，业务链路直接使用基金简称，不再写入 `customer_id`
 - 业务平台：`business_platform`
 
+需求录入页的客户下拉显示全部 active 客户；报价、映射和结算场景仍优先使用公募基金客户。系统启动时会默认补入 `VectorEngine / 向量引擎`，并在 `group_contact_mappings` 中补入 `雷声 -> 向量引擎 / 其它` 的无群手工对接人映射，用于内部项目类需求录入。
+
 匹配口径：
 
 - 群唯一标识 `group_key` 决定基金客户。
@@ -370,6 +372,7 @@ AI 提示词：
 - `requirements`：客户/项目与创建时间、需求编号。
 - `requirement_items`：需求 ID、报价状态、需求项编号。
 - `tasks`：项目、需求项、执行人状态、状态截止时间、任务编号。
+- `customers`：客户主数据；系统默认补入 `VectorEngine / 向量引擎` 作为内部项目客户，默认对接人为雷声。
 - `task_result_files`：任务、资产来源、软删除时间。
 - `quotations` / `quotation_items`：客户、项目、报价编号、报价子项排序、匹配状态。
 - `requirement_quotation_mappings`：需求项、项目状态、报价子项状态。

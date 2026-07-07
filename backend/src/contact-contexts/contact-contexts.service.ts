@@ -29,6 +29,7 @@ export class ContactContextsService implements OnModuleInit {
     await this.migrateLegacyContactContextsToGroupMappings();
     await this.migrateWechatGroupConfigsToGroupMappings();
     await this.migrateSourceContextsToGroupMappings();
+    await this.seedDefaultGroupContactMappings();
   }
 
   async findAll(status?: string, customerCode?: string, keyword?: string) {
@@ -626,6 +627,61 @@ export class ContactContextsService implements OnModuleInit {
       input.id ? [input.id] : [input.groupKey, input.contactName],
     );
     return Boolean(rows?.[0]?.nicknameUpdated);
+  }
+
+  private async seedDefaultGroupContactMappings() {
+    await this.ensureDefaultCustomer({
+      customerCode: 'VectorEngine',
+      customerName: '向量引擎',
+      contactName: '雷声',
+      industry: '内部项目',
+      remark: '内部项目客户，用于需求录入',
+    });
+    await this.upsertGroupContactMapping({
+      groupKey: 'manual_vector_engine',
+      groupName: '无群手工对接人',
+      contactName: '雷声',
+      groupNickname: '雷声',
+      customerCode: 'VectorEngine',
+      businessPlatform: '其它',
+      collectEnabled: false,
+      nicknameUpdated: true,
+      status: 'active',
+      remark: '系统默认内部项目对接人',
+    });
+  }
+
+  private async ensureDefaultCustomer(input: {
+    customerCode: string;
+    customerName: string;
+    contactName?: string | null;
+    industry: string;
+    remark?: string | null;
+  }) {
+    const existing = await this.customersRepository.findOne({
+      where: { customer_code: input.customerCode },
+    });
+    if (existing) {
+      if (!existing.contact_name && input.contactName) {
+        existing.contact_name = input.contactName;
+        await this.customersRepository.save(existing);
+      }
+      return existing;
+    }
+    return this.customersRepository.save(
+      this.customersRepository.create({
+        id: randomUUID(),
+        customer_code: input.customerCode,
+        customer_name: input.customerName,
+        contact_name: input.contactName ?? null,
+        contact_mobile: null,
+        contact_email: null,
+        industry: input.industry,
+        source: 'system',
+        status: 'active',
+        remark: input.remark ?? null,
+      }),
+    );
   }
 
   private async nextGroupKey(customerCode: string) {

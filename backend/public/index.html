@@ -1441,7 +1441,7 @@
             <div id="manualIntakePanel" class="tab-panel">
               <div id="copySourceNote" class="copy-source-note"></div>
               <div class="form-grid">
-                <label>对接人
+                <label>需求方
                   <select id="contactContextSelect" onchange="applyContactContextSelection()"></select>
                 </label>
                 <label>客户
@@ -1457,7 +1457,7 @@
                   <select id="secondaryCategoryInput"></select>
                 </label>
                 <label>三级分类
-                  <input id="tertiaryCategoryInput" placeholder="可由对接人带出，也可人工修改" />
+                  <input id="tertiaryCategoryInput" placeholder="可由需求方带出，也可人工修改" />
                 </label>
                 <label>开始时间
                   <input id="plannedStartAtInput" type="date" />
@@ -1478,9 +1478,6 @@
                   </select>
                 </label>
               </div>
-              <label>业务命名
-                <input id="businessNameInput" placeholder="人工填写，例如：2026Q2国联安季报制作" />
-              </label>
               <label>需求标题
                 <input id="requirementTitle" />
               </label>
@@ -1927,9 +1924,9 @@
     </div>
   </div>
   <div id="manualContactPopover" class="manual-contact-popover hidden" role="dialog" aria-modal="false" aria-labelledby="manualContactTitle">
-    <h3 id="manualContactTitle">其它对接人</h3>
-    <p>输入后会自动加入当前客户的无群手工对接人，并直接选中。</p>
-    <input id="manualContactInput" type="text" placeholder="请输入对接人姓名" autocomplete="off" />
+    <h3 id="manualContactTitle">其它需求方</h3>
+    <p>输入后会自动加入当前客户的无群手工需求方，并直接选中。</p>
+    <input id="manualContactInput" type="text" placeholder="请输入需求方姓名" autocomplete="off" />
     <div class="manual-contact-actions">
       <button class="btn" type="button" onclick="resolveManualContactPopover(false)">取消</button>
       <button class="btn primary" type="button" onclick="resolveManualContactPopover(true)">确认</button>
@@ -2267,7 +2264,7 @@
       }
       const contactName = input?.value.trim() || "";
       if (!contactName) {
-        toast("请输入对接人姓名");
+        toast("请输入需求方姓名");
         input?.focus();
         return;
       }
@@ -2365,13 +2362,14 @@
     function renderBootstrap() {
       renderLoginUsers();
       const fundCustomers = state.customers.filter(c => c.industry === "公募基金");
-      const customers = [...(fundCustomers.length ? fundCustomers : state.customers)].sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
+      const customers = [...state.customers].sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
+      const fundScopedCustomers = [...(fundCustomers.length ? fundCustomers : state.customers)].sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
       qs("customerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_name || c.customer_code || "客户")}</option>`).join("");
-      qs("quoteCustomerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
-      qs("mappingCustomerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
+      qs("quoteCustomerSelect").innerHTML = fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
+      qs("mappingCustomerSelect").innerHTML = fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
       qs("mappingQuarterSelect").innerHTML = quarterOptions().map(item => `<option value="${item.value}">${item.label}</option>`).join("");
-      qs("settlementCustomerSelect").innerHTML = [`<option value="all">全部基金客户</option>`, ...customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`)].join("");
-      state.mappingCustomerId ||= customers[0]?.customer_code || null;
+      qs("settlementCustomerSelect").innerHTML = [`<option value="all">全部基金客户</option>`, ...fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`)].join("");
+      state.mappingCustomerId ||= fundScopedCustomers[0]?.customer_code || null;
       state.mappingQuarter ||= currentQuarter();
       state.settlementQuarter ||= currentQuarter();
       if (state.mappingCustomerId) qs("mappingCustomerSelect").value = state.mappingCustomerId;
@@ -2447,8 +2445,8 @@
       const activeContexts = expandedContactContexts().filter(item => item.status !== "inactive");
       select.innerHTML = [
         `<option value="">手动选择客户和平台</option>`,
-        ...activeContexts.map(item => `<option value="${escapeAttr(item.id)}" data-option-key="${escapeAttr(item.optionKey)}">${escapeHtml(item.contact_name || "对接人")}</option>`),
-        `<option value="__manual_contact__">其它对接人</option>`,
+        ...activeContexts.map(item => `<option value="${escapeAttr(item.id)}" data-option-key="${escapeAttr(item.optionKey)}">${escapeHtml(item.contact_name || "需求方")}</option>`),
+        `<option value="__manual_contact__">其它需求方</option>`,
       ].join("");
       syncContactContextPreview(null);
     }
@@ -2519,7 +2517,7 @@
         const saved = await request("/contact-contexts/wechat-groups", {
           method: "POST",
           body: {
-            groupName: "无群手工对接人",
+            groupName: "无群手工需求方",
             customerCode,
             businessPlatform: businessPlatform || undefined,
             contactName,
@@ -2542,7 +2540,7 @@
           selectContactContextOption(createdContext);
           syncContactContextPreview(createdContext);
           await syncProjectSelection(false);
-          toast(`已新增并选中对接人：${contactName}`);
+          toast(`已新增并选中需求方：${contactName}`);
         }
       } catch (error) {
         if (select) select.value = "";
@@ -3444,7 +3442,6 @@
       } else {
         qs("requirementTitle").value = "";
         qs("requirementContent").value = "";
-        if (qs("businessNameInput")) qs("businessNameInput").value = "";
         if (qs("plannedStartAtInput")) qs("plannedStartAtInput").value = "";
         if (qs("plannedEndAtInput")) qs("plannedEndAtInput").value = "";
         if (qs("requirementPriorityInput")) qs("requirementPriorityInput").value = "";
@@ -3911,7 +3908,7 @@
                 </div>
                 <div class="ai-preview-meta">
                   <span>${safeText(row.chat_name || row.customer_name || "-")}</span>
-                  ${row.owner_name ? `<span>对接人 ${safeText(row.owner_name)}</span>` : ""}
+                  ${row.owner_name ? `<span>需求方 ${safeText(row.owner_name)}</span>` : ""}
                   <span>${safeText(row.business_platform || "-")}</span>
                   <span>负责人 ${safeText(row.review_owner_name || "未分配")}</span>
                   <span>置信度 ${safeText(previewConfidenceText(row.confidence))}</span>
@@ -4151,13 +4148,12 @@
       if (qs("plannedEndAtInput")) qs("plannedEndAtInput").value = dateInputValue(candidate.deadline);
       updateRequirementPriorityFromDeadline();
       if (qs("requirementUrgencyInput") && !qs("requirementUrgencyInput").value) qs("requirementUrgencyInput").value = "normal";
-      if (qs("businessNameInput")) qs("businessNameInput").value = candidate.business_name || candidate.demand_title || "";
       if (qs("requirementTitle")) qs("requirementTitle").value = candidate.demand_title || candidate.business_name || "";
       if (qs("requirementContent")) qs("requirementContent").value = aiPreviewContent(candidate);
       updateCreateRequirementButtonLabel();
       renderAiPreviewBoard();
       qs("manualIntakePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      toast(contactContext ? `已识别对接人：${contactContext.contact_name}` : (customer ? "已填充 AI 预览需求，可修改后确认" : "已填充 AI 预览需求，请确认客户后再保存"));
+      toast(contactContext ? `已识别需求方：${contactContext.contact_name}` : (customer ? "已填充 AI 预览需求，可修改后确认" : "已填充 AI 预览需求，请确认客户后再保存"));
     }
     async function copyRequirementAsNew(event, requirementId) {
       event?.stopPropagation();
@@ -4193,7 +4189,6 @@
       if (qs("businessPlatformInput")) qs("businessPlatformInput").value = businessPlatform;
       renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", requirement.secondary_category || "");
       if (qs("tertiaryCategoryInput")) qs("tertiaryCategoryInput").value = requirement.tertiary_category || "";
-      if (qs("businessNameInput")) qs("businessNameInput").value = requirement.business_name || "";
       if (qs("requirementTitle")) qs("requirementTitle").value = requirement.title || row.item?.item_title || task?.task_name || "";
       if (qs("requirementContent")) qs("requirementContent").value = requirement.raw_content || requirement.summary || row.item?.item_description || "";
       if (qs("plannedStartAtInput")) qs("plannedStartAtInput").value = todayInputValue();
@@ -4279,7 +4274,7 @@
               <div class="form-grid history-filter-grid">
                 ${[
                   ["基金", "customerId", "全部基金"],
-                  ["对接人", "contactContextId", "全部对接人"],
+                  ["需求方", "contactContextId", "全部需求方"],
                   ["业务平台", "businessPlatform", "全部平台"],
                   ["业务大类", "businessCategory", "全部业务大类"],
                   ["二级分类", "secondaryCategory", "全部二级分类"],
@@ -4348,8 +4343,7 @@
               </div>
               <div class="requirement-card-footer">
                 <div class="requirement-meta-line">${[
-                  row.requirement.business_name ? `业务命名：${safeText(row.requirement.business_name)}` : "",
-                  row.contactContext ? `对接人：${safeText(row.contactContext)}` : "",
+                  row.contactContext ? `需求方：${safeText(row.contactContext)}` : "",
                   taskPlanDateRangeText(row.task) ? `计划：${taskPlanDateRangeText(row.task)}` : "",
                   `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
                   `负责人：${safeText(taskReporterName(row.task))}`,
@@ -4587,10 +4581,6 @@
                 ${editProjectHint(requirement.customer_code, project?.project_type)}
               </div>
               <label>
-                业务命名
-                <input id="edit-business-name-${requirement.id}" value="${escapeAttr(requirement.business_name || "")}" />
-              </label>
-              <label>
                 业务平台
                 <select id="edit-business-platform-${requirement.id}">
                   ${businessPlatformOptions(requirement.business_platform || "")}
@@ -4723,7 +4713,6 @@
       const rawContent = qs(`edit-content-${requirementId}`)?.value.trim();
       const priority = qs(`edit-priority-${requirementId}`)?.value;
       const urgencyLevel = qs(`edit-urgency-${requirementId}`)?.value;
-      const businessName = qs(`edit-business-name-${requirementId}`)?.value.trim();
       const businessPlatform = normalizeBusinessPlatform(qs(`edit-business-platform-${requirementId}`)?.value);
       const tertiaryCategory = qs(`edit-tertiary-category-${requirementId}`)?.value.trim();
       const customerId = qs(`edit-customer-${requirementId}`)?.value;
@@ -4740,7 +4729,7 @@
 
         const result = await request(`/requirements/${requirementId}`, {
           method: "PATCH",
-          body: { title, rawContent, priority, urgencyLevel, customerCode: customerId, projectId: project.id, businessName, businessPlatform: businessPlatform || undefined, tertiaryCategory },
+          body: { title, rawContent, priority, urgencyLevel, customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, tertiaryCategory },
         });
         if (result.requirement) {
           state.requirements = state.requirements.map(item => item.id === requirementId ? result.requirement : item);
@@ -6186,7 +6175,6 @@
       const selectedCandidateId = state.selectedAiPreviewCandidateId;
       const project = await syncProjectSelection(true);
       if (!project) return toast("请先选择客户和业务大类");
-      const businessName = qs("businessNameInput").value.trim();
       const businessPlatform = normalizeBusinessPlatform(qs("businessPlatformInput").value);
       const secondaryCategory = qs("secondaryCategoryInput").value;
       const tertiaryCategory = qs("tertiaryCategoryInput").value.trim();
@@ -6201,7 +6189,6 @@
       }
       if (!plannedEndAt || !priority) return toast("请填写截止时间以计算任务优先级");
       if (!urgencyLevel) return toast("请选择任务紧急程度");
-      if (!businessName) return toast("请填写业务命名");
       if (!title) return toast("请填写需求标题");
       if (!content) return toast("请填写需求内容");
       const button = qs("createRequirementButton");
@@ -6230,7 +6217,6 @@
             plannedStartAt: plannedStartAt || undefined,
             plannedEndAt: plannedEndAt || undefined,
             contactContextId: contactContext?.id || undefined,
-            businessName,
             businessPlatform: businessPlatform || undefined,
             businessCategory: qs("projectTypeSelect").value || undefined,
             secondaryCategory: secondaryCategory || undefined,
@@ -6261,7 +6247,6 @@
           loadQuarterMappingWorkbench(false),
           isViewActive("settlement") ? loadSettlementStatement(false) : Promise.resolve(),
         ]);
-        qs("businessNameInput").value = "";
         qs("plannedStartAtInput").value = "";
         qs("plannedEndAtInput").value = "";
         qs("requirementPriorityInput").value = "";
