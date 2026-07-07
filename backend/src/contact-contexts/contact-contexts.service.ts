@@ -190,7 +190,11 @@ export class ContactContextsService implements OnModuleInit {
 
   async listWechatGroupConfigs(status?: string, keyword?: string) {
     await this.ensureGroupContactMappingsSchema();
-    const where: string[] = ['mapping.deleted_at IS NULL'];
+    const where: string[] = [
+      'mapping.deleted_at IS NULL',
+      "mapping.group_key NOT LIKE 'manual\\_%'",
+      "mapping.group_name NOT IN ('无群手工对接人', '无群手工需求方')",
+    ];
     const params: unknown[] = [];
     if (status) {
       where.push('mapping.status = ?');
@@ -716,7 +720,9 @@ export class ContactContextsService implements OnModuleInit {
   }
 
   private isManualContactGroup(groupName?: string | null) {
-    return String(groupName ?? '').trim() === '无群手工对接人';
+    return ['无群手工对接人', '无群手工需求方'].includes(
+      String(groupName ?? '').trim(),
+    );
   }
 
   private manualContactGroupKey(
