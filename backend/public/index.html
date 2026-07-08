@@ -3844,8 +3844,8 @@
       if (!isCopywritingAiCandidate(candidate)) return "";
       if (["confirmed", "rejected"].includes(String(candidate.status || candidate.review_status || ""))) return "";
       return `
-        <button class="btn" onclick="copyAiPreviewCandidate(event, '${escapeAttr(candidate.candidate_id || "")}', 'design')">点击设计协作</button>
-        <button class="btn" onclick="copyAiPreviewCandidate(event, '${escapeAttr(candidate.candidate_id || "")}', 'operation')">点击运营协作</button>
+        <button class="btn" onclick="copyAiPreviewCandidate(event, '${escapeAttr(candidate.candidate_id || "")}', 'design')">需要设计协作</button>
+        <button class="btn" onclick="copyAiPreviewCandidate(event, '${escapeAttr(candidate.candidate_id || "")}', 'operation')">需要运营协作</button>
       `;
     }
     function renderAiPreviewBoard() {
