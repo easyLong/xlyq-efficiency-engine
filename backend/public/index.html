@@ -388,7 +388,7 @@
       min-width: 0;
     }
     .requirement-title-block { display: grid; gap: 6px; }
-    .requirement-title-line { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; }
+    .requirement-title-line { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: center; }
     .requirement-title-line .tag {
       max-width: 118px;
       overflow: hidden;
@@ -1533,7 +1533,7 @@
             <div class="section-title">
               <div>
                 <div class="kicker">History</div>
-                <h3>历史需求任务状态</h3>
+                <h3>任务需求列表</h3>
               </div>
               <span class="tag">在卡片内完成报价和指派</span>
             </div>
@@ -4324,7 +4324,6 @@
               <div class="requirement-card-main">
                 <div class="requirement-title-block">
                   <div class="requirement-title-line">
-                    <span class="tag">${safeText(row.requirement.requirement_code || "需求")}</span>
                     <div class="row-title">${safeText(row.requirement.title)}</div>
                   </div>
                 </div>
@@ -4333,7 +4332,6 @@
                   <span class="dimension-pill">${safeText(row.businessPlatform || "-")}</span>
                   <span class="dimension-pill">${safeText(row.businessCategory || "-")}</span>
                   <div class="status-stack">
-                    <span class="tag">需求：${safeText(row.requirement.status)}</span>
                     <span class="tag">任务：${safeText(row.taskStatus)}</span>
                     ${quoteVisible ? `<span class="tag">报价：${safeText(row.quoteStatus)}</span>` : ""}
                   </div>
@@ -4619,8 +4617,7 @@
       `;
     }
     function editCustomerOptions(selectedCustomerId) {
-      const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
-      const customers = [...(fundCustomers.length ? fundCustomers : state.customers)]
+      const customers = [...state.customers]
         .sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
       return customers.map(customer => `<option value="${customer.customer_code}" ${customer.customer_code === selectedCustomerId ? "selected" : ""}>${customer.customer_code || "客户"} · ${customer.customer_name}</option>`).join("");
     }
