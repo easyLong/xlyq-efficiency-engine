@@ -4639,6 +4639,7 @@
     }
     function renderAssignAction(row) {
       if (!row.task) return `<span class="muted">任务生成中</span>`;
+      if (canOpenAssignedAssetSheet(row.task)) return renderAssigneeAssetAction(row);
       if (row.task.status === "pending_review" && !(can("task.accept_owned") || can("task.return_owned"))) {
         return `<span class="done-text">待管理者验收</span>`;
       }
@@ -4672,6 +4673,29 @@
         </div>
       `;
     }
+    function canOpenAssignedAssetSheet(task) {
+      return Boolean(
+        task?.assignee_user_id &&
+        state.user?.id &&
+        task.assignee_user_id === state.user.id &&
+        can("task.submit_assigned")
+      );
+    }
+    function renderAssigneeAssetAction(row) {
+      const task = row.task;
+      const status = String(task.status || "");
+      const statusText = status === "pending_review"
+        ? "待验收"
+        : status === "completed"
+          ? "已验收"
+          : taskStatusLabel(status);
+      return `
+        <div class="assign-action compact" onclick="event.stopPropagation()">
+          <span class="quote-status-pill">${safeText(statusText)}</span>
+          <button class="btn primary" onclick="openTaskAssetSheet('${task.id}')">进入资产目录</button>
+        </div>
+      `;
+    }
     function startReassignTask(taskId) {
       if (state.busyActionId) return;
       state.assignmentEditingTaskId = taskId;
@@ -4694,6 +4718,20 @@
     function openTaskAssetReview(taskId) {
       if (!taskId) return;
       window.open(`/asset-review.html?taskId=${encodeURIComponent(taskId)}`, "_blank", "noopener");
+    }
+    async function openTaskAssetSheet(taskId) {
+      if (!taskId) return;
+      try {
+        const workspace = await request(`/tasks/${encodeURIComponent(taskId)}/workspace`);
+        const url = workspace?.directory_url;
+        if (!url) {
+          toast("项目资产页还未生成，请联系负责人重新指派或生成资产页");
+          return;
+        }
+        window.open(url, "_blank", "noopener");
+      } catch (error) {
+        toast(error.message || "打开项目资产页失败");
+      }
     }
     function startEditRequirement(requirementId) {
       state.editingRequirementId = requirementId;
