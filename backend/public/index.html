@@ -4639,7 +4639,7 @@
     }
     function renderAssignAction(row) {
       if (!row.task) return `<span class="muted">任务生成中</span>`;
-      if (canOpenAssignedAssetSheet(row.task)) return renderAssigneeAssetAction(row);
+      if (canOpenTaskAssetSheet(row.task)) return renderTaskAssetDirectoryAction(row);
       if (row.task.status === "pending_review" && !(can("task.accept_owned") || can("task.return_owned"))) {
         return `<span class="done-text">待管理者验收</span>`;
       }
@@ -4673,15 +4673,10 @@
         </div>
       `;
     }
-    function canOpenAssignedAssetSheet(task) {
-      return Boolean(
-        task?.assignee_user_id &&
-        state.user?.id &&
-        task.assignee_user_id === state.user.id &&
-        can("task.submit_assigned")
-      );
+    function canOpenTaskAssetSheet(task) {
+      return Boolean(task?.id);
     }
-    function renderAssigneeAssetAction(row) {
+    function renderTaskAssetDirectoryAction(row) {
       const task = row.task;
       const status = String(task.status || "");
       const statusText = status === "pending_review"
@@ -4725,7 +4720,7 @@
         const workspace = await request(`/tasks/${encodeURIComponent(taskId)}/workspace`);
         const url = workspace?.directory_url;
         if (!url) {
-          toast("项目资产页还未生成，请联系负责人重新指派或生成资产页");
+          toast("项目资产目录还未生成，可能是历史任务，请重新指派或生成资产页");
           return;
         }
         window.open(url, "_blank", "noopener");
