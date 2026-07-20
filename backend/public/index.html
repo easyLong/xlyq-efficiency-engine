@@ -479,7 +479,7 @@
     .quote-selected { min-width: 0; }
     .quote-selected .row-sub { word-break: break-word; }
     .assign-action { display: grid; grid-template-columns: minmax(112px, 148px) auto; gap: 5px; align-items: center; justify-content: start; min-width: 0; }
-    .assign-action.compact { grid-template-columns: auto auto; }
+    .assign-action.compact { display: flex; flex-wrap: wrap; }
     .assign-action select {
       width: 148px;
       max-width: 148px;
@@ -4639,12 +4639,21 @@
     }
     function renderAssignAction(row) {
       if (!row.task) return `<span class="muted">任务生成中</span>`;
-      if (canOpenTaskAssetSheet(row.task)) return renderTaskAssetDirectoryAction(row);
       if (row.task.status === "pending_review" && !(can("task.accept_owned") || can("task.return_owned"))) {
-        return `<span class="done-text">待管理者验收</span>`;
+        return `
+          <div class="assign-action compact" onclick="event.stopPropagation()">
+            <span class="done-text">待管理者验收</span>
+            ${renderTaskAssetDirectoryButton(row.task)}
+          </div>
+        `;
       }
       if (!can("task.assign_owned") && !["pending_review", "completed"].includes(row.task.status)) {
-        return `<span class="done-text">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>`;
+        return `
+          <div class="assign-action compact" onclick="event.stopPropagation()">
+            <span class="done-text">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
+            ${renderTaskAssetDirectoryButton(row.task)}
+          </div>
+        `;
       }
       if (row.taskStatus === "待验收") return renderReviewAction(row);
       if (row.taskStatus === "已验收") {
@@ -4652,6 +4661,7 @@
           <div class="assign-action compact" onclick="event.stopPropagation()">
             <span class="done-text">已验收</span>
             <button class="btn" onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
+            ${renderTaskAssetDirectoryButton(row.task)}
           </div>
         `;
       }
@@ -4663,6 +4673,7 @@
           <div class="assign-action compact" onclick="event.stopPropagation()">
             <span class="quote-status-pill">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
             <button class="btn" ${isBusy ? "disabled" : ""} onclick="startReassignTask('${row.task.id}')">${isBusy ? "处理中" : "改派"}</button>
+            ${renderTaskAssetDirectoryButton(row.task)}
           </div>
         `;
       }
@@ -4676,20 +4687,9 @@
     function canOpenTaskAssetSheet(task) {
       return Boolean(task?.id);
     }
-    function renderTaskAssetDirectoryAction(row) {
-      const task = row.task;
-      const status = String(task.status || "");
-      const statusText = status === "pending_review"
-        ? "待验收"
-        : status === "completed"
-          ? "已验收"
-          : taskStatusLabel(status);
-      return `
-        <div class="assign-action compact" onclick="event.stopPropagation()">
-          <span class="quote-status-pill">${safeText(statusText)}</span>
-          <button class="btn primary" onclick="openTaskAssetSheet('${task.id}')">进入资产目录</button>
-        </div>
-      `;
+    function renderTaskAssetDirectoryButton(task) {
+      if (!canOpenTaskAssetSheet(task)) return "";
+      return `<button class="btn" onclick="openTaskAssetSheet('${task.id}')">资产目录</button>`;
     }
     function startReassignTask(taskId) {
       if (state.busyActionId) return;
@@ -4707,6 +4707,7 @@
           <button class="btn" ${isBusy ? "disabled" : ""} onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
           ${can("task.accept_owned") ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "通过验收"}</button>` : ""}
           ${can("task.return_owned") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>` : ""}
+          ${renderTaskAssetDirectoryButton(row.task)}
         </div>
       `;
     }
