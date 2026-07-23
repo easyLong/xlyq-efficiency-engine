@@ -3,6 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Repository } from 'typeorm';
+import {
+  addWorkflowHandoffToAppUrl,
+  buildAppPublicUrl,
+} from '../../common/app-public-url';
 import { TaskEntity } from '../../tasks/entities/task.entity';
 import {
   buildActiveProgressCard,
@@ -124,14 +128,22 @@ export class FeishuTaskCardActionHandler {
   }
 
   private buildTaskAssetSheetUrl(task: TaskEntity) {
-    const baseUrl =
-      this.configService.get<string>('APP_PUBLIC_BASE_URL') ??
-      'http://localhost:3000';
-    const url = new URL(`${baseUrl.replace(/\/$/, '')}/asset-sheet.html`);
-    url.searchParams.set('taskId', task.id);
-    url.searchParams.set('taskNo', task.task_no);
-    url.searchParams.set('token', this.taskAccessToken(task));
-    url.searchParams.set('start', '1');
-    return url.toString();
+    const url = buildAppPublicUrl(
+      '/asset-sheet.html',
+      {
+        taskId: task.id,
+        taskNo: task.task_no,
+        token: this.taskAccessToken(task),
+        start: 1,
+      },
+      this.configService.get<string>('APP_PUBLIC_BASE_URL'),
+    );
+    return task.assignee_user_id
+      ? addWorkflowHandoffToAppUrl(
+          url,
+          task.assignee_user_id,
+          this.configService.get<string>('APP_PUBLIC_BASE_URL'),
+        )
+      : url;
   }
 }

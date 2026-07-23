@@ -16,6 +16,7 @@ import {
   hasPermission,
   normalizeAccessBusinessCategory,
 } from '../common/access-control';
+import { buildAppPublicUrl } from '../common/app-public-url';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { ensureIndex } from '../common/schema-maintenance';
 import { ensureWorkflowConfigTables } from '../common/workflow-config-schema';
@@ -846,29 +847,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  private async notifyCopiedAiPreviewCandidate(
-    candidateId: string,
-    ownerUserId: string,
-    source: Record<string, unknown>,
-    target: AiPreviewCopyTarget,
-  ) {
-    await this.notificationsService.send({
-      recipientUserId: ownerUserId,
-      title: `AI预览需求待确认：${this.businessCategoryName(target)}需求复制`,
-      content: [
-        `需求名称：${source.demand_title ?? source.business_name ?? '-'}`,
-        `客户平台：${[source.raw_customer_name, source.raw_business_platform].filter(Boolean).join('-') || '-'}`,
-        `来源：由文案候选 ${source.id} 复制`,
-        '请进入工作台确认是否转为正式需求。',
-      ].join('\n'),
-      objectType: 'ai_preview_candidate',
-      objectId: candidateId,
-      channels: ['in_app', 'feishu_app'],
-      actionUrl: this.buildWorkbenchUrl(),
-      actionText: '查看并确认',
-    });
-  }
-
   private normalizeAiPreviewRejectFeedback(dto: AiPreviewRejectDto) {
     const rawReasons = Array.isArray(dto?.rejectReasons)
       ? dto.rejectReasons
@@ -1117,6 +1095,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           candidate.raw_business_platform AS businessPlatform,
           candidate.business_category AS businessCategory,
           candidate.confidence,
+          COALESCE(
+            NULLIF(candidate.matched_customer_code, ''),
+            matched_customer.customer_code,
+            raw_customer.customer_code
+          ) AS customerCode,
           dispatcher.user_id AS dispatcherUserId
         FROM demand_intake_candidates candidate
         LEFT JOIN customers matched_customer
@@ -1169,7 +1152,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         objectType: 'ai_preview_candidate',
         objectId: row.id,
         channels: ['in_app', 'feishu_app'],
-        actionUrl: this.buildWorkbenchUrl(),
+        actionUrl: this.buildDispatcherWorkbenchUrl(row.id),
         actionText: '查看并确认',
       });
     }
@@ -1186,9 +1169,13 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     return `${Math.round((numeric > 1 ? numeric / 100 : numeric) * 100)}%`;
   }
 
-  private buildWorkbenchUrl() {
-    const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
-    return baseUrl.replace(/\/$/, '/');
+  private buildDispatcherWorkbenchUrl(candidateId: string) {
+    const url = new URL(buildAppPublicUrl('/'));
+    url.hash = new URLSearchParams({
+      view: 'requirements',
+      candidateId,
+    }).toString();
+    return url.toString();
   }
 
   private async attachAiPreviewEvidences(rows: Array<Record<string, unknown>>) {

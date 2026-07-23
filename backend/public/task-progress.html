@@ -71,6 +71,7 @@
     <div id="statusText" class="status">提交交付后将进入成品审核。</div>
   </main>
 
+  <script src="/js/workflow-session.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const taskId = params.get("taskId") || "";
@@ -78,6 +79,7 @@
     const taskNo = params.get("taskNo") || "";
     let assetSheetUrl = "";
     let currentTaskStatus = "";
+    let workflowSessionEstablished = false;
 
     function qs(id) { return document.getElementById(id); }
     function statusLabel(status) {
@@ -99,6 +101,9 @@
         const response = await fetch(api("context"));
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || "读取任务失败");
+        if (!workflowSessionEstablished) {
+          window.XlyqWorkflowSession.store(result.assigneeSession);
+        }
         const task = result.task || {};
         currentTaskStatus = task.status || "";
         assetSheetUrl = result.assetSheetUrl || "";
@@ -122,7 +127,17 @@
       }
       location.href = target.toString();
     }
-    loadContext();
+    async function bootstrapProgressPage() {
+      try {
+        workflowSessionEstablished = Boolean(
+          await window.XlyqWorkflowSession.establishFromLocation(),
+        );
+      } catch (error) {
+        console.warn("Workflow account handoff failed", error);
+      }
+      await loadContext();
+    }
+    bootstrapProgressPage();
   </script>
 </body>
 </html>

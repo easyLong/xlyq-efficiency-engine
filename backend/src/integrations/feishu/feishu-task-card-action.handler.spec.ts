@@ -21,7 +21,7 @@ describe('FeishuTaskCardActionHandler', () => {
     const config = {
       get: jest.fn((key: string) => {
         if (key === 'TASK_ACCESS_TOKEN_SECRET') return 'test-secret';
-        if (key === 'APP_PUBLIC_BASE_URL') return 'http://localhost:3000';
+        if (key === 'APP_PUBLIC_BASE_URL') return 'http://192.168.10.5:3000';
         return undefined;
       }),
     };

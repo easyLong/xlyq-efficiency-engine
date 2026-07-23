@@ -2679,13 +2679,16 @@
       });
       return rows;
     }
+    function isSharedInternalCustomer(customerCode) {
+      return String(customerCode || "").trim() === "VectorEngine";
+    }
     function renderContactContextOptions() {
       const select = qs("contactContextSelect");
       if (!select) return;
       const dispatchCodes = new Set(state.user?.dispatch_customer_codes || []);
       const activeContexts = expandedContactContexts().filter(item =>
         item.status !== "inactive" &&
-        (isAdminUser() || dispatchCodes.has(item.customer_code))
+        (isAdminUser() || isSharedInternalCustomer(item.customer_code) || dispatchCodes.has(item.customer_code))
       );
       select.innerHTML = [
         `<option value="">手动选择客户和平台</option>`,
@@ -3098,7 +3101,9 @@
     function intakeCustomers(customers = state.customers) {
       if (isAdminUser()) return [...customers];
       const codes = new Set(state.user?.dispatch_customer_codes || []);
-      return [...customers].filter(customer => codes.has(customer.customer_code));
+      return [...customers].filter(customer =>
+        isSharedInternalCustomer(customer.customer_code) || codes.has(customer.customer_code)
+      );
     }
     function workflowRoleDefinition(role = state.workflowConfigRole) {
       return {
@@ -3359,6 +3364,41 @@
       } catch (error) {
         console.error(error);
       }
+    }
+    async function applyFeishuLinkTarget(target) {
+      switchView(target?.view || "requirements");
+      state.aiPreviewScope = "mine";
+      state.aiPreviewOwnerId = "all";
+      const candidateId = String(target?.candidateId || "");
+      if (!candidateId) return;
+      try {
+        const params = new URLSearchParams({ limit: "100", scope: "mine" });
+        state.aiPreviewCandidates = unwrap(await request(`/requirements/ai-preview-candidates?${params.toString()}`));
+        renderAiPreviewBoard();
+        const candidate = state.aiPreviewCandidates.find(item => String(item.candidate_id) === candidateId);
+        if (candidate) {
+          await applyAiPreviewCandidate(candidateId);
+          return;
+        }
+        qs("aiPreviewPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        toast("已切换到派发账号，该需求可能已由其他派发者处理");
+      } catch (error) {
+        toast(error.message || "待派发需求定位失败");
+      }
+    }
+    function feishuLinkTarget() {
+      const fragmentParams = new URLSearchParams(location.hash.replace(/^#/, ""));
+      const candidateId = fragmentParams.get("candidateId") || "";
+      const view = fragmentParams.get("view") || "requirements";
+      return candidateId || fragmentParams.has("view") ? { view, candidateId } : null;
+    }
+    function workflowHandoffToken() {
+      return new URLSearchParams(location.hash.replace(/^#/, "")).get("handoff") || "";
+    }
+    function clearWorkflowHandoffLocation() {
+      const cleanUrl = new URL(location.href);
+      cleanUrl.hash = "";
+      history.replaceState(null, "", `${cleanUrl.pathname}${cleanUrl.search}`);
     }
     function resetLocalSession() {
       window.XlyqAppShell.session.clear();
@@ -7765,6 +7805,19 @@
         await loadBootstrap();
         sessionStorage.removeItem("mvpSession");
         const pageParams = new URLSearchParams(location.search);
+        const linkTarget = feishuLinkTarget();
+        const handoffToken = workflowHandoffToken();
+        if (handoffToken) {
+          clearWorkflowHandoffLocation();
+          const linkSession = await request("/auth/workflow-handoff", {
+            method: "POST",
+            body: { token: handoffToken },
+          });
+          enterApp(linkSession.user, linkSession.accessToken);
+          await initializeAppAfterLogin();
+          if (linkTarget) await applyFeishuLinkTarget(linkTarget);
+          return;
+        }
         const taskSessionRequested = pageParams.get("taskSession") === "1";
         const taskSession = taskSessionRequested ? sessionStorage.getItem("xlyqTaskSession") : null;
         const savedSession = taskSession || window.XlyqAppShell.session.read();
@@ -7778,6 +7831,10 @@
           if (session?.user?.username && session?.accessToken) {
             enterApp(session.user, session.accessToken, { taskSession: Boolean(taskSession) });
             await initializeAppAfterLogin();
+            if (linkTarget) {
+              clearWorkflowHandoffLocation();
+              await applyFeishuLinkTarget(linkTarget);
+            }
           } else {
             window.XlyqAppShell.session.clear();
           }

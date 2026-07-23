@@ -17,6 +17,10 @@ import {
   buildAccessProfile,
   normalizeAccessBusinessCategory,
 } from '../common/access-control';
+import {
+  buildAppPublicUrl,
+  rebaseAppPublicUrl,
+} from '../common/app-public-url';
 import { ensureIndex } from '../common/schema-maintenance';
 import { ensureWorkflowConfigTables } from '../common/workflow-config-schema';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
@@ -915,8 +919,9 @@ export class TasksService implements OnModuleInit {
       statusLabel: this.publicTaskStatusLabel(task),
       workflow: buildTaskWorkflowSnapshot(task),
       assigneeSession: await this.publicAssigneeSession(task),
-      assetSheetUrl:
-        workspace?.directory_url ?? this.buildLocalAssetSheetUrl(task),
+      assetSheetUrl: workspace?.directory_url
+        ? this.ensureSignedLocalAssetSheetUrl(task, workspace.directory_url)
+        : this.buildLocalAssetSheetUrl(task),
     };
   }
 
@@ -1052,9 +1057,12 @@ export class TasksService implements OnModuleInit {
   }
 
   private buildLocalAssetSheetUrl(task: TaskEntity) {
-    const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
     const token = this.assetSheetToken(task);
-    return `${baseUrl.replace(/\/$/, '')}/asset-sheet.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}&token=${encodeURIComponent(token)}`;
+    return buildAppPublicUrl('/asset-sheet.html', {
+      taskId: task.id,
+      taskNo: task.task_no,
+      token,
+    });
   }
 
   private ensureSignedLocalAssetSheetUrl(task: TaskEntity, url: string | null) {
@@ -1062,7 +1070,7 @@ export class TasksService implements OnModuleInit {
       return url;
     }
     try {
-      const parsed = new URL(url);
+      const parsed = new URL(rebaseAppPublicUrl(url));
       parsed.searchParams.set('taskId', task.id);
       parsed.searchParams.set('taskNo', task.task_no);
       parsed.searchParams.set('token', this.assetSheetToken(task));
@@ -1497,11 +1505,17 @@ export class TasksService implements OnModuleInit {
   }
 
   private async publicAssigneeSession(task: TaskEntity) {
-    if (!task.assignee_user_id) {
+    return task.assignee_user_id
+      ? this.publicUserSession(task.assignee_user_id)
+      : null;
+  }
+
+  private async publicUserSession(userId: string) {
+    if (!userId) {
       return null;
     }
     const assignee = await this.usersRepository.findOne({
-      where: { id: task.assignee_user_id, status: 'active' },
+      where: { id: userId, status: 'active' },
     });
     if (!assignee) {
       return null;
@@ -2902,6 +2916,10 @@ export class TasksService implements OnModuleInit {
       canProductReview,
       canCustomerReview,
       canReview: canProductReview || canCustomerReview,
+      viewerSession:
+        access.mode === 'token' && access.userId
+          ? await this.publicUserSession(access.userId)
+          : null,
     };
   }
 

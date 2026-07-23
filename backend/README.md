@@ -63,7 +63,7 @@ copy .env.example .env
 ```env
 PORT=3000
 HOST=0.0.0.0
-APP_PUBLIC_BASE_URL=http://localhost:3000
+APP_PUBLIC_BASE_URL=http://192.168.1.100:3000
 TASK_ACCESS_TOKEN_SECRET=replace-with-a-long-random-secret
 
 DB_HOST=127.0.0.1

@@ -16,10 +16,7 @@ import { FeishuSyncLogEntity } from './entities/feishu-sync-log.entity';
 import { buildInteractiveCard } from './feishu-card-templates';
 import { asRecord } from './feishu-callback-parser';
 import { FeishuOpenApiClient } from './feishu-openapi.client';
-import {
-  ASSET_SHEET_HEADERS,
-  FeishuSheetClient,
-} from './feishu-sheet.client';
+import { ASSET_SHEET_HEADERS, FeishuSheetClient } from './feishu-sheet.client';
 import { FeishuTaskCardActionHandler } from './feishu-task-card-action.handler';
 import { FeishuUserSyncService } from './feishu-user-sync.service';
 
@@ -40,10 +37,11 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
   private larkChannel: LarkChannel | null = null;
 
   getConfigStatus() {
-    const publicBaseUrl =
-      this.configService.get<string>('APP_PUBLIC_BASE_URL') ??
-      'http://localhost:3000';
+    const publicBaseUrl = String(
+      this.configService.get<string>('APP_PUBLIC_BASE_URL') ?? '',
+    ).trim();
     const localSheetPubliclyReachable =
+      Boolean(publicBaseUrl) &&
       /^https?:\/\/(?!localhost(?::|\/|$)|127\.0\.0\.1(?::|\/|$))/i.test(
         publicBaseUrl,
       );
@@ -70,7 +68,8 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
       ),
       websocketCallbackEnabled: this.shouldEnableWebsocketCallbacks(),
       websocketCallbackConnected: Boolean(this.larkChannel),
-      publicBaseUrl,
+      publicBaseUrl: publicBaseUrl || null,
+      publicBaseUrlConfigured: Boolean(publicBaseUrl),
       localSheetPubliclyReachable,
       assetSheetMode: localSheetPubliclyReachable
         ? 'feishu_sheet_with_public_local_fallback'

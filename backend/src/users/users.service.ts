@@ -15,6 +15,7 @@ import {
 } from 'node:crypto';
 import { DataSource, IsNull, Repository } from 'typeorm';
 import { buildAccessProfile } from '../common/access-control';
+import { verifyWorkflowHandoffToken } from '../common/workflow-handoff-token';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { PasswordLoginDto } from './dto/password-login.dto';
@@ -103,7 +104,7 @@ export class UsersService implements OnModuleInit {
       ? dto.password === user.passwd
       : Boolean(
           user.password_hash &&
-            this.verifyPassword(dto.password, user.password_hash),
+          this.verifyPassword(dto.password, user.password_hash),
         );
     if (!passwordMatched) {
       throw new UnauthorizedException('Invalid account or password');
@@ -115,6 +116,27 @@ export class UsersService implements OnModuleInit {
       accessToken: `mvp-${saved.id}`,
       tokenType: 'MVP',
       user: await this.attachRoleCodesToUser(saved),
+    };
+  }
+
+  async exchangeWorkflowHandoff(token: string) {
+    let payload;
+    try {
+      payload = verifyWorkflowHandoffToken(token);
+    } catch {
+      throw new UnauthorizedException('飞书处理链接无效或已过期');
+    }
+    const user = await this.usersRepository.findOne({
+      where: { id: payload.userId, status: 'active' },
+    });
+    if (!user) {
+      throw new UnauthorizedException('飞书账号未关联有效的系统用户');
+    }
+    return {
+      accessToken: `mvp-${user.id}`,
+      tokenType: 'MVP',
+      expiresAt: new Date(payload.expiresAt * 1000).toISOString(),
+      user: await this.attachRoleCodesToUser(user),
     };
   }
 
@@ -254,8 +276,9 @@ export class UsersService implements OnModuleInit {
   }
 
   private async initializePasswords() {
-    const initialUserPassword =
-      this.configService.get<string>('INITIAL_USER_PASSWORD');
+    const initialUserPassword = this.configService.get<string>(
+      'INITIAL_USER_PASSWORD',
+    );
     if (initialUserPassword) {
       const users = await this.usersRepository.find({
         where: { passwd: IsNull(), status: 'active' },

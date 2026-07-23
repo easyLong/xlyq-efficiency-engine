@@ -6,6 +6,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { PasswordLoginDto } from './dto/password-login.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { WorkflowHandoffDto } from './dto/workflow-handoff.dto';
 import { UsersService } from './users.service';
 
 @Controller()
@@ -39,6 +40,12 @@ export class UsersController {
   @Post('auth/password-login')
   loginWithPassword(@Body() dto: PasswordLoginDto) {
     return this.usersService.loginWithPassword(dto);
+  }
+
+  @Public()
+  @Post('auth/workflow-handoff')
+  workflowHandoff(@Body() dto: WorkflowHandoffDto) {
+    return this.usersService.exchangeWorkflowHandoff(dto.token);
   }
 
   @Get('users/me')

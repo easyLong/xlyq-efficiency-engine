@@ -179,6 +179,7 @@
   </div>
 
   <script src="/js/app-shell.js"></script>
+  <script src="/js/workflow-session.js"></script>
   <script>
     const apiBase = "/api/v1";
     const params = new URLSearchParams(location.search);
@@ -186,6 +187,7 @@
     const token = params.get("token") || "";
     let context = null;
     let busy = false;
+    let workflowSessionEstablished = false;
 
     function escapeHtml(value) {
       return window.XlyqAppShell.escapeHtml(value ?? "");
@@ -240,7 +242,7 @@
       return new Date(value).toLocaleString();
     }
     function renderError(message) {
-      const loginAction = token ? "" : `<a class="btn primary" href="/index.html">进入管理后台登录</a>`;
+      const loginAction = token ? "" : `<a class="btn primary" href="/?taskSession=1">进入管理后台登录</a>`;
       document.getElementById("app").innerHTML = `
         <section class="error">
           <div class="kicker">Asset Review</div>
@@ -248,7 +250,7 @@
           <p class="subtitle">${escapeHtml(message || "链接无效或当前账号无权限。")}</p>
           <div class="actions" style="margin-top:14px;">
             ${loginAction}
-            <a class="btn" href="/index.html">返回管理后台</a>
+            <a class="btn" href="/?taskSession=1">返回管理后台</a>
           </div>
         </section>
       `;
@@ -335,11 +337,11 @@
               <div class="actions">
                 <button class="btn primary" ${busy ? "disabled" : ""} onclick="approveReview()">${busy ? "处理中..." : approveText}</button>
                 <button class="btn danger" ${busy ? "disabled" : ""} onclick="returnReview()">${busy ? "处理中..." : "退回修改"}</button>
-                <a class="btn" href="/index.html">返回管理后台</a>
+                <a class="btn" href="/?taskSession=1">返回管理后台</a>
               </div>
             ` : `
               <div class="empty">${escapeHtml(reviewHint)}</div>
-              <div class="actions"><a class="btn" href="/index.html">返回管理后台</a></div>
+              <div class="actions"><a class="btn" href="/?taskSession=1">返回管理后台</a></div>
             `}
           </div>
         </section>
@@ -352,6 +354,9 @@
       }
       try {
         context = await request(`/tasks/${encodeURIComponent(taskId)}/asset-review/context${tokenQuery()}`);
+        if (!workflowSessionEstablished) {
+          window.XlyqWorkflowSession.store(context.viewerSession);
+        }
         render();
       } catch (error) {
         renderError(error.message);
@@ -399,7 +404,17 @@
     document.addEventListener("keydown", event => {
       if (event.key === "Escape") hideImageViewer();
     });
-    load();
+    async function bootstrapReviewPage() {
+      try {
+        workflowSessionEstablished = Boolean(
+          await window.XlyqWorkflowSession.establishFromLocation(),
+        );
+      } catch (error) {
+        console.warn("Workflow account handoff failed", error);
+      }
+      await load();
+    }
+    bootstrapReviewPage();
   </script>
 </body>
 </html>

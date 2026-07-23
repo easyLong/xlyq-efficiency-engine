@@ -2,6 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { MoreThanOrEqual, Repository } from 'typeorm';
+import {
+  addWorkflowHandoffToAppUrl,
+  buildAppPublicUrl,
+  rebaseAppPublicUrl,
+} from '../common/app-public-url';
 import { WorklogEntity } from '../common/entities/worklog.entity';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
 import { FeishuService } from '../integrations/feishu/feishu.service';
@@ -89,9 +94,18 @@ export class NotificationsService {
     if (channels.includes('feishu_app')) {
       try {
         result.feishu_app = await this.sendFeishuAppMessage(message, {
-          actionUrl: dto.actionUrl,
+          actionUrl: this.recipientAppUrl(
+            dto.actionUrl,
+            message.recipient_user_id,
+          ),
           actionText: dto.actionText,
-          actions: dto.actions,
+          actions: dto.actions?.map((action) => ({
+            ...action,
+            url: this.recipientAppUrl(
+              action.url,
+              message.recipient_user_id,
+            ),
+          })),
         });
       } catch (error) {
         const errorMessage =
@@ -150,6 +164,16 @@ export class NotificationsService {
           : `${channel}: delivery failed`;
       })
       .filter((message): message is string => Boolean(message));
+  }
+
+  private recipientAppUrl(
+    actionUrl: string | undefined,
+    recipientUserId: string | null,
+  ) {
+    if (!actionUrl || !recipientUserId) {
+      return actionUrl;
+    }
+    return addWorkflowHandoffToAppUrl(actionUrl, recipientUserId);
   }
 
   async notifyTaskAssignedById(taskId: string, message?: string) {
@@ -804,28 +828,30 @@ export class NotificationsService {
   }
 
   private buildTaskAssetSheetUrl(task: TaskEntity) {
-    const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
     const token = this.taskAccessToken(task);
-    return `${baseUrl.replace(/\/$/, '')}/asset-sheet.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}&token=${encodeURIComponent(token)}&start=1`;
+    return buildAppPublicUrl('/asset-sheet.html', {
+      taskId: task.id,
+      taskNo: task.task_no,
+      token,
+      start: 1,
+    });
   }
 
   private withAssetSheetStart(url: string | null) {
     if (!url || !url.includes('/asset-sheet.html')) {
       return url;
     }
-    try {
-      const parsed = new URL(url);
-      parsed.searchParams.set('start', '1');
-      return parsed.toString();
-    } catch {
-      return url;
-    }
+    const parsed = new URL(rebaseAppPublicUrl(url));
+    parsed.searchParams.set('start', '1');
+    return parsed.toString();
   }
 
   private buildTaskAssetReviewUrl(task: TaskEntity, reviewerUserId: string) {
-    const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
     const token = this.taskReviewAccessToken(task, reviewerUserId);
-    return `${baseUrl.replace(/\/$/, '')}/asset-review.html?taskId=${task.id}&token=${encodeURIComponent(token)}`;
+    return buildAppPublicUrl('/asset-review.html', {
+      taskId: task.id,
+      token,
+    });
   }
 
   private taskAccessToken(task: TaskEntity) {

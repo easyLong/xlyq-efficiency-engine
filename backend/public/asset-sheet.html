@@ -433,6 +433,7 @@
     </div>
   </div>
 
+  <script src="/js/workflow-session.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const taskId = params.get("taskId") || "default";
@@ -449,6 +450,7 @@
     let pendingImagePreviews = [];
     let pendingConfirmResolve = null;
     let lastPointerPosition = null;
+    let workflowSessionEstablished = false;
 
     document.addEventListener("pointerdown", event => {
       if (!event.target?.closest?.("#confirmBackdrop")) {
@@ -783,6 +785,9 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || "读取任务失败");
         context = result;
+        if (!workflowSessionEstablished) {
+          window.XlyqWorkflowSession.store(result.assigneeSession);
+        }
         if (
           shouldStartWork &&
           !startAttempted &&
@@ -967,7 +972,7 @@
     }
 
     function returnToAssigneeWorkspace(session) {
-      const switched = applyAssigneeSession(session);
+      const switched = workflowSessionEstablished || applyAssigneeSession(session);
       setTimeout(() => {
         if (switched) {
           location.replace("/?taskSession=1");
@@ -979,6 +984,10 @@
     }
 
     async function openAssigneeWorkspace() {
+      if (workflowSessionEstablished) {
+        location.href = "/?taskSession=1";
+        return;
+      }
       let session = context?.assigneeSession;
       if (!session && taskId !== "default") {
         setStatus("正在读取个人任务主页身份...", "");
@@ -1113,9 +1122,20 @@
       return escapeHtml(value).replaceAll("'", "&#39;");
     }
 
-    setupUploadInteractions();
-    renderAssets();
-    reloadContext();
+    async function bootstrapAssetSheet() {
+      try {
+        workflowSessionEstablished = Boolean(
+          await window.XlyqWorkflowSession.establishFromLocation(),
+        );
+      } catch (error) {
+        console.warn("Workflow account handoff failed", error);
+      }
+      setupUploadInteractions();
+      renderAssets();
+      await reloadContext();
+    }
+
+    bootstrapAssetSheet();
   </script>
 </body>
 </html>
