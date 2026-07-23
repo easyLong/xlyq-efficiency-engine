@@ -28,6 +28,8 @@ import { RequirementQuotationMappingEntity } from '../quotations/entities/requir
 import { TaskDirectoryEntity } from '../tasks/entities/task-directory.entity';
 import { TaskResultFileEntity } from '../tasks/entities/task-result-file.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
+import { TaskWorkflowRuntimeService } from '../tasks/task-workflow-runtime.service';
+import { TaskWorkflowStep } from '../tasks/task-workflow-state';
 import { UserEntity } from '../users/entities/user.entity';
 import { WorkflowConfigsService } from '../workflow-configs/workflow-configs.service';
 import { AiMatchRequirementContextDto } from './dto/ai-match-requirement-context.dto';
@@ -153,10 +155,12 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
     private readonly workflowConfigsService: WorkflowConfigsService,
+    private readonly taskWorkflowRuntime: TaskWorkflowRuntimeService,
   ) {}
 
   async onModuleInit() {
     await this.ensureRequirementsSchema();
+    await this.taskWorkflowRuntime.ensureSchema();
     await ensureWorkflowConfigTables(this.dataSource);
     await this.ensureBusinessCategoryOwnerConfigTable();
     await this.normalizeBusinessCategoryOwnerConfigUsers();
@@ -221,7 +225,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           })
         : Promise.resolve([]),
     ]);
-    const scoped = this.scopeHistoryBoardRows(
+    const scoped = await this.scopeHistoryBoardRows(
       requirements,
       requirementItems,
       tasks,
@@ -257,15 +261,19 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         : 'hidden';
     }
 
+    const presentedTasks = await this.taskWorkflowRuntime.decorateTasks(
+      scopedTasks,
+      currentUser,
+    );
     return {
       requirements,
       requirementItems: scopedRequirementItems,
-      tasks: scopedTasks,
+      tasks: presentedTasks,
       quoteMappings: scopedQuoteMappings,
     };
   }
 
-  private scopeHistoryBoardRows(
+  private async scopeHistoryBoardRows(
     requirements: RequirementEntity[],
     requirementItems: RequirementItemEntity[],
     tasks: TaskEntity[],
@@ -275,6 +283,13 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     if (!profile || profile.dataScope.requirements === 'all') {
       return { requirements, requirementItems, tasks };
     }
+
+    const handledTaskIds = currentUser
+      ? await this.taskWorkflowRuntime.findHandledTaskIds(
+          currentUser.id,
+          tasks.map((task) => task.id),
+        )
+      : new Set<string>();
 
     const taskByItemId = new Map(
       tasks.map((task) => [task.requirement_item_id, task]),
@@ -296,19 +311,29 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       );
       const hasHistoricalTaskRole = Boolean(
         task &&
-        [
-          task.assignee_user_id,
-          task.dispatcher_user_id,
-          task.reporter_user_id,
-          task.product_reviewer_user_id,
-          task.customer_reviewer_user_id,
-        ].includes(currentUser?.id ?? null),
+        (handledTaskIds.has(task.id) ||
+          [
+            task.assignee_user_id,
+            task.dispatcher_user_id,
+            task.reporter_user_id,
+            task.product_reviewer_user_id,
+            task.customer_reviewer_user_id,
+          ].includes(currentUser?.id ?? null)),
       );
       const hasConfiguredScope = Boolean(
         ownedCategories.has(requirementCategory) ||
-        dispatchCustomers.has(requirement.customer_code) ||
-        reviewCustomers.has(requirement.customer_code) ||
-        productReviewTypes.has(requirementCategory),
+        (task &&
+          ['todo', 'pending'].includes(task.status) &&
+          !task.dispatcher_user_id &&
+          dispatchCustomers.has(requirement.customer_code)) ||
+        (task &&
+          task.status === 'pending_review' &&
+          task.review_stage === 'product_review' &&
+          productReviewTypes.has(requirementCategory)) ||
+        (task &&
+          task.status === 'pending_review' &&
+          ['customer_review', 'none', null].includes(task.review_stage) &&
+          reviewCustomers.has(requirement.customer_code)),
       );
       if (
         hasHistoricalTaskRole ||
@@ -1935,6 +1960,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         description: item.item_description ?? null,
         status: 'todo',
         review_stage: 'none',
+        current_step: TaskWorkflowStep.Dispatch,
+        delivery_version: 0,
+        returned_from_step: null,
+        workflow_version: 0,
+        last_transition_at: new Date(),
         priority: item.priority ?? 'p3',
         urgency_level: item.urgency_level ?? urgencyLevel,
         assignee_user_id: null,
@@ -1954,6 +1984,8 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         progress_percent: 0,
       }),
     );
+
+    await this.taskWorkflowRuntime.syncTaskCurrentStep(task, { manager });
 
     return {
       requirement,

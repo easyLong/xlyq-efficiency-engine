@@ -12,6 +12,11 @@ describe('TasksService delivery flow', () => {
     description: null,
     status: TaskStatus.Assigned,
     review_stage: 'none',
+    current_step: 'execute',
+    delivery_version: 0,
+    returned_from_step: null,
+    workflow_version: 0,
+    last_transition_at: null,
     priority: 'medium',
     assignee_user_id: 'user-1',
     reporter_user_id: null,
@@ -110,6 +115,15 @@ describe('TasksService delivery flow', () => {
         .mockResolvedValue(['reviewer-1']),
       findCustomerMemberIds: jest.fn().mockResolvedValue(['reviewer-2']),
     };
+    const taskWorkflowRuntime = {
+      ensureSchema: jest.fn().mockResolvedValue(undefined),
+      normalizeLegacyTaskState: jest.fn().mockResolvedValue(undefined),
+      reconcileOpenWorkItems: jest.fn().mockResolvedValue(undefined),
+      syncTaskCurrentStep: jest.fn().mockResolvedValue('work-item-1'),
+      claimStep: jest.fn().mockResolvedValue('work-item-1'),
+      completeStep: jest.fn().mockResolvedValue('work-item-1'),
+      decorateTasks: jest.fn(async (values) => values),
+    };
     const noopRepository = {};
     const service = new TasksService(
       tasksRepository as never,
@@ -125,6 +139,7 @@ describe('TasksService delivery flow', () => {
       {} as never,
       notificationsService as never,
       workflowConfigsService as never,
+      taskWorkflowRuntime as never,
     );
 
     return {
@@ -136,6 +151,7 @@ describe('TasksService delivery flow', () => {
       fileRepositoryInTx,
       usersRepository,
       notificationsService,
+      taskWorkflowRuntime,
       savedFiles,
     };
   }

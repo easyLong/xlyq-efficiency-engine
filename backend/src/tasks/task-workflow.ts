@@ -4,6 +4,11 @@ import {
   TaskStatus,
   taskDisplayStatusLabel,
 } from './task-status';
+import {
+  deriveTaskWorkflowStep,
+  TaskWorkflowStep,
+  taskWorkflowStepLabel,
+} from './task-workflow-state';
 
 export type TaskWorkflowAction =
   | 'assign'
@@ -15,6 +20,10 @@ export type TaskWorkflowAction =
 export type TaskWorkflowSnapshot = {
   status: string;
   reviewStage: string;
+  currentStep: TaskWorkflowStep;
+  currentStepLabel: string;
+  deliveryVersion: number;
+  returnedFromStep: string | null;
   statusLabel: string;
   phase: 'intake' | 'assigned' | 'working' | 'review' | 'done' | 'blocked';
   nextAction: TaskWorkflowAction | null;
@@ -36,15 +45,22 @@ export function buildTaskWorkflowSnapshot(
     | 'progress_percent'
     | 'actual_end_at'
     | 'blocked_reason'
-  >,
+  > &
+    Partial<
+      Pick<
+        TaskEntity,
+        'current_step' | 'delivery_version' | 'returned_from_step'
+      >
+    >,
 ): TaskWorkflowSnapshot {
   const status = task.status as TaskStatus;
   const reviewStage = (task.review_stage ??
     TaskReviewStage.None) as TaskReviewStage;
   const hasAssignee = Boolean(task.assignee_user_id);
+  const currentStep = deriveTaskWorkflowStep(task);
   const actions = new Set<TaskWorkflowAction>();
 
-  if ([TaskStatus.Todo, TaskStatus.Pending].includes(status)) {
+  if (currentStep === TaskWorkflowStep.Dispatch) {
     actions.add('assign');
   }
 
@@ -75,6 +91,10 @@ export function buildTaskWorkflowSnapshot(
   return {
     status,
     reviewStage,
+    currentStep,
+    currentStepLabel: taskWorkflowStepLabel(currentStep),
+    deliveryVersion: Number(task.delivery_version ?? 0),
+    returnedFromStep: task.returned_from_step ?? null,
     statusLabel: taskDisplayStatusLabel(
       status,
       reviewStage,

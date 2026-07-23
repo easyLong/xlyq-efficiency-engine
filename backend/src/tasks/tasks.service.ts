@@ -48,6 +48,11 @@ import {
   taskStatusLabel,
 } from './task-status';
 import { buildTaskWorkflowSnapshot } from './task-workflow';
+import { TaskWorkflowRuntimeService } from './task-workflow-runtime.service';
+import {
+  reviewStageToWorkflowStep,
+  TaskWorkflowStep,
+} from './task-workflow-state';
 
 type ExportAssetImage = {
   file: TaskResultFileEntity | null;
@@ -130,12 +135,16 @@ export class TasksService implements OnModuleInit {
     private readonly feishuService: FeishuService,
     private readonly notificationsService: NotificationsService,
     private readonly workflowConfigsService: WorkflowConfigsService,
+    private readonly taskWorkflowRuntime: TaskWorkflowRuntimeService,
   ) {}
 
   async onModuleInit() {
     await this.ensureTasksSchema();
     await this.ensureTaskStatusHistoryTable();
     await this.ensureTaskReviewTables();
+    await this.taskWorkflowRuntime.ensureSchema();
+    await this.taskWorkflowRuntime.normalizeLegacyTaskState();
+    await this.taskWorkflowRuntime.reconcileOpenWorkItems();
   }
 
   async findAll(
@@ -153,7 +162,8 @@ export class TasksService implements OnModuleInit {
       order: { created_at: 'DESC' },
       take: this.defaultListLimit,
     });
-    return this.scopeTasksForUser(tasks, currentUser ?? null);
+    const scoped = await this.scopeTasksForUser(tasks, currentUser ?? null);
+    return this.taskWorkflowRuntime.decorateTasks(scoped, currentUser ?? null);
   }
 
   async findOne(id: string) {
@@ -167,7 +177,12 @@ export class TasksService implements OnModuleInit {
   async findOneForUser(id: string, actingUserId: string | null) {
     const task = await this.findOne(id);
     await this.assertCanViewTaskAssets(task, actingUserId);
-    return task;
+    const currentUser = actingUserId
+      ? await this.usersRepository.findOne({ where: { id: actingUserId } })
+      : null;
+    return (
+      await this.taskWorkflowRuntime.decorateTasks([task], currentUser)
+    )[0];
   }
 
   async listStatusHistory(id: string, actingUserId: string | null) {
@@ -193,9 +208,17 @@ export class TasksService implements OnModuleInit {
       }),
     ]);
 
+    const currentUser = actingUserId
+      ? await this.usersRepository.findOne({ where: { id: actingUserId } })
+      : null;
+    const workflowView = (
+      await this.taskWorkflowRuntime.decorateTasks([task], currentUser)
+    )[0]?.workflow_view;
+
     return {
       task,
       workflow: buildTaskWorkflowSnapshot(task),
+      workflowView,
       workspace: workspace
         ? {
             ...workspace,
@@ -228,7 +251,11 @@ export class TasksService implements OnModuleInit {
     if (liveAssetCount) {
       await this.refreshOnlineAssetCounts(tasks, assetCountByTaskId);
     }
-    const rows = tasks.map((task) => ({
+    const decoratedTasks = await this.taskWorkflowRuntime.decorateTasks(
+      tasks,
+      currentUser ?? null,
+    );
+    const rows = decoratedTasks.map((task) => ({
       ...task,
       asset_count: assetCountByTaskId.get(task.id) ?? 0,
       workflow: buildTaskWorkflowSnapshot(task),
@@ -255,7 +282,12 @@ export class TasksService implements OnModuleInit {
     currentUser?: UserEntity | null,
   ) {
     if (!customerId) {
-      return this.findAll(projectId, undefined, currentUser);
+      const tasks = await this.tasksRepository.find({
+        where: projectId ? { project_id: projectId } : {},
+        order: { created_at: 'DESC' },
+        take: this.defaultListLimit,
+      });
+      return this.scopeTasksForUser(tasks, currentUser ?? null);
     }
 
     const projects = await this.projectsRepository.find({
@@ -289,15 +321,21 @@ export class TasksService implements OnModuleInit {
     if (profile.dataScope.tasks === 'all') {
       return tasks;
     }
+    const handledTaskIds = await this.taskWorkflowRuntime.findHandledTaskIds(
+      currentUser.id,
+      tasks.map((task) => task.id),
+    );
     if (profile.dataScope.tasks === 'assigned') {
-      return tasks.filter((task) =>
-        [
-          task.assignee_user_id,
-          task.dispatcher_user_id,
-          task.reporter_user_id,
-          task.product_reviewer_user_id,
-          task.customer_reviewer_user_id,
-        ].includes(currentUser.id),
+      return tasks.filter(
+        (task) =>
+          handledTaskIds.has(task.id) ||
+          [
+            task.assignee_user_id,
+            task.dispatcher_user_id,
+            task.reporter_user_id,
+            task.product_reviewer_user_id,
+            task.customer_reviewer_user_id,
+          ].includes(currentUser.id),
       );
     }
 
@@ -305,14 +343,16 @@ export class TasksService implements OnModuleInit {
       .map((task) => task.requirement_item_id)
       .filter(Boolean);
     if (!itemIds.length) {
-      return tasks.filter((task) =>
-        [
-          task.assignee_user_id,
-          task.dispatcher_user_id,
-          task.reporter_user_id,
-          task.product_reviewer_user_id,
-          task.customer_reviewer_user_id,
-        ].includes(currentUser.id),
+      return tasks.filter(
+        (task) =>
+          handledTaskIds.has(task.id) ||
+          [
+            task.assignee_user_id,
+            task.dispatcher_user_id,
+            task.reporter_user_id,
+            task.product_reviewer_user_id,
+            task.customer_reviewer_user_id,
+          ].includes(currentUser.id),
       );
     }
     const items = await this.requirementItemsRepository.find({
@@ -336,6 +376,7 @@ export class TasksService implements OnModuleInit {
     const customerReviewCodes = new Set(profile.customerReviewCodes);
     return tasks.filter((task) => {
       if (
+        handledTaskIds.has(task.id) ||
         [
           task.assignee_user_id,
           task.dispatcher_user_id,
@@ -356,11 +397,24 @@ export class TasksService implements OnModuleInit {
         requirement?.business_category,
       );
       const customerCode = String(requirement?.customer_code ?? '').trim();
+      const isOpenDispatch = [TaskStatus.Todo, TaskStatus.Pending].includes(
+        task.status as TaskStatus,
+      );
+      const isOpenFirstReview =
+        task.status === TaskStatus.PendingReview &&
+        task.review_stage === TaskReviewStage.ProductReview;
+      const isOpenSecondReview =
+        task.status === TaskStatus.PendingReview &&
+        (task.review_stage === TaskReviewStage.CustomerReview ||
+          !task.review_stage ||
+          task.review_stage === TaskReviewStage.None);
       return (
         ownedCategories.has(businessCategory) ||
-        productReviewTypes.has(businessCategory) ||
-        dispatchCustomers.has(customerCode) ||
-        customerReviewCodes.has(customerCode)
+        (isOpenDispatch &&
+          !task.dispatcher_user_id &&
+          dispatchCustomers.has(customerCode)) ||
+        (isOpenFirstReview && productReviewTypes.has(businessCategory)) ||
+        (isOpenSecondReview && customerReviewCodes.has(customerCode))
       );
     });
   }
@@ -457,6 +511,11 @@ export class TasksService implements OnModuleInit {
       description: dto.description ?? null,
       status: TaskStatus.Todo,
       review_stage: TaskReviewStage.None,
+      current_step: TaskWorkflowStep.Dispatch,
+      delivery_version: 0,
+      returned_from_step: null,
+      workflow_version: 0,
+      last_transition_at: new Date(),
       priority: this.normalizePriority(dto.priority),
       urgency_level: dto.urgencyLevel ?? null,
       assignee_user_id: null,
@@ -474,7 +533,9 @@ export class TasksService implements OnModuleInit {
       progress_percent: 0,
     });
 
-    return this.tasksRepository.save(task);
+    const saved = await this.tasksRepository.save(task);
+    await this.taskWorkflowRuntime.syncTaskCurrentStep(saved);
+    return saved;
   }
 
   private async nextTaskNo(projectId: string) {
@@ -576,6 +637,11 @@ export class TasksService implements OnModuleInit {
         SET dispatcher_user_id = COALESCE(dispatcher_user_id, ?),
             assignee_user_id = ?,
             status = ?,
+            review_stage = 'none',
+            current_step = 'execute',
+            returned_from_step = NULL,
+            workflow_version = COALESCE(workflow_version, 0) + 1,
+            last_transition_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
           AND deleted_at IS NULL
@@ -600,6 +666,25 @@ export class TasksService implements OnModuleInit {
       hadAssignee ? 'task_reassigned' : 'task_assigned',
       null,
     );
+    if (hadAssignee) {
+      await this.taskWorkflowRuntime.completeStep(
+        task.id,
+        TaskWorkflowStep.Execute,
+        current.assignee_user_id,
+        'reassigned',
+        `改派给 ${dto.assigneeUserId}`,
+      );
+    } else {
+      await this.taskWorkflowRuntime.completeStep(
+        task.id,
+        TaskWorkflowStep.Dispatch,
+        dispatcherId,
+        'assigned',
+      );
+    }
+    await this.taskWorkflowRuntime.syncTaskCurrentStep(task, {
+      forceNew: hadAssignee,
+    });
     if (!dto.provisionWorkspace) {
       const notification =
         await this.notificationsService.notifyTaskAssigned(task);
@@ -740,7 +825,16 @@ export class TasksService implements OnModuleInit {
     if (task.status === TaskStatus.Completed) {
       throw new BadRequestException('任务已完成，如需返工请由管理者发起');
     }
-    if (task.status === TaskStatus.InProgress) {
+    if (
+      [TaskStatus.InProgress, TaskStatus.Returned].includes(
+        task.status as TaskStatus,
+      )
+    ) {
+      await this.taskWorkflowRuntime.claimStep(
+        task.id,
+        TaskWorkflowStep.Execute,
+        task.assignee_user_id,
+      );
       return {
         task,
         statusLabel: taskDisplayStatusLabel(
@@ -759,7 +853,16 @@ export class TasksService implements OnModuleInit {
     );
     task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
     task.actual_end_at = null;
+    task.current_step = TaskWorkflowStep.Execute;
+    task.returned_from_step = null;
+    task.workflow_version = Number(task.workflow_version ?? 0) + 1;
+    task.last_transition_at = new Date();
     const saved = await this.tasksRepository.save(task);
+    await this.taskWorkflowRuntime.claimStep(
+      saved.id,
+      TaskWorkflowStep.Execute,
+      saved.assignee_user_id!,
+    );
     await this.recordTaskStatusHistory(
       saved,
       fromStatus,
@@ -1178,6 +1281,13 @@ export class TasksService implements OnModuleInit {
           TaskStatus.PendingReview,
         );
         lockedTask.review_stage = TaskReviewStage.ProductReview;
+        lockedTask.current_step = TaskWorkflowStep.FirstReview;
+        lockedTask.delivery_version =
+          Number(lockedTask.delivery_version ?? 0) + 1;
+        lockedTask.returned_from_step = null;
+        lockedTask.workflow_version =
+          Number(lockedTask.workflow_version ?? 0) + 1;
+        lockedTask.last_transition_at = new Date();
         lockedTask.product_review_type = productReviewType;
         lockedTask.product_reviewer_user_id = null;
         lockedTask.customer_reviewer_user_id = null;
@@ -1188,6 +1298,17 @@ export class TasksService implements OnModuleInit {
         lockedTask.blocked_reason = null;
         lockedTask.actual_end_at = null;
         const savedTask = await taskRepository.save(lockedTask);
+        await this.taskWorkflowRuntime.completeStep(
+          savedTask.id,
+          TaskWorkflowStep.Execute,
+          savedTask.assignee_user_id,
+          'submitted',
+          `提交 V${savedTask.delivery_version}`,
+          manager,
+        );
+        await this.taskWorkflowRuntime.syncTaskCurrentStep(savedTask, {
+          manager,
+        });
         return { created, savedTask, fromStatus, fromReviewStage };
       });
     await this.recordTaskStatusHistory(
@@ -1520,6 +1641,11 @@ export class TasksService implements OnModuleInit {
       );
     }
     task.review_stage = TaskReviewStage.ProductReview;
+    task.current_step = TaskWorkflowStep.FirstReview;
+    task.delivery_version = Number(task.delivery_version ?? 0) + 1;
+    task.returned_from_step = null;
+    task.workflow_version = Number(task.workflow_version ?? 0) + 1;
+    task.last_transition_at = new Date();
     task.product_review_type = productReviewType;
     task.product_reviewer_user_id = null;
     task.customer_reviewer_user_id = null;
@@ -1527,6 +1653,14 @@ export class TasksService implements OnModuleInit {
     task.blocked_reason = null;
     task.actual_end_at = null;
     const saved = await this.tasksRepository.save(task);
+    await this.taskWorkflowRuntime.completeStep(
+      saved.id,
+      TaskWorkflowStep.Execute,
+      saved.assignee_user_id,
+      'submitted',
+      `提交 V${saved.delivery_version}`,
+    );
+    await this.taskWorkflowRuntime.syncTaskCurrentStep(saved);
     await this.recordTaskStatusHistory(
       saved,
       fromStatus,
@@ -1667,6 +1801,31 @@ export class TasksService implements OnModuleInit {
     );
     await this.addColumnIfMissing(
       'tasks',
+      'current_step',
+      "current_step VARCHAR(32) NOT NULL DEFAULT 'dispatch' AFTER review_stage",
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'delivery_version',
+      'delivery_version INT NOT NULL DEFAULT 0 AFTER current_step',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'returned_from_step',
+      'returned_from_step VARCHAR(32) NULL AFTER delivery_version',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'workflow_version',
+      'workflow_version INT NOT NULL DEFAULT 0 AFTER returned_from_step',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'last_transition_at',
+      'last_transition_at DATETIME NULL AFTER workflow_version',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
       'dispatcher_user_id',
       'dispatcher_user_id CHAR(36) NULL AFTER reporter_user_id',
     );
@@ -1709,6 +1868,10 @@ export class TasksService implements OnModuleInit {
     ]);
     await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_review_stage', [
       'review_stage',
+    ]);
+    await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_current_step', [
+      'current_step',
+      'last_transition_at',
     ]);
     await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_dispatcher', [
       'dispatcher_user_id',
@@ -2819,8 +2982,12 @@ export class TasksService implements OnModuleInit {
         UPDATE tasks
         SET review_stage = ?,
             product_reviewer_user_id = ?,
+            current_step = 'second_review',
+            returned_from_step = NULL,
             progress_percent = GREATEST(COALESCE(progress_percent, 0), 95),
             blocked_reason = NULL,
+            workflow_version = COALESCE(workflow_version, 0) + 1,
+            last_transition_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
           AND deleted_at IS NULL
@@ -2837,6 +3004,13 @@ export class TasksService implements OnModuleInit {
     );
     this.assertReviewTransitionWon(transition, '一审');
     const saved = await this.findOne(task.id);
+    await this.taskWorkflowRuntime.completeStep(
+      saved.id,
+      TaskWorkflowStep.FirstReview,
+      reviewerUserId,
+      'approved',
+    );
+    await this.taskWorkflowRuntime.syncTaskCurrentStep(saved);
     await this.recordTaskReview(
       saved,
       TaskReviewStage.ProductReview,
@@ -2882,10 +3056,14 @@ export class TasksService implements OnModuleInit {
         UPDATE tasks
         SET status = ?,
             review_stage = ?,
+            current_step = 'done',
+            returned_from_step = NULL,
             customer_reviewer_user_id = ?,
             progress_percent = 100,
             actual_end_at = CURRENT_TIMESTAMP,
             blocked_reason = NULL,
+            workflow_version = COALESCE(workflow_version, 0) + 1,
+            last_transition_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
           AND deleted_at IS NULL
@@ -2908,6 +3086,13 @@ export class TasksService implements OnModuleInit {
     );
     this.assertReviewTransitionWon(transition, '二审');
     const saved = await this.findOne(task.id);
+    await this.taskWorkflowRuntime.completeStep(
+      saved.id,
+      TaskWorkflowStep.SecondReview,
+      reviewerUserId,
+      'approved',
+    );
+    await this.taskWorkflowRuntime.syncTaskCurrentStep(saved);
     await this.recordTaskStatusHistory(
       saved,
       fromStatus,
@@ -2975,10 +3160,20 @@ export class TasksService implements OnModuleInit {
     const reviewer = await this.usersRepository.findOne({
       where: { id: reviewerUserId },
     });
-    const inProgressStatus = assertTaskStatusTransition(
+    const returnedStatus = assertTaskStatusTransition(
       task.status,
-      TaskStatus.InProgress,
+      TaskStatus.Returned,
     );
+    const returnedFromStep =
+      reviewStageToWorkflowStep(stage) ??
+      (stage === TaskReviewStage.None ? TaskWorkflowStep.SecondReview : null);
+    if (!returnedFromStep) {
+      throw new BadRequestException('无法识别当前审核阶段');
+    }
+    const reviewerColumn =
+      returnedFromStep === TaskWorkflowStep.FirstReview
+        ? 'product_reviewer_user_id'
+        : 'customer_reviewer_user_id';
     const stageCondition =
       stage === TaskReviewStage.None
         ? '(review_stage = ? OR review_stage IS NULL)'
@@ -2988,9 +3183,14 @@ export class TasksService implements OnModuleInit {
         UPDATE tasks
         SET status = ?,
             review_stage = ?,
+            current_step = 'execute',
+            returned_from_step = ?,
+            ${reviewerColumn} = ?,
             progress_percent = 60,
             blocked_reason = ?,
             actual_end_at = NULL,
+            workflow_version = COALESCE(workflow_version, 0) + 1,
+            last_transition_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
           AND deleted_at IS NULL
@@ -2998,8 +3198,10 @@ export class TasksService implements OnModuleInit {
           AND ${stageCondition}
       `,
       [
-        inProgressStatus,
+        returnedStatus,
         TaskReviewStage.None,
+        returnedFromStep,
+        reviewerUserId,
         reason,
         task.id,
         TaskStatus.PendingReview,
@@ -3011,6 +3213,14 @@ export class TasksService implements OnModuleInit {
       stage === TaskReviewStage.ProductReview ? '一审' : '二审',
     );
     const saved = await this.findOne(task.id);
+    await this.taskWorkflowRuntime.completeStep(
+      saved.id,
+      returnedFromStep,
+      reviewerUserId,
+      'returned',
+      reason,
+    );
+    await this.taskWorkflowRuntime.syncTaskCurrentStep(saved);
     await this.recordTaskStatusHistory(
       saved,
       fromStatus,

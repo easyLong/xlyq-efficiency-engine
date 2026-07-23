@@ -34,6 +34,15 @@ describe('task status state machine', () => {
     ).toThrow('Invalid task status transition');
   });
 
+  it('returns review work to the executor before it can be resubmitted', () => {
+    expect(
+      assertTaskStatusTransition(TaskStatus.PendingReview, TaskStatus.Returned),
+    ).toBe(TaskStatus.Returned);
+    expect(
+      assertTaskStatusTransition(TaskStatus.Returned, TaskStatus.PendingReview),
+    ).toBe(TaskStatus.PendingReview);
+  });
+
   it('rejects executor completion and reopening a completed task', () => {
     expect(() =>
       assertTaskStatusTransition(TaskStatus.InProgress, TaskStatus.Completed),
@@ -45,19 +54,19 @@ describe('task status state machine', () => {
 
   it('keeps labels centralized', () => {
     expect(taskStatusLabel(TaskStatus.PendingReview)).toBe('待审核');
-    expect(taskStatusLabel(TaskStatus.Completed)).toBe('已完成');
+    expect(taskStatusLabel(TaskStatus.Completed)).toBe('已验收');
     expect(
       taskDisplayStatusLabel(
         TaskStatus.PendingReview,
         TaskReviewStage.ProductReview,
       ),
-    ).toBe('待成品审核');
+    ).toBe('待一审');
     expect(
       taskDisplayStatusLabel(
         TaskStatus.PendingReview,
         TaskReviewStage.CustomerReview,
       ),
-    ).toBe('待客户确认');
+    ).toBe('待二审');
     expect(
       taskDisplayStatusLabel(
         TaskStatus.InProgress,

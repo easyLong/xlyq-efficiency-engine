@@ -36,9 +36,6 @@ const ownerPermissions = [
   'requirement.create',
   'requirement.edit_owned',
   'task.view_owned',
-  'task.assign_owned',
-  'task.accept_owned',
-  'task.return_owned',
   'ai_preview.view_owned',
   'ai_preview.confirm_owned',
 ];
@@ -91,7 +88,8 @@ export function normalizeAccessBusinessCategory(value?: string | null) {
 
 export function hasPermission(profile: AccessProfile, permission: string) {
   return (
-    profile.permissions.includes('*') || profile.permissions.includes(permission)
+    profile.permissions.includes('*') ||
+    profile.permissions.includes(permission)
   );
 }
 
@@ -267,10 +265,7 @@ async function getProductReviewTypes(dataSource: DataSource, userId: string) {
   }
 }
 
-async function getCustomerReviewCodes(
-  dataSource: DataSource,
-  userId: string,
-) {
+async function getCustomerReviewCodes(dataSource: DataSource, userId: string) {
   try {
     const rows: Array<{ customer_code: string }> = await dataSource.query(
       `
@@ -292,7 +287,9 @@ async function getCustomerReviewCodes(
 
 function uniqueCodes(values: Array<string | null | undefined>) {
   return [
-    ...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean)),
+    ...new Set(
+      values.map((value) => String(value ?? '').trim()).filter(Boolean),
+    ),
   ];
 }
 

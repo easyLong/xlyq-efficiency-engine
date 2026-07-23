@@ -488,6 +488,15 @@
     .quote-selected .row-sub { word-break: break-word; }
     .assign-action { display: grid; grid-template-columns: minmax(112px, 148px) auto; gap: 5px; align-items: center; justify-content: start; min-width: 0; }
     .assign-action.compact { display: flex; flex-wrap: wrap; }
+    .review-action {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 2px;
+      min-width: 0;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+    }
     .assign-action select {
       width: 148px;
       max-width: 148px;
@@ -561,6 +570,44 @@
     .inline-assign select { padding: 9px 10px; border-radius: 12px; }
     .inline-assign .btn { width: 88px; min-height: 36px; padding: 8px 0; white-space: nowrap; }
     .status-stack { display: flex; gap: 6px; flex-wrap: wrap; min-width: 128px; }
+    .workflow-state-strip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .workflow-state-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      min-width: 0;
+      max-width: 132px;
+      padding: 2px 6px;
+      border: 1px solid #d8dfcf;
+      border-radius: 5px;
+      background: #f7f9f5;
+      color: #50604e;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .workflow-state-chip strong { flex: 0 0 auto; color: #27372c; }
+    .workflow-state-chip span { overflow: hidden; text-overflow: ellipsis; }
+    .workflow-risk-tag { color: #a6402b; background: #fff1ec; border-color: #efc5b9; }
+    .personal-workflow-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .personal-workflow-line .workflow-state-strip { flex: 0 1 auto; }
+    .personal-workflow-meta {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .done-text { color: #2f6b45; font-weight: 800; }
     .empty-list { padding: 22px; text-align: center; color: #6a7567; border: 1px dashed #cbd8c3; border-radius: 16px; background: #fbf8ed; }
     .empty-state {
@@ -3408,20 +3455,28 @@
         in_progress: "进行中",
         blocked: "受阻",
         pending_review: "待审核",
-        completed: "已完成",
+        completed: "已验收",
         cancelled: "已取消",
-        returned: "已退回",
+        returned: "待修改",
       };
       return labels[status] || status || "未生成";
     }
     function taskDisplayStatusLabel(task) {
       if (!task) return "未生成";
-      if (task.status === "pending_review") {
-        if (task.review_stage === "product_review") return "待成品审核";
-        if (task.review_stage === "customer_review") return "待客户确认";
+      const workflowView = task.workflow_view;
+      if (workflowView) {
+        if (!isAdminUser() && workflowView.primaryMyState?.statusLabel) {
+          return workflowView.primaryMyState.statusLabel;
+        }
+        if (workflowView.global?.statusLabel) return workflowView.global.statusLabel;
       }
-      if (task.status === "completed") return "已完成";
-      if (task.status === "in_progress" && task.blocked_reason) return "修改中";
+      if (task.status === "pending_review") {
+        if (task.review_stage === "product_review") return "待一审";
+        if (task.review_stage === "customer_review") return "待二审";
+      }
+      if (task.status === "completed") return "已验收";
+      if (task.status === "returned") return "待修改";
+      if (task.status === "in_progress" && task.blocked_reason) return "待修改";
       return taskStatusLabel(task.status);
     }
     function invalidateLookupMaps() {
@@ -4082,8 +4137,30 @@
     }
     function displayTaskStatus(task) {
       if (!task) return "未生成";
-      if (task.status === "todo" && task.assignee_user_id) return "已指派";
       return taskDisplayStatusLabel(task);
+    }
+    function taskPersonalWorkflowStates(task) {
+      return Array.isArray(task?.workflow_view?.myStates) ? task.workflow_view.myStates : [];
+    }
+    function renderPersonalWorkflowStates(task) {
+      if (!task) return "";
+      const states = taskPersonalWorkflowStates(task);
+      const risks = task.workflow_view?.riskTags || [];
+      if (!states.length && !risks.length) return "";
+      return `<div class="workflow-state-strip">
+        ${states.map(item => {
+          const title = `${item.roleLabel}：${item.statusLabel}${item.remark ? `；${item.remark}` : ""}`;
+          return `<span class="workflow-state-chip" title="${escapeAttr(title)}"><strong>${safeText(item.roleLabel)}</strong><span>${safeText(item.statusLabel)}</span></span>`;
+        }).join("")}
+        ${risks.map(risk => `<span class="workflow-state-chip workflow-risk-tag"><span>${safeText(risk)}</span></span>`).join("")}
+      </div>`;
+    }
+    function requirementMetaText(row) {
+      return [
+        row.contactContext ? `需求方：${safeText(row.contactContext)}` : "",
+        taskPlanDateRangeText(row.task) ? `计划：${taskPlanDateRangeText(row.task)}` : "",
+        `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
+      ].filter(Boolean).join(" · ");
     }
     function requirementRows() {
       return state.requirements.map(requirement => {
@@ -4614,32 +4691,54 @@
       const rows = activeDimensionRows();
       const quoteVisible = can("quote.view_all");
       const canManageAssignment = can("task.assign_owned");
+      const personalWorkflowView = !isAdminUser();
       if (!canManageAssignment && state.requirementFilter === "pending") {
         state.requirementFilter = "all";
       }
+      const primaryWorkflowState = row => row.task?.workflow_view?.primaryMyState || null;
       const metrics = {
         total: rows.length,
-        pending: rows.filter(row => !row.task || row.taskStatus === "待指派").length,
-        assigned: rows.filter(row => row.taskStatus === "已指派" || row.taskStatus === "进行中").length,
+        pending: rows.filter(row => !row.task || ["todo", "pending"].includes(row.task.status)).length,
+        assigned: rows.filter(row => ["assigned", "in_progress", "returned", "blocked"].includes(row.task?.status)).length,
         pendingReview: rows.filter(row => row.task?.status === "pending_review").length,
+        myTodo: rows.filter(row => primaryWorkflowState(row)?.actionable).length,
+        myActive: rows.filter(row => primaryWorkflowState(row)?.bucket === "active").length,
+        myWaiting: rows.filter(row => primaryWorkflowState(row)?.bucket === "waiting").length,
+        myAttention: rows.filter(row => primaryWorkflowState(row)?.bucket === "attention").length,
+        myDone: rows.filter(row => primaryWorkflowState(row)?.bucket === "done").length,
         quoteReady: rows.filter(row => row.item?.quote_scope_status === "matched").length,
         quotePending: rows.filter(isPendingQuoteRow).length,
       };
       const metricsEl = qs("requirementMetrics");
       if (metricsEl) {
-        metricsEl.innerHTML = [
+        const metricRows = personalWorkflowView ? [
+          ["all", "我的相关", metrics.total],
+          ["my_todo", "待我处理", metrics.myTodo],
+          ["my_active", "处理中", metrics.myActive],
+          ["my_waiting", "等待后续", metrics.myWaiting],
+          ["my_attention", "异常关注", metrics.myAttention],
+          ["my_done", "已结束", metrics.myDone],
+        ] : [
           ["total", "全部需求", metrics.total],
           canManageAssignment ? ["pending", "待指派", metrics.pending] : null,
           ["assigned", "处理中", metrics.assigned],
           ["pending_review", "待审核", metrics.pendingReview],
           ["quote_ready", "报价已确认", metrics.quoteReady],
           ["quote_pending", "报价待处理", metrics.quotePending],
-        ].filter(Boolean)
+        ];
+        metricsEl.innerHTML = metricRows.filter(Boolean)
           .filter(([key]) => quoteVisible || !key.startsWith("quote_"))
           .map(([, label, value]) => `<div class="mini-metric"><span>${label}</span><strong>${value}</strong></div>`).join("");
       }
 
-      const filters = [
+      const filters = personalWorkflowView ? [
+        ["all", "我的相关"],
+        ["my_todo", "待我处理"],
+        ["my_active", "处理中"],
+        ["my_waiting", "等待后续"],
+        ["my_attention", "异常关注"],
+        ["my_done", "已结束"],
+      ] : [
         ["all", "全部"],
         canManageAssignment ? ["pending", "待指派"] : null,
         ["assigned", "处理中"],
@@ -4706,9 +4805,18 @@
           ].filter(Boolean).join(" ").toLowerCase();
           if (!haystack.includes(keyword)) return false;
         }
-        if (state.requirementFilter === "pending") return !row.task || row.taskStatus === "待指派";
+        if (personalWorkflowView) {
+          const myState = primaryWorkflowState(row);
+          if (state.requirementFilter === "my_todo") return Boolean(myState?.actionable);
+          if (state.requirementFilter === "my_active") return myState?.bucket === "active";
+          if (state.requirementFilter === "my_waiting") return myState?.bucket === "waiting";
+          if (state.requirementFilter === "my_attention") return myState?.bucket === "attention";
+          if (state.requirementFilter === "my_done") return myState?.bucket === "done";
+          return true;
+        }
+        if (state.requirementFilter === "pending") return !row.task || ["todo", "pending"].includes(row.task.status);
         if (state.requirementFilter === "quote_pending") return isPendingQuoteRow(row);
-        if (state.requirementFilter === "assigned") return row.taskStatus === "已指派" || row.taskStatus === "进行中";
+        if (state.requirementFilter === "assigned") return ["assigned", "in_progress", "returned", "blocked"].includes(row.task?.status);
         if (state.requirementFilter === "pending_review") return row.task?.status === "pending_review";
         if (state.requirementFilter === "completed") return row.task?.status === "completed";
         return true;
@@ -4744,20 +4852,21 @@
                     <span class="tag">任务：${safeText(row.taskStatus)}</span>
                     ${quoteVisible ? `<span class="tag">报价：${safeText(row.quoteStatus)}</span>` : ""}
                   </div>
-                  <div class="row-sub">派发人：${safeText(taskDispatcherName(row.task))} · 执行人：${safeText(assigneeName(row.task?.assignee_user_id))}</div>
+                  <div class="row-sub">${isAdminUser()
+                    ? `派发人：${safeText(taskDispatcherName(row.task))} · 执行人：${safeText(assigneeName(row.task?.assignee_user_id))}`
+                    : row.task?.workflow_view?.primaryMyState
+                      ? `我的角色：${safeText(row.task.workflow_view.primaryMyState.roleLabel)}`
+                      : "当前账号暂无角色状态"}</div>
                 </div>
                 ${renderRequirementEditAction(row)}
               </div>
               <div class="requirement-card-footer">
-                <div class="requirement-meta-line">${[
-                  row.contactContext ? `需求方：${safeText(row.contactContext)}` : "",
-                  taskPlanDateRangeText(row.task) ? `计划：${taskPlanDateRangeText(row.task)}` : "",
-                  `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
-                  `派发人：${safeText(taskDispatcherName(row.task))}`,
-                  `执行人：${safeText(assigneeName(row.task?.assignee_user_id))}`,
-                  `一审：${safeText(taskProductReviewerName(row.task))}`,
-                  `二审：${safeText(taskCustomerReviewerName(row.task))}`,
-                ].filter(Boolean).join(" · ")}</div>
+                <div class="requirement-meta-line">${isAdminUser()
+                  ? requirementMetaText(row)
+                  : `<div class="personal-workflow-line">
+                      ${renderPersonalWorkflowStates(row.task)}
+                      <span class="personal-workflow-meta">${requirementMetaText(row)}</span>
+                    </div>`}</div>
                 ${quoteVisible ? renderRequirementQuoteAction(row) : ""}
                 ${renderAssignAction(row)}
               </div>
@@ -5131,10 +5240,9 @@
     function renderReviewAction(row) {
       const isBusy = state.busyActionId === row.task.id;
       const canAct = canCurrentUserReviewRow(row);
-      const approveText = row.task.review_stage === "product_review" ? "成品通过" : row.task.review_stage === "customer_review" ? "客户确认通过" : "通过验收";
+      const approveText = row.task.review_stage === "product_review" ? "一审通过" : row.task.review_stage === "customer_review" ? "二审通过" : "通过验收";
       return `
-        <div class="assign-action" onclick="event.stopPropagation()">
-          <span class="done-text">${safeText(row.taskStatus)}</span>
+        <div class="review-action" onclick="event.stopPropagation()">
           <button class="btn" ${isBusy ? "disabled" : ""} onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
           ${canAct && can("task.accept_owned") ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : approveText}</button>` : ""}
           ${canAct && can("task.return_owned") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>` : ""}
@@ -6857,7 +6965,8 @@
         });
         state.tasks = state.tasks.map(item => item.id === taskId ? result.task : item);
         addLog("任务审核通过", result);
-        toast(result.task?.status === "completed" ? "客户确认通过，任务已完成" : "成品审核通过，已进入客户确认");
+        toast(result.task?.status === "completed" ? "二审通过，任务已验收" : "一审通过，已进入二审");
+        await refreshRequirementBoard({ force: true, preserveScroll: true });
         refreshMessages();
         refreshAnalytics();
       } catch (error) {
@@ -6883,6 +6992,7 @@
         state.tasks = state.tasks.map(item => item.id === taskId ? result.task : item);
         addLog("任务已退回修改", result);
         toast("已退回修改，并通知员工");
+        await refreshRequirementBoard({ force: true, preserveScroll: true });
         refreshMessages();
         refreshAnalytics();
       } catch (error) {

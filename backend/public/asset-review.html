@@ -284,11 +284,11 @@
       const assets = data.assets || { images: [], links: [], others: [] };
       const canReview = Boolean(data.canReview);
       const reviewStage = data.reviewStage || task.review_stage || "none";
-      const approveText = reviewStage === "product_review" ? "成品通过" : reviewStage === "customer_review" ? "客户确认通过" : "通过验收";
+      const approveText = reviewStage === "product_review" ? "一审通过" : reviewStage === "customer_review" ? "二审通过" : "通过验收";
       const reviewHint = reviewStage === "product_review"
         ? "请审核交付物是否符合产品需求、制作规范和交付标准。"
         : reviewStage === "customer_review"
-          ? "成品审核已通过，请确认交付物是否符合客户/基金公司的实际需求。"
+          ? "一审已通过，请确认交付物是否符合客户/基金公司的实际需求。"
           : "当前任务可查看交付资产。";
       document.getElementById("app").innerHTML = `
         <div class="topbar">

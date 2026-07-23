@@ -9,6 +9,7 @@ export enum TaskStatus {
   PendingReview = 'pending_review',
   Completed = 'completed',
   Returned = 'returned',
+  Cancelled = 'cancelled',
 }
 
 export const TASK_STATUSES = Object.values(TaskStatus);
@@ -27,26 +28,43 @@ const transitions: Record<TaskStatus, TaskStatus[]> = {
     TaskStatus.Assigned,
     TaskStatus.InProgress,
     TaskStatus.PendingReview,
+    TaskStatus.Cancelled,
   ],
   [TaskStatus.Pending]: [
     TaskStatus.Assigned,
     TaskStatus.InProgress,
     TaskStatus.PendingReview,
+    TaskStatus.Cancelled,
   ],
   [TaskStatus.Assigned]: [
     TaskStatus.InProgress,
     TaskStatus.Blocked,
     TaskStatus.PendingReview,
+    TaskStatus.Cancelled,
   ],
-  [TaskStatus.InProgress]: [TaskStatus.Blocked, TaskStatus.PendingReview],
-  [TaskStatus.Blocked]: [TaskStatus.InProgress, TaskStatus.PendingReview],
-  [TaskStatus.PendingReview]: [TaskStatus.InProgress, TaskStatus.Completed],
+  [TaskStatus.InProgress]: [
+    TaskStatus.Blocked,
+    TaskStatus.PendingReview,
+    TaskStatus.Cancelled,
+  ],
+  [TaskStatus.Blocked]: [
+    TaskStatus.InProgress,
+    TaskStatus.PendingReview,
+    TaskStatus.Cancelled,
+  ],
+  [TaskStatus.PendingReview]: [
+    TaskStatus.Returned,
+    TaskStatus.Completed,
+    TaskStatus.Cancelled,
+  ],
   [TaskStatus.Completed]: [],
   [TaskStatus.Returned]: [
     TaskStatus.Assigned,
     TaskStatus.InProgress,
     TaskStatus.PendingReview,
+    TaskStatus.Cancelled,
   ],
+  [TaskStatus.Cancelled]: [],
 };
 
 export function isTaskStatus(value: string): value is TaskStatus {
@@ -86,8 +104,9 @@ export function taskStatusLabel(status: string | null) {
       [TaskStatus.InProgress]: '进行中',
       [TaskStatus.Blocked]: '已停滞',
       [TaskStatus.PendingReview]: '待审核',
-      [TaskStatus.Completed]: '已完成',
+      [TaskStatus.Completed]: '已验收',
       [TaskStatus.Returned]: '已退回',
+      [TaskStatus.Cancelled]: '已取消',
     }[status ?? ''] ??
     status ??
     '-'
@@ -98,8 +117,8 @@ export function taskReviewStageLabel(stage: string | null) {
   return (
     {
       [TaskReviewStage.None]: '无审核',
-      [TaskReviewStage.ProductReview]: '待成品审核',
-      [TaskReviewStage.CustomerReview]: '待客户确认',
+      [TaskReviewStage.ProductReview]: '待一审',
+      [TaskReviewStage.CustomerReview]: '待二审',
       [TaskReviewStage.Done]: '已完成',
     }[stage ?? ''] ??
     stage ??
@@ -113,11 +132,14 @@ export function taskDisplayStatusLabel(
   returnReason?: string | null,
 ) {
   if (status === TaskStatus.PendingReview) {
-    if (reviewStage === TaskReviewStage.ProductReview) return '待成品审核';
-    if (reviewStage === TaskReviewStage.CustomerReview) return '待客户确认';
+    if (reviewStage === TaskReviewStage.ProductReview) return '待一审';
+    if (reviewStage === TaskReviewStage.CustomerReview) return '待二审';
   }
   if (status === TaskStatus.Completed) {
-    return '已完成';
+    return '已验收';
+  }
+  if (status === TaskStatus.Returned) {
+    return '待修改';
   }
   if (status === TaskStatus.InProgress && returnReason) {
     return '修改中';

@@ -24,6 +24,21 @@ export class TaskEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 32, default: 'none' })
   review_stage!: string;
 
+  @Column({ type: 'varchar', length: 32, default: 'dispatch' })
+  current_step!: string;
+
+  @Column({ type: 'int', default: 0 })
+  delivery_version!: number;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  returned_from_step!: string | null;
+
+  @Column({ type: 'int', default: 0 })
+  workflow_version!: number;
+
+  @Column({ type: 'datetime', nullable: true })
+  last_transition_at!: Date | null;
+
   @Column({ type: 'varchar', length: 32, nullable: true })
   priority!: string | null;
 

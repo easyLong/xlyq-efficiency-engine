@@ -13,6 +13,7 @@ import { TaskEntity } from './entities/task.entity';
 import { TaskResultFileEntity } from './entities/task-result-file.entity';
 import { TaskStatusHistoryEntity } from './entities/task-status-history.entity';
 import { TasksController } from './tasks.controller';
+import { TaskWorkflowRuntimeService } from './task-workflow-runtime.service';
 import { TasksService } from './tasks.service';
 
 @Module({
@@ -33,7 +34,7 @@ import { TasksService } from './tasks.service';
     ]),
   ],
   controllers: [TasksController],
-  providers: [TasksService],
-  exports: [TasksService],
+  providers: [TasksService, TaskWorkflowRuntimeService],
+  exports: [TasksService, TaskWorkflowRuntimeService],
 })
 export class TasksModule {}

@@ -1066,9 +1066,9 @@
         in_progress: "进行中",
         blocked: "受阻",
         pending_review: "待审核",
-        completed: "已完成",
+        completed: "已验收",
         cancelled: "已取消",
-        returned: "已退回",
+        returned: "待修改",
       }[status] || status || "-";
     }
 
@@ -1085,8 +1085,8 @@
         assigned: "填写项目资产",
         in_progress: "提交交付",
         blocked: "处理阻塞后提交交付",
-        pending_review: "等待成品审核或客户确认",
-        completed: "已完成",
+        pending_review: "等待一审或二审",
+        completed: "已验收",
         returned: "根据反馈修改后重新提交",
       }[status] || "暂无下一步";
     }

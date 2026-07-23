@@ -10,6 +10,7 @@ import { RequirementQuotationMappingEntity } from '../quotations/entities/requir
 import { TaskDirectoryEntity } from '../tasks/entities/task-directory.entity';
 import { TaskResultFileEntity } from '../tasks/entities/task-result-file.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
+import { TaskWorkflowRuntimeService } from '../tasks/task-workflow-runtime.service';
 import { UserEntity } from '../users/entities/user.entity';
 import { WorkflowConfigsModule } from '../workflow-configs/workflow-configs.module';
 import { RequirementItemEntity } from './entities/requirement-item.entity';
@@ -40,7 +41,7 @@ import { RequirementsService } from './requirements.service';
     ]),
   ],
   controllers: [RequirementsController, RequirementItemsController],
-  providers: [RequirementsService],
+  providers: [RequirementsService, TaskWorkflowRuntimeService],
   exports: [RequirementsService],
 })
 export class RequirementsModule {}

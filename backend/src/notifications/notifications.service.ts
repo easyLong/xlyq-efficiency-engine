@@ -237,6 +237,8 @@ export class NotificationsService {
       blocked: '任务阻塞',
       pending_review: '任务待验收',
       completed: '任务已验收',
+      returned: '任务待修改',
+      cancelled: '任务已取消',
     };
     const statusTitle =
       statusTitleMap[task.status] ?? `任务状态更新为 ${task.status}`;
@@ -297,7 +299,7 @@ export class NotificationsService {
     const taskDetail = await this.taskDetailForNotification(task);
 
     return this.sendToUsers([reviewerUserId], {
-      title: `任务待验收：${task.task_name}`,
+      title: `任务待审核：${task.task_name}`,
       content: [
         `任务：${task.task_name}`,
         ...(taskDetail ? [`任务详情：${taskDetail}`] : []),
@@ -305,7 +307,7 @@ export class NotificationsService {
         `执行人：${assignee?.display_name ?? '-'}`,
         `交付资产：${assetCount} 项`,
         `当前状态：${this.taskStatusLabel(task.status)}`,
-        '请查看交付内容并完成验收。',
+        '请查看交付内容并完成当前审核。',
       ].join('\n'),
       objectType: 'task_asset_review',
       objectId: task.id,
@@ -336,20 +338,20 @@ export class NotificationsService {
       recipients.map((reviewerUserId) =>
         this.send({
           recipientUserId: reviewerUserId,
-          title: `待成品审核：${task.task_name}`,
+          title: `待一审：${task.task_name}`,
           content: [
             `任务：${task.task_name}`,
             ...(taskDetail ? [`任务详情：${taskDetail}`] : []),
             `基金平台：${fundPlatformLabel}`,
             `执行人：${assignee?.display_name ?? '-'}`,
             `交付资产：${assetCount} 项`,
-            '请先审核交付物是否符合制作规范和交付标准。',
+            '请完成一审，确认交付物符合制作规范和交付标准。',
           ].join('\n'),
           objectType: 'task_asset_review',
           objectId: task.id,
           channels: ['in_app', 'feishu_app'],
           actionUrl: this.buildTaskAssetReviewUrl(task, reviewerUserId),
-          actionText: '进入成品审核',
+          actionText: '进入一审',
         }),
       ),
     );
@@ -372,18 +374,18 @@ export class NotificationsService {
       recipients.map((reviewerUserId) =>
         this.send({
           recipientUserId: reviewerUserId,
-          title: `待客户确认：${task.task_name}`,
+          title: `待二审：${task.task_name}`,
           content: [
             `任务：${task.task_name}`,
             `基金平台：${fundPlatformLabel}`,
-            `成品审核：已由 ${reviewerName} 通过`,
-            '请确认交付物是否符合客户/基金公司的实际需求。',
+            `一审结果：已由 ${reviewerName} 通过`,
+            '请完成二审，确认交付物符合客户/基金公司的实际需求。',
           ].join('\n'),
           objectType: 'task_asset_review',
           objectId: task.id,
           channels: ['in_app', 'feishu_app'],
           actionUrl: this.buildTaskAssetReviewUrl(task, reviewerUserId),
-          actionText: '进入客户确认',
+          actionText: '进入二审',
         }),
       ),
     );
@@ -395,7 +397,7 @@ export class NotificationsService {
     recipientUserIds: string[],
   ) {
     return this.sendToUsers(recipientUserIds, {
-      title: `任务已完成：${task.task_name}`,
+      title: `任务已验收：${task.task_name}`,
       content: [
         `任务名称：${task.task_name}`,
         '确认结果：已通过',
