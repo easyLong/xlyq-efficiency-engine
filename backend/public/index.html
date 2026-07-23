@@ -1510,6 +1510,12 @@
     .workflow-member-option strong,
     .workflow-member-option span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .workflow-member-option span { margin-top: 2px; color: #7a8378; font-size: 11px; }
+    .workflow-member-option .workflow-member-name {
+      margin: 0;
+      color: #263426;
+      font-size: 13px;
+      font-weight: 800;
+    }
     .workflow-config-empty { padding: 36px 14px; color: #758074; text-align: center; }
     .hidden { display: none !important; }
     @media (max-width: 980px) {
@@ -1594,7 +1600,7 @@
         <button data-view="settlement" onclick="switchView('settlement')">结算统计</button>
         <button data-view="dashboard" onclick="switchView('dashboard')">需求面板</button>
         <button data-view="groups" onclick="switchView('groups')">群管理</button>
-        <button data-view="workflow" onclick="switchView('workflow')">流程配置</button>
+        <button data-view="workflow" onclick="switchView('workflow')">人员配置</button>
         <button data-view="messages" onclick="switchView('messages')">消息记录</button>
       </nav>
       <button id="logoutButton" class="btn warn" onclick="logout()">退出登录</button>
@@ -2061,16 +2067,16 @@
         <div class="panel workflow-config-panel">
           <div class="workflow-config-head">
             <div>
-              <div class="kicker">Workflow Teams</div>
-              <h3>任务流程团队配置</h3>
+              <div class="kicker">Personnel Settings</div>
+              <h3>任务人员配置</h3>
               <p>派发和二审按基金配置，一审按业务大类配置；每个范围均可选择多名员工。</p>
             </div>
             <button class="btn" onclick="loadWorkflowConfiguration(true)">刷新</button>
           </div>
           <div class="workflow-role-tabs" role="tablist">
-            <button data-workflow-role="dispatcher" class="active" onclick="setWorkflowConfigRole('dispatcher')">派发团队</button>
-            <button data-workflow-role="product_reviewer" onclick="setWorkflowConfigRole('product_reviewer')">一审团队</button>
-            <button data-workflow-role="customer_reviewer" onclick="setWorkflowConfigRole('customer_reviewer')">二审团队</button>
+            <button data-workflow-role="dispatcher" class="active" onclick="setWorkflowConfigRole('dispatcher')">派发人员</button>
+            <button data-workflow-role="product_reviewer" onclick="setWorkflowConfigRole('product_reviewer')">一审人员</button>
+            <button data-workflow-role="customer_reviewer" onclick="setWorkflowConfigRole('customer_reviewer')">二审人员</button>
           </div>
           <div class="workflow-config-layout">
             <aside class="workflow-scope-pane">
@@ -2081,7 +2087,7 @@
               <div class="workflow-member-head">
                 <div>
                   <h4 id="workflowMemberTitle">请选择配置范围</h4>
-                  <p id="workflowMemberSummary">选择左侧基金或业务大类后维护团队成员。</p>
+                  <p id="workflowMemberSummary">选择左侧基金或业务大类后维护人员。</p>
                 </div>
                 <span id="workflowSelectedCount" class="tag">0 人</span>
               </div>
@@ -3097,17 +3103,17 @@
     function workflowRoleDefinition(role = state.workflowConfigRole) {
       return {
         dispatcher: {
-          label: "派发团队",
+          label: "派发人员",
           scopeLabel: "基金",
           description: "可确认该基金的需求并指派执行人",
         },
         product_reviewer: {
-          label: "一审团队",
+          label: "一审人员",
           scopeLabel: "业务大类",
           description: "审核交付物是否符合制作与交付标准",
         },
         customer_reviewer: {
-          label: "二审团队",
+          label: "二审人员",
           scopeLabel: "基金",
           description: "确认交付物是否符合基金客户需求",
         },
@@ -3227,7 +3233,7 @@
       );
       scopeList.innerHTML = scopes.length ? scopes.map(scope => {
         const members = workflowConfiguredMembers(scope.code);
-        const memberNames = members.map(member => member.userName || member.username).filter(Boolean).join("、");
+        const memberNames = members.map(member => member.userName || "未设置姓名").join("、");
         return `
           <button class="workflow-scope-item ${scope.code === state.workflowConfigScopeCode ? "active" : ""}" onclick="setWorkflowConfigScope('${escapeAttr(scope.code)}')">
             <span><strong>${safeText(scope.name)}</strong><span title="${escapeAttr(memberNames)}">${safeText(memberNames || "尚未配置")}</span></span>
@@ -3244,7 +3250,7 @@
         .filter(user => !memberKeyword || `${user.display_name || ""} ${user.username || ""}`.toLowerCase().includes(memberKeyword))
         .sort((left, right) => String(left.display_name || left.username).localeCompare(String(right.display_name || right.username), "zh-Hans-CN"));
       qs("workflowMemberTitle").textContent = scope ? `${scope.name} · ${role.label}` : `请选择${role.scopeLabel}`;
-      qs("workflowMemberSummary").textContent = scope ? role.description : `选择左侧${role.scopeLabel}后维护团队成员。`;
+      qs("workflowMemberSummary").textContent = scope ? role.description : `选择左侧${role.scopeLabel}后维护人员。`;
       qs("workflowSelectedCount").textContent = `${selected.size} 人`;
       const saveButton = qs("saveWorkflowMembersButton");
       if (saveButton) {
@@ -3259,7 +3265,7 @@
               return `
                 <label class="workflow-member-option ${checked ? "selected" : ""}">
                   <input type="checkbox" ${checked ? "checked" : ""} onchange="toggleWorkflowMember('${escapeAttr(user.id)}', this.checked)" />
-                  <span><strong>${safeText(user.display_name || user.username)}</strong><span>${safeText(user.username || "员工账号")}</span></span>
+                  <strong class="workflow-member-name">${safeText(userDisplayName(user))}</strong>
                 </label>
               `;
             }).join("")
@@ -3397,7 +3403,7 @@
         settlement: ["结算统计", "按基金、平台和业务分类统计结算金额与资产数量。"],
         dashboard: ["需求面板", "按不同维度查看需求进度、任务状态、延期风险和资产交付情况。"],
         groups: ["群管理", "拉DP入群-->新增群信息-->DP微信号备注客户真名"],
-        workflow: ["流程配置", "按基金和业务大类维护派发、一审与二审团队。"],
+        workflow: ["人员配置", "按基金和业务大类维护派发、一审与二审人员。"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
       };
       qs("pageTitle").textContent = titles[view][0];
