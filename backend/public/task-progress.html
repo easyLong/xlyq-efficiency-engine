@@ -32,7 +32,7 @@
     .meta-item { border: 1px solid #eef1f5; border-radius: 10px; padding: 11px; background: #fafbfd; }
     .meta-item span { display: block; color: #7b8494; font-size: 12px; font-weight: 800; margin-bottom: 5px; }
     .meta-item strong { display: block; color: #263244; font-size: 14px; line-height: 1.45; word-break: break-word; }
-    .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .actions { display: grid; grid-template-columns: 1fr; gap: 10px; }
     button {
       min-height: 46px;
       border: 1px solid #2563eb;
@@ -43,8 +43,6 @@
       font-weight: 900;
       cursor: pointer;
     }
-    button.secondary { background: #fff; color: #1f2937; border-color: #d7dee8; }
-    button.done { background: #16a34a; border-color: #16a34a; }
     button:disabled { opacity: .55; cursor: not-allowed; }
     .status { min-height: 24px; color: #667085; font-size: 14px; font-weight: 800; }
     .status.ok { color: #166534; }
@@ -68,10 +66,9 @@
       <div class="meta-item"><span>执行人</span><strong id="assigneeName">-</strong></div>
     </div>
     <div class="actions">
-      <button onclick="submitStatus('in_progress')">进行中</button>
-      <button class="done" onclick="submitStatus('completed')">已完成</button>
+      <button id="assetButton" onclick="openAssetSheet()">填写项目资产</button>
     </div>
-    <div id="statusText" class="status">请选择当前任务进度。</div>
+    <div id="statusText" class="status">提交交付后将进入成品审核。</div>
   </main>
 
   <script>
@@ -79,15 +76,12 @@
     const taskId = params.get("taskId") || "";
     const taskToken = params.get("token") || "";
     const taskNo = params.get("taskNo") || "";
-    const requestedStatus = params.get("status") || "";
-    const silentMode = params.get("silent") === "1";
     let assetSheetUrl = "";
-    let currentTaskName = "";
-    let autoSubmitted = false;
+    let currentTaskStatus = "";
 
     function qs(id) { return document.getElementById(id); }
     function statusLabel(status) {
-      return { todo: "未开始", pending: "未开始", assigned: "已指派", in_progress: "进行中", blocked: "受阻", pending_review: "待验收", completed: "已完成" }[status] || status || "-";
+      return { todo: "未开始", pending: "未开始", assigned: "已指派", in_progress: "进行中", blocked: "受阻", pending_review: "待审核", completed: "已完成" }[status] || status || "-";
     }
     function setStatus(message, type) {
       qs("statusText").textContent = message;
@@ -106,49 +100,27 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || "读取任务失败");
         const task = result.task || {};
-        currentTaskName = task.task_name || taskNo || "任务";
+        currentTaskStatus = task.status || "";
         assetSheetUrl = result.assetSheetUrl || "";
-        qs("taskTitle").textContent = currentTaskName;
-        qs("taskSub").textContent = "如需继续处理，请进入项目资产；完成后可直接反馈已完成。";
+        qs("taskTitle").textContent = task.task_name || taskNo || "任务";
+        qs("taskSub").textContent = "进入项目资产填写交付内容；提交后依次进入成品审核和客户确认。";
         qs("taskNo").textContent = task.task_no || taskNo || "-";
-        qs("taskStatus").textContent = statusLabel(task.status);
+        qs("taskStatus").textContent = result.workflow?.statusLabel || statusLabel(task.status);
         qs("projectName").textContent = result.fundPlatformLabel || result.project?.project_name || "-";
         qs("assigneeName").textContent = result.assignee?.display_name || result.assignee?.username || "-";
-        if (["in_progress", "completed"].includes(requestedStatus) && !autoSubmitted) {
-          autoSubmitted = true;
-          await submitStatus(requestedStatus);
-        }
+        if (task.status === "pending_review") setStatus("交付已提交，当前正在审核中，可进入查看资产。", "ok");
+        if (task.status === "completed") setStatus("任务已完成，可进入查看已归档资产。", "ok");
       } catch (error) {
         setStatus(error.message, "error");
       }
     }
-    async function submitStatus(status) {
-      const buttons = [...document.querySelectorAll("button")];
-      buttons.forEach(button => button.disabled = true);
-      setStatus("正在提交...", "");
-      try {
-        const response = await fetch(api("status"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json; charset=utf-8" },
-          body: JSON.stringify({ status }),
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.message || "提交失败");
-        qs("taskStatus").textContent = result.statusLabel || statusLabel(status);
-        if (status === "in_progress") {
-          setStatus("已进入进行中，正在打开项目资产...", "ok");
-          const targetUrl = result.assetSheetUrl || assetSheetUrl;
-          if (targetUrl) location.href = targetUrl;
-          return;
-        }
-        setStatus("任务已完成。", "ok");
-        buttons.forEach(button => button.disabled = true);
-      } catch (error) {
-        setStatus(error.message, "error");
-        buttons.forEach(button => button.disabled = false);
-      } finally {
-        if (status !== "completed") buttons.forEach(button => button.disabled = false);
+    function openAssetSheet() {
+      if (!assetSheetUrl) return setStatus("项目资产地址尚未生成，请联系派发人。", "error");
+      const target = new URL(assetSheetUrl, location.origin);
+      if (!["pending_review", "completed"].includes(currentTaskStatus)) {
+        target.searchParams.set("start", "1");
       }
+      location.href = target.toString();
     }
     loadContext();
   </script>

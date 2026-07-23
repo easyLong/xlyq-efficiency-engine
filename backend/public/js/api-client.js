@@ -32,6 +32,7 @@
       const aiPreviewVisible = Boolean(
         canAccess?.("ai_preview.view_all") || canAccess?.("ai_preview.view_owned"),
       );
+      const workflowConfigVisible = Boolean(canAccess?.("permission.manage"));
       const [
         projects,
         customers,
@@ -42,7 +43,7 @@
         quotations,
         businessPlatformDimensions,
         businessCategoryRelations,
-        businessCategoryOwners,
+        workflowConfig,
         health,
       ] = await Promise.all([
         request("/projects"),
@@ -56,7 +57,7 @@
         quoteVisible ? request("/quotations") : Promise.resolve([]),
         request("/dimensions?type=business_platform").catch(() => []),
         request("/dimensions/business-category-relations").catch(() => []),
-        aiPreviewVisible ? request("/requirements/business-category-owners").catch(() => []) : Promise.resolve([]),
+        workflowConfigVisible ? request("/workflow-config").catch(() => null) : Promise.resolve(null),
         request("/health"),
       ]);
 
@@ -73,7 +74,7 @@
         aiPreviewCandidates: unwrap(aiPreviewCandidates),
         businessPlatformDimensions: unwrap(businessPlatformDimensions),
         businessCategoryRelations: unwrap(businessCategoryRelations),
-        businessCategoryOwners: unwrap(businessCategoryOwners),
+        workflowConfig,
         health,
       };
     }

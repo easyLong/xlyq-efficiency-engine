@@ -283,6 +283,13 @@
       const requirement = data.requirement || {};
       const assets = data.assets || { images: [], links: [], others: [] };
       const canReview = Boolean(data.canReview);
+      const reviewStage = data.reviewStage || task.review_stage || "none";
+      const approveText = reviewStage === "product_review" ? "成品通过" : reviewStage === "customer_review" ? "客户确认通过" : "通过验收";
+      const reviewHint = reviewStage === "product_review"
+        ? "请审核交付物是否符合产品需求、制作规范和交付标准。"
+        : reviewStage === "customer_review"
+          ? "成品审核已通过，请确认交付物是否符合客户/基金公司的实际需求。"
+          : "当前任务可查看交付资产。";
       document.getElementById("app").innerHTML = `
         <div class="topbar">
           <div>
@@ -297,8 +304,11 @@
             <div class="panel-head"><h2>任务信息</h2></div>
             <div class="panel-body info-list">
               <div class="field"><span>任务编号</span><strong>${escapeHtml(task.task_no || "-")}</strong></div>
+              <div class="field"><span>当前阶段</span><strong>${escapeHtml(data.reviewStageLabel || task.review_stage_label || "-")}</strong></div>
+              <div class="field"><span>派发人</span><strong>${escapeHtml(data.dispatcher?.display_name || "-")}</strong></div>
               <div class="field"><span>负责人</span><strong>${escapeHtml(data.reporter?.display_name || "-")}</strong></div>
               <div class="field"><span>执行人</span><strong>${escapeHtml(data.assignee?.display_name || "-")}</strong></div>
+              <div class="field"><span>成品负责人</span><strong>${escapeHtml(data.productReviewer?.display_name || (reviewStage === "product_review" ? "待成品负责人处理" : "-"))}</strong></div>
               <div class="field"><span>截止时间</span><strong>${escapeHtml(formatDate(task.planned_end_at))}</strong></div>
               <div class="field"><span>需求标题</span><strong>${escapeHtml(requirement.title || "-")}</strong></div>
               <div class="field"><span>需求内容</span><p>${escapeHtml(requirement.content || "-")}</p></div>
@@ -320,14 +330,15 @@
           <div class="panel-head"><h2>验收操作</h2></div>
           <div class="panel-body">
             ${canReview ? `
+              <div class="field"><span>审核提示</span><p>${escapeHtml(reviewHint)}</p></div>
               <textarea id="returnReason" placeholder="退回修改时填写原因，例如：请补充源文件或替换第 2 张图片。"></textarea>
               <div class="actions">
-                <button class="btn primary" ${busy ? "disabled" : ""} onclick="approveReview()">${busy ? "处理中..." : "通过验收"}</button>
+                <button class="btn primary" ${busy ? "disabled" : ""} onclick="approveReview()">${busy ? "处理中..." : approveText}</button>
                 <button class="btn danger" ${busy ? "disabled" : ""} onclick="returnReview()">${busy ? "处理中..." : "退回修改"}</button>
                 <a class="btn" href="/index.html">返回管理后台</a>
               </div>
             ` : `
-              <div class="empty">当前任务不是待验收状态，只能查看交付资产。</div>
+              <div class="empty">${escapeHtml(reviewHint)}</div>
               <div class="actions"><a class="btn" href="/index.html">返回管理后台</a></div>
             `}
           </div>
@@ -355,8 +366,7 @@
           method: "POST",
           body: token ? { token } : {},
         });
-        context.task = result.task;
-        context.canReview = false;
+        context = await request(`/tasks/${encodeURIComponent(taskId)}/asset-review/context${tokenQuery()}`);
         render();
       } catch (error) {
         busy = false;
@@ -378,8 +388,7 @@
           method: "POST",
           body: { token, reason },
         });
-        context.task = result.task;
-        context.canReview = false;
+        context = await request(`/tasks/${encodeURIComponent(taskId)}/asset-review/context${tokenQuery()}`);
         render();
       } catch (error) {
         busy = false;

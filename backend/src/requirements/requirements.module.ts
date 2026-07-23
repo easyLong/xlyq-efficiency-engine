@@ -11,6 +11,7 @@ import { TaskDirectoryEntity } from '../tasks/entities/task-directory.entity';
 import { TaskResultFileEntity } from '../tasks/entities/task-result-file.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
 import { UserEntity } from '../users/entities/user.entity';
+import { WorkflowConfigsModule } from '../workflow-configs/workflow-configs.module';
 import { RequirementItemEntity } from './entities/requirement-item.entity';
 import { RequirementEntity } from './entities/requirement.entity';
 import {
@@ -22,6 +23,7 @@ import { RequirementsService } from './requirements.service';
 @Module({
   imports: [
     NotificationsModule,
+    WorkflowConfigsModule,
     TypeOrmModule.forFeature([
       RequirementEntity,
       RequirementItemEntity,

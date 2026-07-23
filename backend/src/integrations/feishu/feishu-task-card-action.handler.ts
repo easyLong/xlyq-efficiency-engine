@@ -5,10 +5,6 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { TaskEntity } from '../../tasks/entities/task.entity';
 import {
-  assertTaskStatusTransition,
-  TaskStatus,
-} from '../../tasks/task-status';
-import {
   buildActiveProgressCard,
   buildCompletedProgressCard,
 } from './feishu-card-templates';
@@ -86,54 +82,20 @@ export class FeishuTaskCardActionHandler {
       };
     }
 
-    return actionName === 'task_progress_reopen'
-      ? this.reopenTask(task, actionName)
-      : this.completeTask(task, actionName);
-  }
-
-  private async reopenTask(task: TaskEntity, actionName: string) {
-    task.status = assertTaskStatusTransition(
-      task.status,
-      TaskStatus.InProgress,
-    );
-    task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
-    task.actual_end_at = null;
-    await this.tasksRepository.save(task);
-
+    const cardBuilder =
+      actionName === 'task_progress_completed'
+        ? buildCompletedProgressCard
+        : buildActiveProgressCard;
     return {
       handled: true,
       action: actionName,
       taskId: task.id,
       response: {
         toast: {
-          type: 'success',
-          content: `已重新打开 ${task.task_no} 任务。`,
+          type: 'warning',
+          content: '请在项目资产页提交交付，审核通过后任务才会完成。',
         },
-        card: buildActiveProgressCard({
-          task,
-          token: this.taskAccessToken(task),
-          assetSheetUrl: this.buildTaskAssetSheetUrl(task),
-        }),
-      },
-    };
-  }
-
-  private async completeTask(task: TaskEntity, actionName: string) {
-    task.status = assertTaskStatusTransition(task.status, TaskStatus.Completed);
-    task.progress_percent = 100;
-    task.actual_end_at = task.actual_end_at ?? new Date();
-    await this.tasksRepository.save(task);
-
-    return {
-      handled: true,
-      action: actionName,
-      taskId: task.id,
-      response: {
-        toast: {
-          type: 'success',
-          content: `已完成 ${task.task_no} 任务。`,
-        },
-        card: buildCompletedProgressCard({
+        card: cardBuilder({
           task,
           token: this.taskAccessToken(task),
           assetSheetUrl: this.buildTaskAssetSheetUrl(task),
@@ -161,10 +123,7 @@ export class FeishuTaskCardActionHandler {
     );
   }
 
-  private buildTaskAssetSheetUrl(
-    task: TaskEntity,
-    options?: { reopen?: boolean },
-  ) {
+  private buildTaskAssetSheetUrl(task: TaskEntity) {
     const baseUrl =
       this.configService.get<string>('APP_PUBLIC_BASE_URL') ??
       'http://localhost:3000';
@@ -172,9 +131,7 @@ export class FeishuTaskCardActionHandler {
     url.searchParams.set('taskId', task.id);
     url.searchParams.set('taskNo', task.task_no);
     url.searchParams.set('token', this.taskAccessToken(task));
-    if (options?.reopen) {
-      url.searchParams.set('reopen', '1');
-    }
+    url.searchParams.set('start', '1');
     return url.toString();
   }
 }

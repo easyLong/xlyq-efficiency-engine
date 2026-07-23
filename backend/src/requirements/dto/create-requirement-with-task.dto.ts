@@ -67,4 +67,8 @@ export class CreateRequirementWithTaskDto {
   @IsOptional()
   @IsString()
   tertiaryCategory?: string;
+
+  @IsOptional()
+  @IsString()
+  sourceCandidateId?: string;
 }

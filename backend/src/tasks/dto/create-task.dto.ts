@@ -26,10 +26,6 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsString()
-  assigneeUserId?: string;
-
-  @IsOptional()
-  @IsString()
   estimatedHours?: string;
 
   @IsOptional()

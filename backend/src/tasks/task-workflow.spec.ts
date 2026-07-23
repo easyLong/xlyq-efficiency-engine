@@ -4,9 +4,11 @@ import { buildTaskWorkflowSnapshot } from './task-workflow';
 describe('task workflow snapshot', () => {
   const baseTask = {
     status: TaskStatus.Assigned,
+    review_stage: 'none',
     assignee_user_id: 'user-1',
     progress_percent: 0,
     actual_end_at: null,
+    blocked_reason: null,
   };
 
   it('guides assigned tasks into asset delivery', () => {
@@ -30,7 +32,7 @@ describe('task workflow snapshot', () => {
     expect(snapshot.canReviewDelivery).toBe(true);
   });
 
-  it('guides completed tasks into reopen only', () => {
+  it('keeps completed tasks read-only', () => {
     const snapshot = buildTaskWorkflowSnapshot({
       ...baseTask,
       status: TaskStatus.Completed,
@@ -38,8 +40,9 @@ describe('task workflow snapshot', () => {
     });
 
     expect(snapshot.phase).toBe('done');
-    expect(snapshot.nextAction).toBe('reopen');
-    expect(snapshot.canReopen).toBe(true);
+    expect(snapshot.nextAction).toBeNull();
+    expect(snapshot.canReopen).toBe(false);
+    expect(snapshot.canOpenAssetSheet).toBe(true);
     expect(snapshot.canSubmitDelivery).toBe(false);
   });
 });

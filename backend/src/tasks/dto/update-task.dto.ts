@@ -1,5 +1,4 @@
-import { IsIn, IsOptional, IsString } from 'class-validator';
-import { TASK_STATUSES, TaskStatus } from '../task-status';
+import { IsOptional, IsString } from 'class-validator';
 
 export class UpdateTaskDto {
   @IsOptional()
@@ -11,20 +10,12 @@ export class UpdateTaskDto {
   description?: string;
 
   @IsOptional()
-  @IsIn(TASK_STATUSES)
-  status?: TaskStatus;
-
-  @IsOptional()
   @IsString()
   priority?: string;
 
   @IsOptional()
   @IsString()
   urgencyLevel?: string;
-
-  @IsOptional()
-  @IsString()
-  assigneeUserId?: string;
 
   @IsOptional()
   @IsString()
@@ -36,17 +27,5 @@ export class UpdateTaskDto {
 
   @IsOptional()
   @IsString()
-  actualEndAt?: string;
-
-  @IsOptional()
-  @IsString()
   estimatedHours?: string;
-
-  @IsOptional()
-  @IsString()
-  progressPercent?: string;
-
-  @IsOptional()
-  @IsString()
-  blockedReason?: string;
 }

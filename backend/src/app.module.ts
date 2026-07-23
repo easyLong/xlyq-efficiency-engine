@@ -18,6 +18,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { UsersModule } from './users/users.module';
 import { WeeklyReportsModule } from './weekly-reports/weekly-reports.module';
 import { WorklogsModule } from './worklogs/worklogs.module';
+import { WorkflowConfigsModule } from './workflow-configs/workflow-configs.module';
 import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
 
 @Module({
@@ -45,6 +46,7 @@ import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
     NotificationsModule,
     CustomersModule,
     UsersModule,
+    WorkflowConfigsModule,
     ProjectsModule,
     RequirementsModule,
     TasksModule,

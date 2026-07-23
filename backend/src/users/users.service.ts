@@ -228,7 +228,10 @@ export class UsersService implements OnModuleInit {
       return true;
     }
     const profile = await buildAccessProfile(this.dataSource, user);
-    return profile.isAdmin || profile.effectiveRoles.includes('owner');
+    return (
+      profile.isAdmin ||
+      profile.effectiveRoles.some((role) => role !== 'member')
+    );
   }
 
   private hashPassword(password: string) {
@@ -399,6 +402,9 @@ export class UsersService implements OnModuleInit {
       permissions: profile.permissions,
       data_scope: profile.dataScope,
       owned_business_category_codes: profile.ownedBusinessCategoryCodes,
+      dispatch_customer_codes: profile.dispatchCustomerCodes,
+      product_review_types: profile.productReviewTypes,
+      customer_review_codes: profile.customerReviewCodes,
       is_admin: profile.isAdmin,
     };
   }

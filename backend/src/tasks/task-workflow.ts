@@ -1,25 +1,22 @@
 import { TaskEntity } from './entities/task.entity';
-import { TaskStatus, taskStatusLabel } from './task-status';
+import {
+  TaskReviewStage,
+  TaskStatus,
+  taskDisplayStatusLabel,
+} from './task-status';
 
 export type TaskWorkflowAction =
   | 'assign'
   | 'open_asset_sheet'
   | 'submit_delivery'
   | 'review_delivery'
-  | 'return_revision'
-  | 'reopen'
-  | 'complete';
+  | 'return_revision';
 
 export type TaskWorkflowSnapshot = {
   status: string;
+  reviewStage: string;
   statusLabel: string;
-  phase:
-    | 'intake'
-    | 'assigned'
-    | 'working'
-    | 'review'
-    | 'done'
-    | 'blocked';
+  phase: 'intake' | 'assigned' | 'working' | 'review' | 'done' | 'blocked';
   nextAction: TaskWorkflowAction | null;
   nextActionLabel: string;
   availableActions: TaskWorkflowAction[];
@@ -33,15 +30,26 @@ export type TaskWorkflowSnapshot = {
 export function buildTaskWorkflowSnapshot(
   task: Pick<
     TaskEntity,
-    'status' | 'assignee_user_id' | 'progress_percent' | 'actual_end_at'
+    | 'status'
+    | 'review_stage'
+    | 'assignee_user_id'
+    | 'progress_percent'
+    | 'actual_end_at'
+    | 'blocked_reason'
   >,
 ): TaskWorkflowSnapshot {
   const status = task.status as TaskStatus;
+  const reviewStage = (task.review_stage ??
+    TaskReviewStage.None) as TaskReviewStage;
   const hasAssignee = Boolean(task.assignee_user_id);
   const actions = new Set<TaskWorkflowAction>();
 
   if ([TaskStatus.Todo, TaskStatus.Pending].includes(status)) {
     actions.add('assign');
+  }
+
+  if (hasAssignee) {
+    actions.add('open_asset_sheet');
   }
 
   if (
@@ -55,7 +63,6 @@ export function buildTaskWorkflowSnapshot(
       TaskStatus.Returned,
     ].includes(status)
   ) {
-    actions.add('open_asset_sheet');
     actions.add('submit_delivery');
   }
 
@@ -64,18 +71,15 @@ export function buildTaskWorkflowSnapshot(
     actions.add('return_revision');
   }
 
-  if (status === TaskStatus.Completed) {
-    actions.add('reopen');
-  }
-
-  if ([TaskStatus.InProgress, TaskStatus.Blocked].includes(status)) {
-    actions.add('complete');
-  }
-
   const availableActions = [...actions];
   return {
     status,
-    statusLabel: taskStatusLabel(status),
+    reviewStage,
+    statusLabel: taskDisplayStatusLabel(
+      status,
+      reviewStage,
+      task.blocked_reason,
+    ),
     phase: workflowPhase(status),
     nextAction: nextWorkflowAction(status, availableActions),
     nextActionLabel: nextWorkflowActionLabel(status, availableActions),
@@ -83,7 +87,7 @@ export function buildTaskWorkflowSnapshot(
     canOpenAssetSheet: actions.has('open_asset_sheet'),
     canSubmitDelivery: actions.has('submit_delivery'),
     canReviewDelivery: actions.has('review_delivery'),
-    canReopen: actions.has('reopen'),
+    canReopen: false,
     progressPercent: Math.max(
       0,
       Math.min(100, Number(task.progress_percent ?? 0)),
@@ -121,13 +125,10 @@ function nextWorkflowAction(
     return pick(availableActions, 'open_asset_sheet');
   }
   if ([TaskStatus.InProgress, TaskStatus.Blocked].includes(status)) {
-    return pick(availableActions, 'submit_delivery', 'complete');
+    return pick(availableActions, 'submit_delivery');
   }
   if (status === TaskStatus.PendingReview) {
     return pick(availableActions, 'review_delivery');
-  }
-  if (status === TaskStatus.Completed) {
-    return pick(availableActions, 'reopen');
   }
   return null;
 }
@@ -147,8 +148,6 @@ function nextWorkflowActionLabel(
       submit_delivery: '提交交付',
       review_delivery: '验收交付',
       return_revision: '退回修改',
-      reopen: '再次打开',
-      complete: '标记完成',
     } satisfies Record<TaskWorkflowAction, string>
   )[action];
 }

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -7,7 +8,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { createHash, randomUUID } from 'node:crypto';
 import { getAiPrompt } from '../ai-prompts/prompt-registry';
 import {
@@ -17,6 +18,7 @@ import {
 } from '../common/access-control';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { ensureIndex } from '../common/schema-maintenance';
+import { ensureWorkflowConfigTables } from '../common/workflow-config-schema';
 import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
 import { CustomerEntity } from '../customers/entities/customer.entity';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -27,6 +29,7 @@ import { TaskDirectoryEntity } from '../tasks/entities/task-directory.entity';
 import { TaskResultFileEntity } from '../tasks/entities/task-result-file.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
 import { UserEntity } from '../users/entities/user.entity';
+import { WorkflowConfigsService } from '../workflow-configs/workflow-configs.service';
 import { AiMatchRequirementContextDto } from './dto/ai-match-requirement-context.dto';
 import { AiSplitRequirementsDto } from './dto/ai-split-requirements.dto';
 import { CreateRequirementDto } from './dto/create-requirement.dto';
@@ -149,14 +152,15 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     private readonly quotationItemsRepository: Repository<QuotationItemEntity>,
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
+    private readonly workflowConfigsService: WorkflowConfigsService,
   ) {}
 
   async onModuleInit() {
     await this.ensureRequirementsSchema();
+    await ensureWorkflowConfigTables(this.dataSource);
     await this.ensureBusinessCategoryOwnerConfigTable();
     await this.normalizeBusinessCategoryOwnerConfigUsers();
     await this.ensureDemandIntakeTables();
-    await this.backfillTaskReportersFromBusinessCategoryOwners();
     this.startAiPreviewNotificationScanner();
   }
 
@@ -280,27 +284,37 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     );
 
     const visibleRequirementIds = new Set<string>();
-    if (profile.dataScope.requirements === 'owned') {
-      const ownedCategories = new Set(profile.ownedBusinessCategoryCodes);
-      for (const requirement of requirements) {
-        const item = itemByRequirementId.get(requirement.id);
-        const task = item ? taskByItemId.get(item.id) : null;
-        const requirementCategory = normalizeAccessBusinessCategory(
-          requirement.business_category,
-        );
-        if (
-          ownedCategories.has(requirementCategory) ||
-          task?.reporter_user_id === currentUser?.id
-        ) {
-          visibleRequirementIds.add(requirement.id);
-        }
-      }
-    } else {
-      for (const item of requirementItems) {
-        const task = taskByItemId.get(item.id);
-        if (task?.assignee_user_id === currentUser?.id) {
-          visibleRequirementIds.add(item.requirement_id);
-        }
+    const ownedCategories = new Set(profile.ownedBusinessCategoryCodes);
+    const dispatchCustomers = new Set(profile.dispatchCustomerCodes);
+    const reviewCustomers = new Set(profile.customerReviewCodes);
+    const productReviewTypes = new Set(profile.productReviewTypes);
+    for (const requirement of requirements) {
+      const item = itemByRequirementId.get(requirement.id);
+      const task = item ? taskByItemId.get(item.id) : null;
+      const requirementCategory = normalizeAccessBusinessCategory(
+        requirement.business_category,
+      );
+      const hasHistoricalTaskRole = Boolean(
+        task &&
+        [
+          task.assignee_user_id,
+          task.dispatcher_user_id,
+          task.reporter_user_id,
+          task.product_reviewer_user_id,
+          task.customer_reviewer_user_id,
+        ].includes(currentUser?.id ?? null),
+      );
+      const hasConfiguredScope = Boolean(
+        ownedCategories.has(requirementCategory) ||
+        dispatchCustomers.has(requirement.customer_code) ||
+        reviewCustomers.has(requirement.customer_code) ||
+        productReviewTypes.has(requirementCategory),
+      );
+      if (
+        hasHistoricalTaskRole ||
+        (profile.dataScope.requirements === 'owned' && hasConfiguredScope)
+      ) {
+        visibleRequirementIds.add(requirement.id);
       }
     }
 
@@ -442,20 +456,27 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
 
   async confirmAiPreviewCandidate(
     candidateId: string,
-    reviewedByUserId: string | null = null,
+    currentUser: UserEntity | null = null,
   ) {
+    await this.assertCanDispatchAiPreviewCandidate(candidateId, currentUser);
+    const reviewedByUserId = currentUser?.id ?? null;
     const result = await this.dataSource.query(
       `
         UPDATE demand_intake_candidates
         SET status = 'confirmed',
             review_status = 'confirmed',
+            review_owner_user_id = ?,
             reviewed_by_user_id = ?,
             reviewed_at = NOW(),
             confirmed_at = COALESCE(confirmed_at, NOW()),
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? OR external_candidate_id = ?
+        WHERE deleted_at IS NULL
+          AND (id = ? OR external_candidate_id = ?)
+          AND COALESCE(status, 'pending') NOT IN (
+            'confirmed', 'rejected', 'dispatching'
+          )
       `,
-      [reviewedByUserId, candidateId, candidateId],
+      [reviewedByUserId, reviewedByUserId, candidateId, candidateId],
     );
     return {
       updated: result?.affectedRows ?? result?.[0]?.affectedRows ?? 0,
@@ -465,15 +486,21 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
 
   async rejectAiPreviewCandidate(
     candidateId: string,
-    reviewedByUserId: string | null = null,
+    currentUser: UserEntity | null = null,
     dto: AiPreviewRejectDto = {},
   ) {
+    await this.assertCanDispatchAiPreviewCandidate(candidateId, currentUser);
+    const reviewedByUserId = currentUser?.id ?? null;
     const feedback = this.normalizeAiPreviewRejectFeedback(dto);
     const candidateRows = await this.dataSource.query(
       `
         SELECT *
         FROM demand_intake_candidates
-        WHERE id = ? OR external_candidate_id = ?
+        WHERE deleted_at IS NULL
+          AND (id = ? OR external_candidate_id = ?)
+          AND COALESCE(status, 'pending') NOT IN (
+            'confirmed', 'rejected', 'dispatching'
+          )
         LIMIT 1
       `,
       [candidateId, candidateId],
@@ -492,14 +519,26 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         UPDATE demand_intake_candidates
         SET status = 'rejected',
             review_status = 'rejected',
+            review_owner_user_id = ?,
             reviewed_by_user_id = ?,
             reviewed_at = NOW(),
             review_note = ?,
             match_reason = ?,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? OR external_candidate_id = ?
+        WHERE deleted_at IS NULL
+          AND (id = ? OR external_candidate_id = ?)
+          AND COALESCE(status, 'pending') NOT IN (
+            'confirmed', 'rejected', 'dispatching'
+          )
       `,
-      [reviewedByUserId, reviewNote, matchReason, candidateId, candidateId],
+      [
+        reviewedByUserId,
+        reviewedByUserId,
+        reviewNote,
+        matchReason,
+        candidateId,
+        candidateId,
+      ],
     );
     const updated = result?.affectedRows ?? result?.[0]?.affectedRows ?? 0;
     if (updated > 0 && candidate?.id) {
@@ -539,8 +578,10 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
   async copyAiPreviewCandidate(
     candidateId: string,
     targetBusinessCategory?: string | null,
-    copiedByUserId: string | null = null,
+    currentUser: UserEntity | null = null,
   ) {
+    await this.assertCanDispatchAiPreviewCandidate(candidateId, currentUser);
+    const copiedByUserId = currentUser?.id ?? null;
     const target = this.normalizeAiPreviewCopyTarget(targetBusinessCategory);
     const sourceRows = await this.dataSource.query(
       `
@@ -566,35 +607,17 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    const [duplicateRows, ownerRows] = await Promise.all([
-      this.dataSource.query(
-        `
-          SELECT id
-          FROM demand_intake_candidates
-          WHERE deleted_at IS NULL
-            AND copied_from_candidate_id = ?
-            AND copy_target_business_category = ?
-          LIMIT 1
-        `,
-        [source.id, target],
-      ),
-      this.dataSource.query(
-        `
-          SELECT owner_config.owner_user_id AS ownerUserId
-          FROM business_category_owner_configs owner_config
-          JOIN users owner_user
-            ON owner_user.id = owner_config.owner_user_id
-           AND owner_user.status = 'active'
-           AND owner_user.deleted_at IS NULL
-          WHERE owner_config.business_category_code = ?
-            AND owner_config.status = 'active'
-            AND owner_config.owner_user_id IS NOT NULL
-          ORDER BY owner_config.created_at ASC
-          LIMIT 1
-        `,
-        [target],
-      ),
-    ]);
+    const duplicateRows = await this.dataSource.query(
+      `
+        SELECT id
+        FROM demand_intake_candidates
+        WHERE deleted_at IS NULL
+          AND copied_from_candidate_id = ?
+          AND copy_target_business_category = ?
+        LIMIT 1
+      `,
+      [source.id, target],
+    );
     if (duplicateRows?.[0]?.id) {
       return {
         copied: false,
@@ -604,12 +627,12 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const newCandidateId = randomUUID();
-    const ownerUserId = ownerRows?.[0]?.ownerUserId ?? null;
+    const ownerUserId = null;
     const confidence = this.lowerAiPreviewCopyConfidence(source.confidence);
     const suggestion = [
       `由文案候选需求复制，来源候选：${source.id}`,
       `目标业务大类：${this.businessCategoryName(target)}`,
-      '请负责人确认是否需要后续交付。',
+      '请基金派发团队确认是否需要后续交付。',
       source.match_suggestion ? `原识别建议：${source.match_suggestion}` : '',
     ]
       .filter(Boolean)
@@ -683,7 +706,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           source.match_confidence ?? null,
           `copy_from_candidate:${source.id}`,
           ownerUserId,
-          ownerUserId ? 'pending_owner_review' : 'unassigned',
+          'pending_dispatch',
           source.id,
           target,
         ],
@@ -747,15 +770,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       );
     });
 
-    if (ownerUserId) {
-      await this.notifyCopiedAiPreviewCandidate(
-        newCandidateId,
-        ownerUserId,
-        source,
-        target,
-      );
-    }
-
     const [created] = await this.dataSource.query(
       `
         SELECT
@@ -788,7 +802,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     if (target === 'design' || target === 'operation') {
       return target;
     }
-    throw new BadRequestException('Target business category must be design or operation');
+    throw new BadRequestException(
+      'Target business category must be design or operation',
+    );
   }
 
   private lowerAiPreviewCopyConfidence(value: unknown) {
@@ -799,7 +815,10 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     if (Number.isNaN(numeric)) {
       return null;
     }
-    return Math.max(0, Math.min(1, numeric > 1 ? numeric / 100 : numeric) * 0.75);
+    return Math.max(
+      0,
+      Math.min(1, numeric > 1 ? numeric / 100 : numeric) * 0.75,
+    );
   }
 
   private async notifyCopiedAiPreviewCandidate(
@@ -808,7 +827,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     source: Record<string, unknown>,
     target: AiPreviewCopyTarget,
   ) {
-      await this.notificationsService.send({
+    await this.notificationsService.send({
       recipientUserId: ownerUserId,
       title: `AI预览需求待确认：${this.businessCategoryName(target)}需求复制`,
       content: [
@@ -876,6 +895,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
   ) {
     const whereParts = ['c.deleted_at IS NULL'];
     const params: Array<string | number> = [];
+    const candidateCustomerCode = `COALESCE(
+      NULLIF(c.matched_customer_code, ''),
+      matched_customer.customer_code,
+      raw_customer.customer_code
+    )`;
     if (scope === 'processed') {
       whereParts.push(
         "COALESCE(c.review_status, c.status, 'pending_owner_review') IN ('confirmed', 'rejected')",
@@ -885,10 +909,26 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         "COALESCE(c.status, 'pending') NOT IN ('confirmed', 'rejected')",
       );
       if (scope === 'mine' && currentUserId) {
-        whereParts.push('c.review_owner_user_id = ?');
+        whereParts.push(`EXISTS (
+          SELECT 1
+          FROM customer_workflow_members dispatcher
+          WHERE dispatcher.customer_code = ${candidateCustomerCode}
+            AND dispatcher.role_code = 'dispatcher'
+            AND dispatcher.user_id = ?
+            AND dispatcher.status = 'active'
+            AND dispatcher.deleted_at IS NULL
+        )`);
         params.push(currentUserId);
       } else if (scope === 'all' && reviewOwnerId) {
-        whereParts.push('c.review_owner_user_id = ?');
+        whereParts.push(`EXISTS (
+          SELECT 1
+          FROM customer_workflow_members dispatcher
+          WHERE dispatcher.customer_code = ${candidateCustomerCode}
+            AND dispatcher.role_code = 'dispatcher'
+            AND dispatcher.user_id = ?
+            AND dispatcher.status = 'active'
+            AND dispatcher.deleted_at IS NULL
+        )`);
         params.push(reviewOwnerId);
       }
     }
@@ -916,9 +956,21 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           c.demand_content,
           c.confidence,
           c.status,
-          COALESCE(c.review_status, 'pending_owner_review') AS review_status,
+          COALESCE(c.review_status, 'pending_dispatch') AS review_status,
           c.review_owner_user_id,
           review_owner.display_name AS review_owner_name,
+          (
+            SELECT GROUP_CONCAT(DISTINCT dispatcher_user.display_name ORDER BY dispatcher_user.display_name SEPARATOR '、')
+            FROM customer_workflow_members dispatcher_member
+            JOIN users dispatcher_user
+              ON dispatcher_user.id = dispatcher_member.user_id
+             AND dispatcher_user.status = 'active'
+             AND dispatcher_user.deleted_at IS NULL
+            WHERE dispatcher_member.customer_code = ${candidateCustomerCode}
+              AND dispatcher_member.role_code = 'dispatcher'
+              AND dispatcher_member.status = 'active'
+              AND dispatcher_member.deleted_at IS NULL
+          ) AS dispatcher_names,
           c.reviewed_by_user_id,
           reviewed_by.display_name AS reviewed_by_name,
           c.reviewed_at,
@@ -928,7 +980,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           c.copy_source,
           source_candidate.demand_title AS copied_from_candidate_title,
           c.match_suggestion,
-          COALESCE(c.matched_customer_code, matched_customer.customer_code) AS matched_customer_code,
+          ${candidateCustomerCode} AS matched_customer_code,
           c.matched_customer_id,
           c.matched_contact_context_id,
           c.match_confidence,
@@ -937,6 +989,12 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         LEFT JOIN customers matched_customer
           ON matched_customer.id = c.matched_customer_id
          AND matched_customer.deleted_at IS NULL
+        LEFT JOIN customers raw_customer
+          ON raw_customer.deleted_at IS NULL
+         AND (
+           raw_customer.customer_code = c.raw_customer_name
+           OR raw_customer.customer_name = c.raw_customer_name
+         )
         LEFT JOIN users review_owner
           ON review_owner.id = c.review_owner_user_id
         LEFT JOIN users reviewed_by
@@ -986,6 +1044,21 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
   private async assignAiPreviewReviewOwners() {
     await this.dataSource.query(`
       UPDATE demand_intake_candidates
+      SET status = 'pending',
+          review_status = 'pending_dispatch',
+          review_owner_user_id = NULL,
+          reviewed_by_user_id = NULL,
+          reviewed_at = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE deleted_at IS NULL
+        AND status = 'dispatching'
+        AND confirmed_requirement_id IS NULL
+        AND confirmed_task_id IS NULL
+        AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+    `);
+
+    await this.dataSource.query(`
+      UPDATE demand_intake_candidates
       SET review_status = status,
           reviewed_at = COALESCE(reviewed_at, confirmed_at),
           updated_at = CURRENT_TIMESTAMP
@@ -995,54 +1068,12 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.dataSource.query(`
-      UPDATE demand_intake_candidates candidate
-      JOIN business_category_owner_configs owner_config
-        ON owner_config.business_category_code =
-          CASE candidate.business_category
-            WHEN '设计' THEN 'design'
-            WHEN '文案' THEN 'copywriting'
-            WHEN '运营' THEN 'operation'
-            WHEN '社区' THEN 'community'
-            ELSE candidate.business_category
-          END
-       AND owner_config.status = 'active'
-       AND owner_config.owner_user_id IS NOT NULL
-      JOIN users owner_user
-        ON owner_user.id = owner_config.owner_user_id
-       AND owner_user.status = 'active'
-       AND owner_user.deleted_at IS NULL
-      SET candidate.review_owner_user_id = owner_config.owner_user_id,
-          candidate.review_status =
-            CASE
-              WHEN COALESCE(candidate.review_status, '') IN ('', 'unassigned') THEN 'pending_owner_review'
-              ELSE candidate.review_status
-            END,
-          candidate.updated_at = CURRENT_TIMESTAMP
-      WHERE candidate.deleted_at IS NULL
-        AND COALESCE(candidate.status, 'pending') NOT IN ('confirmed', 'rejected')
-        AND (candidate.review_owner_user_id IS NULL OR candidate.review_owner_user_id = '')
-    `);
-
-    await this.dataSource.query(`
-      UPDATE demand_intake_candidates candidate
-      LEFT JOIN business_category_owner_configs owner_config
-        ON owner_config.business_category_code =
-          CASE candidate.business_category
-            WHEN '设计' THEN 'design'
-            WHEN '文案' THEN 'copywriting'
-            WHEN '运营' THEN 'operation'
-            WHEN '社区' THEN 'community'
-            ELSE candidate.business_category
-          END
-       AND owner_config.status = 'active'
-       AND owner_config.owner_user_id IS NOT NULL
-      SET candidate.review_status = 'unassigned',
-          candidate.updated_at = CURRENT_TIMESTAMP
-      WHERE candidate.deleted_at IS NULL
-        AND COALESCE(candidate.status, 'pending') NOT IN ('confirmed', 'rejected')
-        AND (candidate.review_owner_user_id IS NULL OR candidate.review_owner_user_id = '')
-        AND owner_config.owner_user_id IS NULL
-        AND COALESCE(candidate.review_status, '') <> 'unassigned'
+      UPDATE demand_intake_candidates
+      SET review_status = 'pending_dispatch',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE deleted_at IS NULL
+        AND COALESCE(status, 'pending') NOT IN ('confirmed', 'rejected')
+        AND COALESCE(review_status, '') <> 'pending_dispatch'
     `);
   }
 
@@ -1053,41 +1084,62 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           candidate.id,
           candidate.demand_title AS demandTitle,
           candidate.business_name AS businessName,
-          candidate.raw_customer_name AS customerName,
+          COALESCE(
+            matched_customer.customer_name,
+            raw_customer.customer_name,
+            candidate.raw_customer_name
+          ) AS customerName,
           candidate.raw_business_platform AS businessPlatform,
           candidate.business_category AS businessCategory,
           candidate.confidence,
-          candidate.review_owner_user_id AS reviewOwnerUserId
+          dispatcher.user_id AS dispatcherUserId
         FROM demand_intake_candidates candidate
-        JOIN users owner_user
-          ON owner_user.id = candidate.review_owner_user_id
-         AND owner_user.status = 'active'
-         AND owner_user.deleted_at IS NULL
+        LEFT JOIN customers matched_customer
+          ON matched_customer.id = candidate.matched_customer_id
+         AND matched_customer.deleted_at IS NULL
+        LEFT JOIN customers raw_customer
+          ON raw_customer.deleted_at IS NULL
+         AND (
+           raw_customer.customer_code = candidate.raw_customer_name
+           OR raw_customer.customer_name = candidate.raw_customer_name
+         )
+        JOIN customer_workflow_members dispatcher
+          ON dispatcher.customer_code = COALESCE(
+            NULLIF(candidate.matched_customer_code, ''),
+            matched_customer.customer_code,
+            raw_customer.customer_code
+          )
+         AND dispatcher.role_code = 'dispatcher'
+         AND dispatcher.status = 'active'
+         AND dispatcher.deleted_at IS NULL
+        JOIN users dispatcher_user
+          ON dispatcher_user.id = dispatcher.user_id
+         AND dispatcher_user.status = 'active'
+         AND dispatcher_user.deleted_at IS NULL
         LEFT JOIN notification_messages message
           ON message.object_type = 'ai_preview_candidate'
          AND message.object_id = candidate.id
-         AND message.recipient_user_id = candidate.review_owner_user_id
+         AND message.recipient_user_id = dispatcher.user_id
          AND message.deleted_at IS NULL
         WHERE candidate.deleted_at IS NULL
           AND COALESCE(candidate.status, 'pending') NOT IN ('confirmed', 'rejected')
-          AND candidate.review_owner_user_id IS NOT NULL
-          AND COALESCE(candidate.review_status, 'pending_owner_review') = 'pending_owner_review'
+          AND COALESCE(candidate.review_status, 'pending_dispatch') = 'pending_dispatch'
           AND message.id IS NULL
         ORDER BY candidate.created_at DESC
-        LIMIT 20
+        LIMIT 100
       `,
     );
 
     for (const row of rows) {
       await this.notificationsService.send({
-        recipientUserId: row.reviewOwnerUserId,
-        title: `AI需求待确认：${row.demandTitle ?? row.businessName ?? '未命名需求'}`,
+        recipientUserId: row.dispatcherUserId,
+        title: `AI需求待派发：${row.demandTitle ?? row.businessName ?? '未命名需求'}`,
         content: [
           `需求名称：${row.demandTitle ?? row.businessName ?? '-'}`,
           `客户平台：${[row.customerName, row.businessPlatform].filter(Boolean).join('-') || '-'}`,
           `业务类型：${row.businessCategory ?? '-'}`,
           `识别置信度：${this.previewConfidenceText(row.confidence)}`,
-          '请进入工作台确认是否转为正式需求。',
+          '请进入工作台确认需求并指派执行人。',
         ].join('\n'),
         objectType: 'ai_preview_candidate',
         objectId: row.id,
@@ -1201,7 +1253,10 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     return this.requirementsRepository.save(requirement);
   }
 
-  async createWithTask(dto: CreateRequirementWithTaskDto) {
+  async createWithTask(
+    dto: CreateRequirementWithTaskDto,
+    currentUser: UserEntity | null = null,
+  ) {
     let contactContext = dto.contactContextId
       ? await this.resolveContactContext(dto.contactContextId)
       : null;
@@ -1216,22 +1271,65 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    return this.createRequirementTaskBundle({
-      ...dto,
-      projectId: dto.projectId,
-      customerCode,
-      contactContextId: contactContext?.id ?? dto.contactContextId,
-      businessName: dto.businessName,
-      businessPlatform:
-        dto.businessPlatform ?? contactContext?.business_platform ?? null,
-      businessCategory: dto.businessCategory ?? null,
-      secondaryCategory: dto.secondaryCategory ?? null,
-      tertiaryCategory: dto.tertiaryCategory ?? null,
-      sourceType: 'manual',
+    await this.assertCanDispatchCustomer(currentUser, customerCode);
+
+    const createBundle = async (manager?: EntityManager) => {
+      const bundle = await this.createRequirementTaskBundle(
+        {
+          ...dto,
+          projectId: dto.projectId,
+          customerCode,
+          contactContextId: contactContext?.id ?? dto.contactContextId,
+          businessName: dto.businessName,
+          businessPlatform:
+            dto.businessPlatform ?? contactContext?.business_platform ?? null,
+          businessCategory: dto.businessCategory ?? null,
+          secondaryCategory: dto.secondaryCategory ?? null,
+          tertiaryCategory: dto.tertiaryCategory ?? null,
+          sourceType: dto.sourceCandidateId ? 'ai_preview_confirmed' : 'manual',
+          dispatcherUserId: currentUser?.id ?? null,
+        },
+        manager,
+      );
+      if (dto.sourceCandidateId && manager) {
+        await this.completeAiPreviewCandidateClaim(
+          dto.sourceCandidateId,
+          currentUser!.id,
+          bundle.requirement.id,
+          bundle.task.id,
+          manager,
+        );
+      }
+      return bundle;
+    };
+
+    if (!dto.sourceCandidateId) {
+      return createBundle();
+    }
+
+    const candidateCustomerCode =
+      await this.assertCanDispatchAiPreviewCandidate(
+        dto.sourceCandidateId,
+        currentUser,
+      );
+    if (candidateCustomerCode && candidateCustomerCode !== customerCode) {
+      throw new BadRequestException('AI候选基金与当前选择的基金不一致');
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      await this.claimAiPreviewCandidate(
+        dto.sourceCandidateId!,
+        currentUser!.id,
+        manager,
+      );
+      return createBundle(manager);
     });
   }
 
-  async aiSplitWithTasks(dto: AiSplitRequirementsDto) {
+  async aiSplitWithTasks(
+    dto: AiSplitRequirementsDto,
+    currentUser: UserEntity | null = null,
+  ) {
     const startedAt = Date.now();
     const requirementContent = this.extractRequirementOnlyContent(
       dto.rawContent,
@@ -1285,6 +1383,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         itemMatch.customerId ??
         batchFallbackMatch.customerId ??
         (await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId));
+      await this.assertCanDispatchCustomer(currentUser, customerId);
       const projectType =
         itemMatch.customerId || itemMatch.customerLocked
           ? itemMatch.projectType
@@ -1329,6 +1428,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           splitResult.mode === 'openai_compatible'
             ? 'ai_model_split'
             : 'ai_file_split',
+        dispatcherUserId: currentUser?.id ?? null,
         match,
       });
       created.push({
@@ -1433,13 +1533,24 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async update(id: string, dto: UpdateRequirementDto) {
+  async update(
+    id: string,
+    dto: UpdateRequirementDto,
+    currentUser: UserEntity | null = null,
+  ) {
     const requirement = await this.findOne(id);
+    await this.assertCanDispatchCustomer(
+      currentUser,
+      requirement.customer_code,
+    );
     const targetProjectId = dto.projectId ?? requirement.project_id;
     const targetCustomerCode =
       dto.customerCode || dto.customerId
         ? await this.resolveCustomerCodeInput(dto.customerCode, dto.customerId)
         : requirement.customer_code;
+    if (targetCustomerCode !== requirement.customer_code) {
+      await this.assertCanDispatchCustomer(currentUser, targetCustomerCode);
+    }
     const priority =
       dto.priority !== undefined
         ? this.normalizePriority(dto.priority)
@@ -1517,11 +1628,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         task.description = dto.rawContent ?? task.description;
         task.priority = priority ?? task.priority;
         task.urgency_level = urgencyLevel ?? task.urgency_level;
-        if (dto.businessCategory !== undefined) {
-          task.reporter_user_id = await this.resolveRequirementReporterUserId(
-            savedRequirement.business_category,
-          );
-        }
         await this.tasksRepository.save(task);
       }
     }
@@ -1734,41 +1840,52 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     return qb.orderBy('ri.created_at', 'ASC').getMany();
   }
 
-  private async createRequirementTaskBundle(input: {
-    projectId: string;
-    customerCode: string;
-    title: string;
-    rawContent?: string;
-    priority?: string;
-    urgencyLevel?: string | null;
-    estimatedHours?: string;
-    plannedStartAt?: string | null;
-    plannedEndAt?: string | null;
-    contactContextId?: string | null;
-    businessName?: string | null;
-    businessPlatform?: string | null;
-    businessCategory?: string | null;
-    secondaryCategory?: string | null;
-    tertiaryCategory?: string | null;
-    sourceType: string;
-    match?: {
-      customerId: string | null;
-      customerName: string | null;
-      projectType: string;
-      projectTypeLabel: string;
-      confidence: number;
-      reason: string;
-    };
-  }) {
-    const code = await this.nextRequirementCode();
+  private async createRequirementTaskBundle(
+    input: {
+      projectId: string;
+      customerCode: string;
+      title: string;
+      rawContent?: string;
+      priority?: string;
+      urgencyLevel?: string | null;
+      estimatedHours?: string;
+      plannedStartAt?: string | null;
+      plannedEndAt?: string | null;
+      contactContextId?: string | null;
+      businessName?: string | null;
+      businessPlatform?: string | null;
+      businessCategory?: string | null;
+      secondaryCategory?: string | null;
+      tertiaryCategory?: string | null;
+      sourceType: string;
+      dispatcherUserId?: string | null;
+      match?: {
+        customerId: string | null;
+        customerName: string | null;
+        projectType: string;
+        projectTypeLabel: string;
+        confidence: number;
+        reason: string;
+      };
+    },
+    manager?: EntityManager,
+  ) {
+    if (!manager) {
+      return this.dataSource.transaction((transactionManager) =>
+        this.createRequirementTaskBundle(input, transactionManager),
+      );
+    }
+
+    const requirementsRepository = manager.getRepository(RequirementEntity);
+    const requirementItemsRepository = manager.getRepository(
+      RequirementItemEntity,
+    );
+    const tasksRepository = manager.getRepository(TaskEntity);
+    const code = await this.nextRequirementCode(manager);
     const priority = this.normalizePriority(input.priority);
     const urgencyLevel = this.normalizeUrgencyLevel(input.urgencyLevel);
-    const reporterUserId = await this.resolveRequirementReporterUserId(
-      input.businessCategory,
-    );
-
-    const requirement = await this.requirementsRepository.save(
-      this.requirementsRepository.create({
+    const requirement = await requirementsRepository.save(
+      requirementsRepository.create({
         id: randomUUID(),
         requirement_code: code,
         project_id: input.projectId,
@@ -1789,8 +1906,8 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       }),
     );
 
-    const item = await this.requirementItemsRepository.save(
-      this.requirementItemsRepository.create({
+    const item = await requirementItemsRepository.save(
+      requirementItemsRepository.create({
         id: randomUUID(),
         requirement_id: requirement.id,
         parent_item_id: null,
@@ -1808,15 +1925,16 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       }),
     );
 
-    const task = await this.tasksRepository.save(
-      this.tasksRepository.create({
+    const task = await tasksRepository.save(
+      tasksRepository.create({
         id: randomUUID(),
         project_id: requirement.project_id,
         requirement_item_id: item.id,
-        task_no: await this.nextTaskNo(requirement.project_id),
+        task_no: await this.nextTaskNo(requirement.project_id, manager),
         task_name: item.item_title,
         description: item.item_description ?? null,
         status: 'todo',
+        review_stage: 'none',
         priority: item.priority ?? 'p3',
         urgency_level: item.urgency_level ?? urgencyLevel,
         assignee_user_id: null,
@@ -1827,7 +1945,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         planned_end_at: input.plannedEndAt
           ? new Date(input.plannedEndAt)
           : null,
-        reporter_user_id: reporterUserId,
+        reporter_user_id: null,
+        dispatcher_user_id: input.dispatcherUserId ?? null,
+        product_review_type: null,
+        product_reviewer_user_id: null,
+        customer_reviewer_user_id: null,
         blocked_reason: null,
         progress_percent: 0,
       }),
@@ -1841,8 +1963,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async nextTaskNo(projectId: string) {
-    const rows = await this.tasksRepository
+  private async nextTaskNo(projectId: string, manager?: EntityManager) {
+    const tasksRepository = manager
+      ? manager.getRepository(TaskEntity)
+      : this.tasksRepository;
+    const rows = await tasksRepository
       .createQueryBuilder('task')
       .withDeleted()
       .select('task.task_no', 'taskNo')
@@ -2049,9 +2174,12 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async nextRequirementCode() {
+  private async nextRequirementCode(manager?: EntityManager) {
+    const requirementsRepository = manager
+      ? manager.getRepository(RequirementEntity)
+      : this.requirementsRepository;
     const prefix = `REQ-${this.todayStamp()}-`;
-    const rows = await this.requirementsRepository
+    const rows = await requirementsRepository
       .createQueryBuilder('requirement')
       .withDeleted()
       .select('requirement.requirement_code', 'requirementCode')
@@ -2733,10 +2861,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       return exact.value;
     }
     const lower = normalized.toLowerCase();
-    if (
-      ['design', 'designer'].includes(lower) ||
-      normalized.includes('设计')
-    ) {
+    if (['design', 'designer'].includes(lower) || normalized.includes('设计')) {
       return 'design';
     }
     if (
@@ -2765,30 +2890,147 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async resolveRequirementReporterUserId(
-    businessCategory?: string | null,
+    customerCode?: string | null,
+    _businessCategory?: string | null,
   ) {
-    const categoryCode = this.normalizeBusinessCategoryCode(businessCategory);
-    if (!categoryCode) {
+    const normalizedCustomerCode = String(customerCode ?? '').trim();
+    if (!normalizedCustomerCode) {
       return null;
     }
+    const reviewerIds = await this.workflowConfigsService.findCustomerMemberIds(
+      normalizedCustomerCode,
+      'customer_reviewer',
+    );
+    return reviewerIds[0] ?? null;
+  }
 
+  private async assertCanDispatchCustomer(
+    currentUser: UserEntity | null,
+    customerCode: string,
+  ) {
+    if (!currentUser) {
+      throw new ForbiddenException('A signed-in dispatcher is required');
+    }
+    const normalizedCustomerCode = String(customerCode ?? '').trim();
+    const profile = await buildAccessProfile(this.dataSource, currentUser);
+    if (profile.isAdmin) {
+      return;
+    }
+    const dispatcherIds =
+      await this.workflowConfigsService.findCustomerMemberIds(
+        normalizedCustomerCode,
+        'dispatcher',
+      );
+    if (dispatcherIds.includes(currentUser.id)) {
+      return;
+    }
+    if (!dispatcherIds.length) {
+      throw new BadRequestException('该基金尚未配置派发团队');
+    }
+    throw new ForbiddenException('当前账号不是该基金的派发人');
+  }
+
+  private async assertCanDispatchAiPreviewCandidate(
+    candidateId: string,
+    currentUser: UserEntity | null,
+  ) {
     const rows = await this.dataSource.query(
       `
-        SELECT owner_user_id AS ownerUserId
-        FROM business_category_owner_configs
-        WHERE business_category_code = ?
-          AND status = 'active'
-          AND owner_user_id IS NOT NULL
+        SELECT
+          COALESCE(
+            NULLIF(candidate.matched_customer_code, ''),
+            matched_customer.customer_code,
+            raw_customer.customer_code
+          ) AS customerCode
+        FROM demand_intake_candidates candidate
+        LEFT JOIN customers matched_customer
+          ON matched_customer.id = candidate.matched_customer_id
+         AND matched_customer.deleted_at IS NULL
+        LEFT JOIN customers raw_customer
+          ON raw_customer.deleted_at IS NULL
+         AND (
+           raw_customer.customer_code = candidate.raw_customer_name
+           OR raw_customer.customer_name = candidate.raw_customer_name
+         )
+        WHERE candidate.deleted_at IS NULL
+          AND (candidate.id = ? OR candidate.external_candidate_id = ?)
         LIMIT 1
       `,
-      [categoryCode],
+      [candidateId, candidateId],
     );
-    const ownerUserId = rows?.[0]?.ownerUserId;
-    if (!ownerUserId) {
-      return null;
+    if (!rows?.length) {
+      throw new NotFoundException('AI preview candidate not found');
     }
+    const customerCode = String(rows[0].customerCode ?? '').trim();
+    if (!customerCode) {
+      if (!currentUser) {
+        throw new ForbiddenException('A signed-in dispatcher is required');
+      }
+      const profile = await buildAccessProfile(this.dataSource, currentUser);
+      if (profile.isAdmin) {
+        return null;
+      }
+      throw new BadRequestException('候选需求尚未匹配基金客户');
+    }
+    await this.assertCanDispatchCustomer(currentUser, customerCode);
+    return customerCode;
+  }
 
-    return this.resolveBusinessCategoryOwnerReference(ownerUserId, true);
+  private async claimAiPreviewCandidate(
+    candidateId: string,
+    dispatcherUserId: string,
+    manager: EntityManager,
+  ) {
+    const result = await manager.query(
+      `
+        UPDATE demand_intake_candidates
+        SET status = 'dispatching',
+            review_status = 'dispatching',
+            review_owner_user_id = ?,
+            reviewed_by_user_id = ?,
+            reviewed_at = NOW(),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE deleted_at IS NULL
+          AND (id = ? OR external_candidate_id = ?)
+          AND COALESCE(status, 'pending') NOT IN (
+            'confirmed', 'rejected', 'dispatching'
+          )
+      `,
+      [dispatcherUserId, dispatcherUserId, candidateId, candidateId],
+    );
+    const affectedRows = result?.affectedRows ?? result?.[0]?.affectedRows ?? 0;
+    if (!affectedRows) {
+      throw new BadRequestException('该候选需求已由其他派发人处理');
+    }
+  }
+
+  private async completeAiPreviewCandidateClaim(
+    candidateId: string,
+    dispatcherUserId: string,
+    requirementId: string,
+    taskId: string,
+    manager: EntityManager,
+  ) {
+    const result = await manager.query(
+      `
+        UPDATE demand_intake_candidates
+        SET status = 'confirmed',
+            review_status = 'confirmed',
+            confirmed_requirement_id = ?,
+            confirmed_task_id = ?,
+            confirmed_at = COALESCE(confirmed_at, NOW()),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE deleted_at IS NULL
+          AND (id = ? OR external_candidate_id = ?)
+          AND status = 'dispatching'
+          AND reviewed_by_user_id = ?
+      `,
+      [requirementId, taskId, candidateId, candidateId, dispatcherUserId],
+    );
+    const affectedRows = result?.affectedRows ?? result?.[0]?.affectedRows ?? 0;
+    if (!affectedRows) {
+      throw new BadRequestException('候选需求派发状态已变化，请刷新后重试');
+    }
   }
 
   private async resolveBusinessCategoryOwnerReference(
@@ -2940,6 +3182,18 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     await this.ensureBusinessCategoryOwnerConfigIndexes();
 
     for (const type of this.projectTypes) {
+      const existingRows: Array<{ id: string }> = await this.dataSource.query(
+        `
+          SELECT id
+          FROM business_category_owner_configs
+          WHERE business_category_code = ?
+            AND deleted_at IS NULL
+          LIMIT 1
+        `,
+        [type.value],
+      );
+      if (existingRows.length) continue;
+
       await this.dataSource.query(
         `
           INSERT INTO business_category_owner_configs (
@@ -3039,6 +3293,37 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       WHERE task.deleted_at IS NULL
         AND item.deleted_at IS NULL
         AND requirement.deleted_at IS NULL
+        AND task.reporter_user_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM customer_owner_configs customer_owner
+          WHERE customer_owner.customer_code = requirement.customer_code
+            AND customer_owner.status = 'active'
+            AND customer_owner.deleted_at IS NULL
+        )
+    `);
+  }
+
+  private async backfillTaskReportersFromCustomerOwners() {
+    await this.dataSource.query(`
+      UPDATE tasks task
+      JOIN requirement_items item
+        ON item.id = task.requirement_item_id
+       AND item.deleted_at IS NULL
+      JOIN requirements requirement
+        ON requirement.id = item.requirement_id
+       AND requirement.deleted_at IS NULL
+      JOIN customer_owner_configs owner_config
+        ON owner_config.customer_code = requirement.customer_code
+       AND owner_config.status = 'active'
+       AND owner_config.deleted_at IS NULL
+      JOIN users owner_user
+        ON owner_user.id = owner_config.owner_user_id
+       AND owner_user.status = 'active'
+       AND owner_user.deleted_at IS NULL
+      SET task.reporter_user_id = owner_config.owner_user_id
+      WHERE task.deleted_at IS NULL
+        AND task.status <> 'completed'
     `);
   }
 
@@ -3062,6 +3347,14 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           AND task.deleted_at IS NULL
           AND item.deleted_at IS NULL
           AND requirement.deleted_at IS NULL
+          AND task.reporter_user_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM customer_owner_configs customer_owner
+            WHERE customer_owner.customer_code = requirement.customer_code
+              AND customer_owner.status = 'active'
+              AND customer_owner.deleted_at IS NULL
+          )
       `,
       [businessCategoryCode],
     );
@@ -3184,6 +3477,21 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'copy_source',
       'copy_source VARCHAR(32) NULL AFTER copy_target_business_category',
     );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'confirmed_requirement_id',
+      'confirmed_requirement_id CHAR(36) NULL AFTER copy_source',
+    );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'confirmed_task_id',
+      'confirmed_task_id CHAR(36) NULL AFTER confirmed_requirement_id',
+    );
+    await this.addColumnIfMissing(
+      'demand_intake_candidates',
+      'confirmed_at',
+      'confirmed_at DATETIME NULL AFTER confirmed_task_id',
+    );
     if (
       await this.columnExists('demand_intake_candidates', 'matched_customer_id')
     ) {
@@ -3222,6 +3530,12 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'demand_intake_candidates',
       'idx_demand_intake_copy_source',
       ['copied_from_candidate_id', 'copy_target_business_category'],
+    );
+    await ensureIndex(
+      this.dataSource,
+      'demand_intake_candidates',
+      'idx_demand_intake_confirmed_requirement',
+      ['confirmed_requirement_id'],
     );
     await this.assignAiPreviewReviewOwners();
 

@@ -74,7 +74,7 @@ export class RequirementsController {
   ) {
     return this.requirementsService.confirmAiPreviewCandidate(
       candidateId,
-      request?.user?.id ?? null,
+      request?.user ?? null,
     );
   }
 
@@ -92,7 +92,7 @@ export class RequirementsController {
   ) {
     return this.requirementsService.rejectAiPreviewCandidate(
       candidateId,
-      request?.user?.id ?? null,
+      request?.user ?? null,
       dto,
     );
   }
@@ -107,7 +107,7 @@ export class RequirementsController {
     return this.requirementsService.copyAiPreviewCandidate(
       candidateId,
       dto?.targetBusinessCategory,
-      request?.user?.id ?? null,
+      request?.user ?? null,
     );
   }
 
@@ -129,14 +129,26 @@ export class RequirementsController {
 
   @Post('with-task')
   @Permission('requirement.create')
-  createWithTask(@Body() dto: CreateRequirementWithTaskDto) {
-    return this.requirementsService.createWithTask(dto);
+  createWithTask(
+    @Body() dto: CreateRequirementWithTaskDto,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.requirementsService.createWithTask(
+      dto,
+      request?.user ?? null,
+    );
   }
 
   @Post('ai-split-with-tasks')
   @Permission('requirement.create')
-  aiSplitWithTasks(@Body() dto: AiSplitRequirementsDto) {
-    return this.requirementsService.aiSplitWithTasks(dto);
+  aiSplitWithTasks(
+    @Body() dto: AiSplitRequirementsDto,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.requirementsService.aiSplitWithTasks(
+      dto,
+      request?.user ?? null,
+    );
   }
 
   @Post('ai-match-context')
@@ -146,8 +158,16 @@ export class RequirementsController {
 
   @Patch(':id')
   @Permission('requirement.edit_owned')
-  update(@Param('id') id: string, @Body() dto: UpdateRequirementDto) {
-    return this.requirementsService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateRequirementDto,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.requirementsService.update(
+      id,
+      dto,
+      request?.user ?? null,
+    );
   }
 
   @Delete(':id/bundle')

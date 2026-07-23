@@ -355,7 +355,7 @@
                       <p>PNG、JPG、WEBP、GIF，单张不超过 8MB。</p>
                     </div>
                   </div>
-                  <button class="secondary" onclick="document.getElementById('fileInput').click()">选择图片</button>
+                  <button class="secondary" data-delivery-control onclick="document.getElementById('fileInput').click()">选择图片</button>
                 </div>
                 <div id="uploadZone" class="upload-zone">
                   <div>
@@ -364,11 +364,11 @@
                       <p>也可以直接粘贴截图。</p>
                     </div>
                     <div class="upload-actions">
-                      <button onclick="document.getElementById('fileInput').click()">上传图片</button>
+                      <button data-delivery-control onclick="document.getElementById('fileInput').click()">上传图片</button>
                     </div>
                   </div>
                 </div>
-                <input id="fileInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onchange="uploadSelectedFiles(this.files)" />
+                <input id="fileInput" class="hidden" data-delivery-control type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onchange="uploadSelectedFiles(this.files)" />
               </div>
 
             </div>
@@ -383,7 +383,7 @@
                   <p>保存后同步到后台统计口径。</p>
                 </div>
               </div>
-              <button class="secondary" onclick="clearImages()">清空</button>
+              <button class="secondary" data-delivery-control onclick="clearImages()">清空</button>
             </div>
             <div id="assetGrid" class="asset-grid"></div>
           </div>
@@ -400,8 +400,8 @@
             </div>
             <div class="link-section">
               <div class="link-input-row">
-                <input id="linkUrlInput" placeholder="粘贴合作链接，可添加多条" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); addLinkFromInput(); }" />
-                <button class="secondary" onclick="addLinkFromInput()">添加链接</button>
+                <input id="linkUrlInput" data-delivery-control placeholder="粘贴合作链接，可添加多条" onkeydown="if(event.key === 'Enter'){ event.preventDefault(); addLinkFromInput(); }" />
+                <button class="secondary" data-delivery-control onclick="addLinkFromInput()">添加链接</button>
               </div>
               <div id="linkList" class="link-list"></div>
             </div>
@@ -410,7 +410,7 @@
           <div class="save-bar">
             <div id="saveStatus" class="status">添加图片或合作链接后提交交付，提交后进入管理者验收。</div>
             <div class="save-actions">
-              <button id="saveButton" onclick="saveDelivery()">提交交付</button>
+              <button id="saveButton" data-delivery-control onclick="saveDelivery()">提交交付</button>
             </div>
           </div>
         </div>
@@ -438,11 +438,14 @@
     const taskId = params.get("taskId") || "default";
     const taskNo = params.get("taskNo") || "任务";
     const taskToken = params.get("token") || "";
+    const shouldStartWork = params.get("start") === "1";
     const storageKey = `asset-delivery:${taskId}`;
     const legacyStorageKey = `asset-sheet:${taskId}`;
     const maxImageCount = 80;
     const maxUrlLength = 500;
     let context = null;
+    let deliveryEditable = false;
+    let startAttempted = false;
     let pendingImagePreviews = [];
     let pendingConfirmResolve = null;
     let lastPointerPosition = null;
@@ -581,7 +584,7 @@
               ${entry.pending
                 ? `<span class="pending-note">上传中...</span>`
                 : `<button class="ghost" onclick="copyText('${escapeAttr(url)}')">复制</button>
-                   <button class="danger" onclick="removeImage(${index})">删除</button>`}
+                   ${deliveryEditable ? `<button class="danger" onclick="removeImage(${index})">删除</button>` : ""}`}
             </div>
           </div>
         </article>
@@ -600,12 +603,13 @@
         <div class="link-item">
           <div class="link-item-url" title="${escapeAttr(url)}">${escapeHtml(url)}</div>
           <button class="ghost" onclick="copyText('${escapeAttr(url)}')">复制</button>
-          <button class="danger" onclick="removeLink(${index})">删除</button>
+          ${deliveryEditable ? `<button class="danger" onclick="removeLink(${index})">删除</button>` : ""}
         </div>
       `).join("");
     }
 
     function addLinkFromInput() {
+      if (!deliveryEditable) return setStatus("当前任务已进入审核，交付内容已锁定。", "error");
       const input = document.getElementById("linkUrlInput");
       const linkUrl = input.value.trim();
       if (!linkUrl) return;
@@ -625,6 +629,7 @@
     }
 
     async function removeLink(index) {
+      if (!deliveryEditable) return;
       const draft = loadDraft();
       if (!draft.linkUrls[index]) return;
       const confirmed = await confirmDialog({
@@ -662,6 +667,7 @@
     }
 
     async function removeImage(index) {
+      if (!deliveryEditable) return;
       const confirmed = await confirmDialog({
         title: "删除图片资产",
         message: `确认删除「图片 ${index + 1}」吗？提交后后台统计也会同步更新。`,
@@ -674,6 +680,7 @@
     }
 
     async function clearImages() {
+      if (!deliveryEditable) return;
       const draft = loadDraft();
       if (!draft.imageUrls.length) return;
       const confirmed = await confirmDialog({
@@ -688,6 +695,7 @@
     }
 
     async function uploadSelectedFiles(files) {
+      if (!deliveryEditable) return setStatus("当前任务已进入审核，交付内容已锁定。", "error");
       const imageFiles = [...(files || [])].filter(file => file.type.startsWith("image/"));
       if (!imageFiles.length) return;
       const currentCount = loadDraft().imageUrls.length + pendingImagePreviews.length;
@@ -775,8 +783,29 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || "读取任务失败");
         context = result;
+        if (
+          shouldStartWork &&
+          !startAttempted &&
+          context?.workflow?.canSubmitDelivery &&
+          context?.task?.status !== "in_progress"
+        ) {
+          startAttempted = true;
+          const startResponse = await fetch(taskAssetApi("start"), {
+            method: "POST",
+          });
+          const startResult = await startResponse.json();
+          if (!startResponse.ok) {
+            throw new Error(startResult.message || "开始任务失败");
+          }
+          context = {
+            ...context,
+            task: startResult.task || context.task,
+            workflow: startResult.workflow || context.workflow,
+          };
+        }
         renderTaskDetails();
         syncDeliveryDraft(result.delivery);
+        applyDeliveryMode();
         renderAssets();
       } catch (error) {
         setStatus(`读取任务详情失败：${error.message}`, "error");
@@ -785,6 +814,10 @@
     }
 
     function renderFallback() {
+      deliveryEditable = true;
+      document.querySelectorAll("[data-delivery-control]").forEach(control => {
+        control.disabled = false;
+      });
       document.getElementById("taskTitle").textContent = `${taskNo} 任务详情`;
       document.getElementById("taskSub").textContent = "本地登记模式";
       document.getElementById("briefStatus").textContent = "未开始";
@@ -810,12 +843,36 @@
       document.getElementById("nextAction").textContent = workflow.nextActionLabel || nextActionLabel(task.status);
       document.getElementById("taskDetails").innerHTML = detailRows([
         ["任务名称", escapeHtml(task.task_name || item.item_title || "-")],
-        ["状态", `<span class="tag ${statusTone(task.status)}">${escapeHtml(statusLabel(task.status))}</span>`],
+        ["状态", `<span class="tag ${statusTone(task.status)}">${escapeHtml(workflow.statusLabel || statusLabel(task.status))}</span>`],
         ["开始时间", escapeHtml(formatDate(task.created_at))],
         ["截止时间", escapeHtml(formatDate(task.planned_end_at))],
         ["优先级", `<span class="tag warn">${escapeHtml(priorityLabel(task.priority))}</span>`],
         ["实际完成时间", escapeHtml(formatDate(task.actual_end_at))],
       ]);
+    }
+
+    function applyDeliveryMode() {
+      deliveryEditable = Boolean(context?.workflow?.canSubmitDelivery);
+      document.querySelectorAll("[data-delivery-control]").forEach(control => {
+        control.disabled = !deliveryEditable;
+      });
+      renderAssets();
+      if (deliveryEditable) {
+        setStatus(
+          context?.task?.blocked_reason
+            ? `请根据退回意见修改后重新提交：${context.task.blocked_reason}`
+            : "添加图片或合作链接后提交交付，提交后进入成品审核。",
+          context?.task?.blocked_reason ? "error" : "",
+        );
+        return;
+      }
+      const status = context?.task?.status;
+      setStatus(
+        status === "completed"
+          ? "任务已完成，交付内容为只读归档。"
+          : "任务正在审核中，交付内容已锁定；退回后可继续修改。",
+        "ok",
+      );
     }
 
     function detailRows(rows) {
@@ -828,6 +885,10 @@
     }
 
     async function saveDelivery() {
+      if (!deliveryEditable) {
+        setStatus("当前任务不允许提交交付。", "error");
+        return;
+      }
       saveDraft();
       if (pendingImagePreviews.length) {
         setStatus("图片还在上传中，请等上传完成后再提交交付。", "error");
@@ -880,7 +941,8 @@
         renderAssets();
         context = { ...(context || {}), task: result.task || context?.task, workflow: result.workflow || context?.workflow };
         renderTaskDetails();
-        setStatus(`已提交 ${imageUrls.length} 张图片${linkUrls.length ? `和 ${linkUrls.length} 个链接` : ""}，任务已进入待验收。正在返回执行人工作台...`, "ok");
+        applyDeliveryMode();
+        setStatus(`已提交 ${imageUrls.length} 张图片${linkUrls.length ? `和 ${linkUrls.length} 个链接` : ""}，任务已进入待成品审核。正在返回执行人工作台...`, "ok");
         returnToAssigneeWorkspace(result.assigneeSession || context?.assigneeSession);
       } catch (error) {
         setStatus(`提交失败：${error.message}`, "error");
@@ -1003,7 +1065,7 @@
         assigned: "已指派",
         in_progress: "进行中",
         blocked: "受阻",
-        pending_review: "待验收",
+        pending_review: "待审核",
         completed: "已完成",
         cancelled: "已取消",
         returned: "已退回",
@@ -1023,7 +1085,7 @@
         assigned: "填写项目资产",
         in_progress: "提交交付",
         blocked: "处理阻塞后提交交付",
-        pending_review: "等待管理者验收",
+        pending_review: "等待成品审核或客户确认",
         completed: "已完成",
         returned: "根据反馈修改后重新提交",
       }[status] || "暂无下一步";

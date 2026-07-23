@@ -1,7 +1,13 @@
 import { DataSource } from 'typeorm';
 import { UserEntity } from '../users/entities/user.entity';
 
-export type AccessRole = 'admin' | 'owner' | 'member';
+export type AccessRole =
+  | 'admin'
+  | 'owner'
+  | 'dispatcher'
+  | 'product_reviewer'
+  | 'customer_owner'
+  | 'member';
 
 export type AccessProfile = {
   roleCodes: string[];
@@ -14,6 +20,9 @@ export type AccessProfile = {
     settlement: 'all' | 'none';
   };
   ownedBusinessCategoryCodes: string[];
+  dispatchCustomerCodes: string[];
+  productReviewTypes: string[];
+  customerReviewCodes: string[];
   isAdmin: boolean;
 };
 
@@ -32,6 +41,29 @@ const ownerPermissions = [
   'task.return_owned',
   'ai_preview.view_owned',
   'ai_preview.confirm_owned',
+];
+
+const dispatcherPermissions = [
+  'page.requirements',
+  'page.dashboard',
+  'page.messages',
+  'requirement.view_owned',
+  'requirement.create',
+  'requirement.edit_owned',
+  'task.view_owned',
+  'task.assign_owned',
+  'ai_preview.view_owned',
+  'ai_preview.confirm_owned',
+];
+
+const reviewerPermissions = [
+  'page.requirements',
+  'page.dashboard',
+  'page.messages',
+  'requirement.view_owned',
+  'task.view_owned',
+  'task.accept_owned',
+  'task.return_owned',
 ];
 
 const memberPermissions = [
@@ -67,9 +99,18 @@ export async function buildAccessProfile(
   dataSource: DataSource,
   user: Pick<UserEntity, 'id' | 'username'>,
 ): Promise<AccessProfile> {
-  const [roleCodes, ownedBusinessCategoryCodes] = await Promise.all([
+  const [
+    roleCodes,
+    ownedBusinessCategoryCodes,
+    dispatchCustomerCodes,
+    productReviewTypes,
+    customerReviewCodes,
+  ] = await Promise.all([
     getRoleCodes(dataSource, user.id),
     getOwnedBusinessCategoryCodes(dataSource, user.id),
+    getDispatchCustomerCodes(dataSource, user.id),
+    getProductReviewTypes(dataSource, user.id),
+    getCustomerReviewCodes(dataSource, user.id),
   ]);
   const admin = isAdminUsername(user.username) || roleCodes.includes('admin');
   const owner =
@@ -87,37 +128,58 @@ export async function buildAccessProfile(
         settlement: 'all',
       },
       ownedBusinessCategoryCodes,
+      dispatchCustomerCodes,
+      productReviewTypes,
+      customerReviewCodes,
       isAdmin: true,
     };
   }
 
+  const dispatcher =
+    roleCodes.includes('dispatcher') || dispatchCustomerCodes.length > 0;
+  const productReviewer =
+    roleCodes.includes('product_reviewer') || productReviewTypes.length > 0;
+  const customerOwner =
+    roleCodes.includes('customer_owner') || customerReviewCodes.length > 0;
+  const effectiveRoles: AccessRole[] = [];
+  const permissionSet = new Set(memberPermissions);
   if (owner) {
-    return {
-      roleCodes,
-      effectiveRoles: ['owner'],
-      permissions: ownerPermissions,
-      dataScope: {
-        requirements: 'owned',
-        tasks: 'owned',
-        quotes: 'none',
-        settlement: 'none',
-      },
-      ownedBusinessCategoryCodes,
-      isAdmin: false,
-    };
+    effectiveRoles.push('owner');
+    ownerPermissions.forEach((permission) => permissionSet.add(permission));
   }
+  if (dispatcher) {
+    effectiveRoles.push('dispatcher');
+    dispatcherPermissions.forEach((permission) =>
+      permissionSet.add(permission),
+    );
+  }
+  if (productReviewer) {
+    effectiveRoles.push('product_reviewer');
+    reviewerPermissions.forEach((permission) => permissionSet.add(permission));
+  }
+  if (customerOwner) {
+    effectiveRoles.push('customer_owner');
+    reviewerPermissions.forEach((permission) => permissionSet.add(permission));
+  }
+  if (!effectiveRoles.length) {
+    effectiveRoles.push('member');
+  }
+  const hasScopedRole = effectiveRoles.some((role) => role !== 'member');
 
   return {
     roleCodes,
-    effectiveRoles: ['member'],
-    permissions: memberPermissions,
+    effectiveRoles,
+    permissions: [...permissionSet],
     dataScope: {
-      requirements: 'assigned',
-      tasks: 'assigned',
+      requirements: hasScopedRole ? 'owned' : 'assigned',
+      tasks: hasScopedRole ? 'owned' : 'assigned',
       quotes: 'none',
       settlement: 'none',
     },
     ownedBusinessCategoryCodes,
+    dispatchCustomerCodes,
+    productReviewTypes,
+    customerReviewCodes,
     isAdmin: false,
   };
 }
@@ -159,6 +221,79 @@ async function getOwnedBusinessCategoryCodes(
   return rows
     .map((row) => normalizeAccessBusinessCategory(row.business_category_code))
     .filter(Boolean);
+}
+
+async function getDispatchCustomerCodes(
+  dataSource: DataSource,
+  userId: string,
+) {
+  try {
+    const rows: Array<{ customer_code: string }> = await dataSource.query(
+      `
+        SELECT customer_code
+        FROM customer_workflow_members
+        WHERE deleted_at IS NULL
+          AND status = 'active'
+          AND role_code = 'dispatcher'
+          AND user_id = ?
+        ORDER BY customer_code
+      `,
+      [userId],
+    );
+    return uniqueCodes(rows.map((row) => row.customer_code));
+  } catch {
+    return [];
+  }
+}
+
+async function getProductReviewTypes(dataSource: DataSource, userId: string) {
+  try {
+    const rows: Array<{ review_type: string }> = await dataSource.query(
+      `
+        SELECT business_category_code AS review_type
+        FROM business_category_review_members
+        WHERE deleted_at IS NULL
+          AND status = 'active'
+          AND user_id = ?
+        ORDER BY review_type
+      `,
+      [userId],
+    );
+    return uniqueCodes(
+      rows.map((row) => normalizeAccessBusinessCategory(row.review_type)),
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function getCustomerReviewCodes(
+  dataSource: DataSource,
+  userId: string,
+) {
+  try {
+    const rows: Array<{ customer_code: string }> = await dataSource.query(
+      `
+        SELECT customer_code
+        FROM customer_workflow_members
+        WHERE deleted_at IS NULL
+          AND status = 'active'
+          AND role_code = 'customer_reviewer'
+          AND user_id = ?
+        ORDER BY customer_code
+      `,
+      [userId],
+    );
+    return uniqueCodes(rows.map((row) => row.customer_code));
+  } catch {
+    return [];
+  }
+}
+
+function uniqueCodes(values: Array<string | null | undefined>) {
+  return [
+    ...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean)),
+  ];
 }
 
 function isAdminUsername(username: string) {

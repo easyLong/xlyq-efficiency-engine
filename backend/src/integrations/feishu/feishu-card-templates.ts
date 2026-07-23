@@ -57,36 +57,20 @@ export function buildInteractiveCard(input: {
 }
 
 export function buildCompletedProgressCard(input: FeishuTaskCardInput) {
-  const { task, token } = input;
+  const { task, assetSheetUrl } = input;
   return buildProgressCard({
-    title: '任务进度反馈',
-    text: `任务 ${task.task_no}「${task.task_name}」已标记为已完成。`,
-    actions: [
-      callbackButton('再次打开', {
-        action: 'task_progress_reopen',
-        taskId: task.id,
-        taskNo: task.task_no,
-        token,
-      }),
-      disabledButton('已完成'),
-    ],
+    title: '任务交付流程已升级',
+    text: `任务 ${task.task_no}「${task.task_name}」需在项目资产页提交交付，一审和二审通过后才会完成。`,
+    actions: [urlButton('查看项目资产', assetSheetUrl)],
   });
 }
 
 export function buildActiveProgressCard(input: FeishuTaskCardInput) {
-  const { task, token, assetSheetUrl } = input;
+  const { task, assetSheetUrl } = input;
   return buildProgressCard({
-    title: '任务进度反馈',
-    text: `任务 ${task.task_no}「${task.task_name}」已重新打开，请继续反馈当前进度。`,
-    actions: [
-      urlButton('进行中', assetSheetUrl),
-      callbackButton('已完成', {
-        action: 'task_progress_completed',
-        taskId: task.id,
-        taskNo: task.task_no,
-        token,
-      }),
-    ],
+    title: '任务交付流程已升级',
+    text: `任务 ${task.task_no}「${task.task_name}」不再支持通过消息直接标记完成，请进入项目资产提交交付。`,
+    actions: [urlButton('填写项目资产', assetSheetUrl)],
   });
 }
 
@@ -122,18 +106,6 @@ function buildProgressCard(input: {
   };
 }
 
-function disabledButton(text: string) {
-  return {
-    tag: 'button',
-    text: {
-      tag: 'plain_text',
-      content: text,
-    },
-    type: 'default',
-    disabled: true,
-  };
-}
-
 function urlButton(text: string, url: string) {
   return {
     tag: 'button',
@@ -143,17 +115,5 @@ function urlButton(text: string, url: string) {
     },
     type: 'primary',
     url,
-  };
-}
-
-function callbackButton(text: string, value: Record<string, unknown>) {
-  return {
-    tag: 'button',
-    text: {
-      tag: 'plain_text',
-      content: text,
-    },
-    type: 'primary',
-    value,
   };
 }

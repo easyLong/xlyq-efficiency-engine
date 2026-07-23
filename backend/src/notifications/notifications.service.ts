@@ -186,11 +186,12 @@ export class NotificationsService {
       return null;
     }
 
-    const directoryUrl =
+    const directoryUrl = this.withAssetSheetStart(
       workspace.directory_url ??
-      (workspace.feishu_folder_token
-        ? `https://www.feishu.cn/drive/folder/${workspace.feishu_folder_token}`
-        : null);
+        (workspace.feishu_folder_token
+          ? `https://www.feishu.cn/drive/folder/${workspace.feishu_folder_token}`
+          : null),
+    );
     const [project, assignee] = await Promise.all([
       this.projectsRepository.findOne({ where: { id: task.project_id } }),
       workspace.assignee_user_id
@@ -311,6 +312,123 @@ export class NotificationsService {
       channels: ['in_app', 'feishu_app'],
       actionUrl: this.buildTaskAssetReviewUrl(task, reviewerUserId),
       actionText: '查看交付资产',
+    });
+  }
+
+  async notifyTaskAssetsSubmittedForProductReview(
+    task: TaskEntity,
+    assetCount: number,
+    reviewerUserIds: string[],
+  ) {
+    const recipients = [...new Set(reviewerUserIds.filter(Boolean))];
+    if (!recipients.length) {
+      return null;
+    }
+    const [project, assignee] = await Promise.all([
+      this.projectsRepository.findOne({ where: { id: task.project_id } }),
+      task.assignee_user_id
+        ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
+        : Promise.resolve(null),
+    ]);
+    const fundPlatformLabel = await this.taskFundPlatformLabel(task, project);
+    const taskDetail = await this.taskDetailForNotification(task);
+    return Promise.all(
+      recipients.map((reviewerUserId) =>
+        this.send({
+          recipientUserId: reviewerUserId,
+          title: `待成品审核：${task.task_name}`,
+          content: [
+            `任务：${task.task_name}`,
+            ...(taskDetail ? [`任务详情：${taskDetail}`] : []),
+            `基金平台：${fundPlatformLabel}`,
+            `执行人：${assignee?.display_name ?? '-'}`,
+            `交付资产：${assetCount} 项`,
+            '请先审核交付物是否符合制作规范和交付标准。',
+          ].join('\n'),
+          objectType: 'task_asset_review',
+          objectId: task.id,
+          channels: ['in_app', 'feishu_app'],
+          actionUrl: this.buildTaskAssetReviewUrl(task, reviewerUserId),
+          actionText: '进入成品审核',
+        }),
+      ),
+    );
+  }
+
+  async notifyTaskProductReviewApproved(
+    task: TaskEntity,
+    reviewerName: string,
+    customerReviewerUserIds: string[],
+  ) {
+    const recipients = [...new Set(customerReviewerUserIds.filter(Boolean))];
+    if (!recipients.length) {
+      return null;
+    }
+    const project = await this.projectsRepository.findOne({
+      where: { id: task.project_id },
+    });
+    const fundPlatformLabel = await this.taskFundPlatformLabel(task, project);
+    return Promise.all(
+      recipients.map((reviewerUserId) =>
+        this.send({
+          recipientUserId: reviewerUserId,
+          title: `待客户确认：${task.task_name}`,
+          content: [
+            `任务：${task.task_name}`,
+            `基金平台：${fundPlatformLabel}`,
+            `成品审核：已由 ${reviewerName} 通过`,
+            '请确认交付物是否符合客户/基金公司的实际需求。',
+          ].join('\n'),
+          objectType: 'task_asset_review',
+          objectId: task.id,
+          channels: ['in_app', 'feishu_app'],
+          actionUrl: this.buildTaskAssetReviewUrl(task, reviewerUserId),
+          actionText: '进入客户确认',
+        }),
+      ),
+    );
+  }
+
+  async notifyTaskCustomerReviewApproved(
+    task: TaskEntity,
+    assetCount: number,
+    recipientUserIds: string[],
+  ) {
+    return this.sendToUsers(recipientUserIds, {
+      title: `任务已完成：${task.task_name}`,
+      content: [
+        `任务名称：${task.task_name}`,
+        '确认结果：已通过',
+        `交付资产：${assetCount} 项`,
+        '交付内容已归档，可在需求面板查看统计与历史记录。',
+      ].join('\n'),
+      objectType: 'task',
+      objectId: task.id,
+      channels: ['in_app', 'feishu_app'],
+    });
+  }
+
+  async notifyTaskReviewReturned(
+    task: TaskEntity,
+    stageLabel: string,
+    reviewerName: string,
+    reason: string,
+    recipientUserIds: string[],
+  ) {
+    return this.sendToUsers(recipientUserIds, {
+      title: `任务退回修改：${task.task_name}`,
+      content: [
+        `任务名称：${task.task_name}`,
+        `审核阶段：${stageLabel}`,
+        `退回人：${reviewerName}`,
+        `退回原因：${reason}`,
+        '请修改后重新提交。',
+      ].join('\n'),
+      objectType: 'task',
+      objectId: task.id,
+      channels: ['in_app', 'feishu_app'],
+      actionUrl: this.buildTaskAssetSheetUrl(task),
+      actionText: '继续修改',
     });
   }
 
@@ -683,16 +801,23 @@ export class NotificationsService {
     return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
   }
 
-  private buildTaskProgressFeedbackUrl(task: TaskEntity) {
-    const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
-    const token = this.taskAccessToken(task);
-    return `${baseUrl.replace(/\/$/, '')}/task-progress.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}&token=${encodeURIComponent(token)}`;
-  }
-
   private buildTaskAssetSheetUrl(task: TaskEntity) {
     const baseUrl = process.env.APP_PUBLIC_BASE_URL ?? 'http://localhost:3000';
     const token = this.taskAccessToken(task);
-    return `${baseUrl.replace(/\/$/, '')}/asset-sheet.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}&token=${encodeURIComponent(token)}`;
+    return `${baseUrl.replace(/\/$/, '')}/asset-sheet.html?taskId=${task.id}&taskNo=${encodeURIComponent(task.task_no)}&token=${encodeURIComponent(token)}&start=1`;
+  }
+
+  private withAssetSheetStart(url: string | null) {
+    if (!url || !url.includes('/asset-sheet.html')) {
+      return url;
+    }
+    try {
+      const parsed = new URL(url);
+      parsed.searchParams.set('start', '1');
+      return parsed.toString();
+    } catch {
+      return url;
+    }
   }
 
   private buildTaskAssetReviewUrl(task: TaskEntity, reviewerUserId: string) {

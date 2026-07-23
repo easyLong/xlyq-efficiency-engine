@@ -1,5 +1,7 @@
 ﻿import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   OnModuleInit,
@@ -13,10 +15,10 @@ import pptxgen from 'pptxgenjs';
 import { DataSource, In, Repository } from 'typeorm';
 import {
   buildAccessProfile,
-  hasPermission,
   normalizeAccessBusinessCategory,
 } from '../common/access-control';
 import { ensureIndex } from '../common/schema-maintenance';
+import { ensureWorkflowConfigTables } from '../common/workflow-config-schema';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
 import { FeishuService } from '../integrations/feishu/feishu.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -24,16 +26,14 @@ import { ProjectEntity } from '../projects/entities/project.entity';
 import { RequirementItemEntity } from '../requirements/entities/requirement-item.entity';
 import { RequirementEntity } from '../requirements/entities/requirement.entity';
 import { UserEntity } from '../users/entities/user.entity';
+import { WorkflowConfigsService } from '../workflow-configs/workflow-configs.service';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { ExportTaskAssetsPptDto } from './dto/export-task-assets-ppt.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
-import { ReturnTaskRevisionDto } from './dto/return-task-revision.dto';
 import { SaveLocalAssetSheetDto } from './dto/save-local-asset-sheet.dto';
-import { SubmitTaskProgressFeedbackDto } from './dto/submit-task-progress-feedback.dto';
 import { UploadLocalAssetImageDto } from './dto/upload-local-asset-image.dto';
-import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskDirectoryEntity } from './entities/task-directory.entity';
 import { TaskEntity } from './entities/task.entity';
@@ -41,7 +41,10 @@ import { TaskResultFileEntity } from './entities/task-result-file.entity';
 import { TaskStatusHistoryEntity } from './entities/task-status-history.entity';
 import {
   assertTaskStatusTransition,
+  TaskReviewStage,
   TaskStatus,
+  taskDisplayStatusLabel,
+  taskReviewStageLabel,
   taskStatusLabel,
 } from './task-status';
 import { buildTaskWorkflowSnapshot } from './task-workflow';
@@ -88,6 +91,14 @@ type AssetReviewAccess = {
   userId: string | null;
 };
 
+type TaskReviewFacts = {
+  businessCategory: string | null;
+  reviewType: string | null;
+  customerCode: string | null;
+  customerName: string | null;
+  businessPlatform: string | null;
+};
+
 @Injectable()
 export class TasksService implements OnModuleInit {
   private readonly liveAssetSyncTtlMs = 2 * 60 * 1000;
@@ -118,11 +129,13 @@ export class TasksService implements OnModuleInit {
     private readonly dataSource: DataSource,
     private readonly feishuService: FeishuService,
     private readonly notificationsService: NotificationsService,
+    private readonly workflowConfigsService: WorkflowConfigsService,
   ) {}
 
   async onModuleInit() {
     await this.ensureTasksSchema();
     await this.ensureTaskStatusHistoryTable();
+    await this.ensureTaskReviewTables();
   }
 
   async findAll(
@@ -151,8 +164,15 @@ export class TasksService implements OnModuleInit {
     return task;
   }
 
-  async listStatusHistory(id: string) {
-    await this.findOne(id);
+  async findOneForUser(id: string, actingUserId: string | null) {
+    const task = await this.findOne(id);
+    await this.assertCanViewTaskAssets(task, actingUserId);
+    return task;
+  }
+
+  async listStatusHistory(id: string, actingUserId: string | null) {
+    const task = await this.findOne(id);
+    await this.assertCanViewTaskAssets(task, actingUserId);
     return this.taskStatusHistoriesRepository.find({
       where: { task_id: id },
       order: { created_at: 'DESC' },
@@ -160,8 +180,9 @@ export class TasksService implements OnModuleInit {
     });
   }
 
-  async getWorkflow(id: string) {
+  async getWorkflow(id: string, actingUserId: string | null) {
     const task = await this.findOne(id);
+    await this.assertCanViewTaskAssets(task, actingUserId);
     const [workspace, assetCount, statusHistory] = await Promise.all([
       this.taskDirectoriesRepository.findOne({ where: { task_id: id } }),
       this.countAssetsByTaskIds([id]).then((counts) => counts.get(id) ?? 0),
@@ -178,10 +199,15 @@ export class TasksService implements OnModuleInit {
       workspace: workspace
         ? {
             ...workspace,
-            directory_url: this.ensureSignedLocalAssetSheetUrl(
-              task,
-              workspace.directory_url,
-            ),
+            access_mode:
+              task.assignee_user_id === actingUserId ? 'edit' : 'read_only',
+            directory_url:
+              task.assignee_user_id === actingUserId
+                ? this.ensureSignedLocalAssetSheetUrl(
+                    task,
+                    workspace.directory_url,
+                  )
+                : `/asset-review.html?taskId=${encodeURIComponent(task.id)}`,
           }
         : null,
       assetCount,
@@ -264,14 +290,30 @@ export class TasksService implements OnModuleInit {
       return tasks;
     }
     if (profile.dataScope.tasks === 'assigned') {
-      return tasks.filter((task) => task.assignee_user_id === currentUser.id);
+      return tasks.filter((task) =>
+        [
+          task.assignee_user_id,
+          task.dispatcher_user_id,
+          task.reporter_user_id,
+          task.product_reviewer_user_id,
+          task.customer_reviewer_user_id,
+        ].includes(currentUser.id),
+      );
     }
 
     const itemIds = tasks
       .map((task) => task.requirement_item_id)
       .filter(Boolean);
     if (!itemIds.length) {
-      return tasks.filter((task) => task.reporter_user_id === currentUser.id);
+      return tasks.filter((task) =>
+        [
+          task.assignee_user_id,
+          task.dispatcher_user_id,
+          task.reporter_user_id,
+          task.product_reviewer_user_id,
+          task.customer_reviewer_user_id,
+        ].includes(currentUser.id),
+      );
     }
     const items = await this.requirementItemsRepository.find({
       where: { id: In(itemIds) },
@@ -289,8 +331,19 @@ export class TasksService implements OnModuleInit {
       requirements.map((requirement) => [requirement.id, requirement]),
     );
     const ownedCategories = new Set(profile.ownedBusinessCategoryCodes);
+    const dispatchCustomers = new Set(profile.dispatchCustomerCodes);
+    const productReviewTypes = new Set(profile.productReviewTypes);
+    const customerReviewCodes = new Set(profile.customerReviewCodes);
     return tasks.filter((task) => {
-      if (task.reporter_user_id === currentUser.id) {
+      if (
+        [
+          task.assignee_user_id,
+          task.dispatcher_user_id,
+          task.reporter_user_id,
+          task.product_reviewer_user_id,
+          task.customer_reviewer_user_id,
+        ].includes(currentUser.id)
+      ) {
         return true;
       }
       const item = task.requirement_item_id
@@ -299,8 +352,15 @@ export class TasksService implements OnModuleInit {
       const requirement = item
         ? requirementById.get(item.requirement_id)
         : null;
-      return ownedCategories.has(
-        normalizeAccessBusinessCategory(requirement?.business_category),
+      const businessCategory = normalizeAccessBusinessCategory(
+        requirement?.business_category,
+      );
+      const customerCode = String(requirement?.customer_code ?? '').trim();
+      return (
+        ownedCategories.has(businessCategory) ||
+        productReviewTypes.has(businessCategory) ||
+        dispatchCustomers.has(customerCode) ||
+        customerReviewCodes.has(customerCode)
       );
     });
   }
@@ -323,6 +383,9 @@ export class TasksService implements OnModuleInit {
     const syncableTasks = tasks.filter((task) => {
       const workspace = workspaceByTaskId.get(task.id);
       return (
+        ![TaskStatus.PendingReview, TaskStatus.Completed].includes(
+          task.status as TaskStatus,
+        ) &&
         workspace?.permission_status === 'sheet_ready' &&
         Boolean(workspace.feishu_folder_token) &&
         !this.isRecentlySynced(workspace.last_synced_at)
@@ -393,15 +456,20 @@ export class TasksService implements OnModuleInit {
       task_name: dto.taskName,
       description: dto.description ?? null,
       status: TaskStatus.Todo,
+      review_stage: TaskReviewStage.None,
       priority: this.normalizePriority(dto.priority),
       urgency_level: dto.urgencyLevel ?? null,
-      assignee_user_id: dto.assigneeUserId ?? null,
+      assignee_user_id: null,
       estimated_hours: dto.estimatedHours ?? null,
       planned_start_at: dto.plannedStartAt
         ? new Date(dto.plannedStartAt)
         : null,
       planned_end_at: dto.plannedEndAt ? new Date(dto.plannedEndAt) : null,
       reporter_user_id: null,
+      dispatcher_user_id: null,
+      product_review_type: null,
+      product_reviewer_user_id: null,
+      customer_reviewer_user_id: null,
       blocked_reason: null,
       progress_percent: 0,
     });
@@ -453,60 +521,85 @@ export class TasksService implements OnModuleInit {
     });
   }
 
-  async update(id: string, dto: UpdateTaskDto) {
+  async update(id: string, dto: UpdateTaskDto, actingUserId?: string | null) {
     const task = await this.findOne(id);
-    const fromStatus = task.status;
-    const nextStatus = dto.status
-      ? assertTaskStatusTransition(task.status, dto.status)
-      : task.status;
+    if (actingUserId !== undefined) {
+      await this.assertCanAssignTask(task, actingUserId);
+    }
     Object.assign(task, {
       task_name: dto.taskName ?? task.task_name,
       description: dto.description ?? task.description,
-      status: nextStatus,
       priority:
         dto.priority !== undefined
           ? this.normalizePriority(dto.priority)
           : task.priority,
       urgency_level: dto.urgencyLevel ?? task.urgency_level,
-      assignee_user_id: dto.assigneeUserId ?? task.assignee_user_id,
       planned_start_at: dto.plannedStartAt
         ? new Date(dto.plannedStartAt)
         : task.planned_start_at,
       planned_end_at: dto.plannedEndAt
         ? new Date(dto.plannedEndAt)
         : task.planned_end_at,
-      actual_end_at: dto.actualEndAt
-        ? new Date(dto.actualEndAt)
-        : task.actual_end_at,
       estimated_hours: dto.estimatedHours ?? task.estimated_hours,
-      progress_percent:
-        dto.progressPercent !== undefined
-          ? Number(dto.progressPercent)
-          : task.progress_percent,
-      blocked_reason: dto.blockedReason ?? task.blocked_reason,
     });
-    const saved = await this.tasksRepository.save(task);
-    await this.recordTaskStatusHistory(
-      saved,
-      fromStatus,
-      saved.status,
-      'manual_update',
-      dto.blockedReason,
-    );
-    return saved;
+    return this.tasksRepository.save(task);
   }
 
-  async assign(id: string, dto: AssignTaskDto) {
+  async assign(
+    id: string,
+    dto: AssignTaskDto,
+    dispatcherUserId?: string | null,
+  ) {
     const current = await this.findOne(id);
+    const hadAssignee = Boolean(current.assignee_user_id);
+    const dispatcherId = dispatcherUserId ?? null;
+    await this.assertCanAssignTask(current, dispatcherId);
+    if (
+      [TaskStatus.PendingReview, TaskStatus.Completed].includes(
+        current.status as TaskStatus,
+      )
+    ) {
+      throw new BadRequestException('审核中或已完成的任务不能改派');
+    }
     const shouldMarkAssigned = [
       TaskStatus.Todo,
       TaskStatus.Pending,
       TaskStatus.Returned,
     ].includes(current.status as TaskStatus);
-    const task = await this.update(id, {
-      assigneeUserId: dto.assigneeUserId,
-      status: shouldMarkAssigned ? TaskStatus.Assigned : undefined,
-    });
+    const fromStatus = current.status;
+    const nextStatus = shouldMarkAssigned
+      ? assertTaskStatusTransition(current.status, TaskStatus.Assigned)
+      : current.status;
+    const claim = await this.dataSource.query(
+      `
+        UPDATE tasks
+        SET dispatcher_user_id = COALESCE(dispatcher_user_id, ?),
+            assignee_user_id = ?,
+            status = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND deleted_at IS NULL
+          AND status = ?
+          AND (dispatcher_user_id IS NULL OR dispatcher_user_id = ?)
+      `,
+      [
+        dispatcherId,
+        dto.assigneeUserId,
+        nextStatus,
+        current.id,
+        current.status,
+        dispatcherId,
+      ],
+    );
+    this.assertAssignmentClaimWon(claim);
+    const task = await this.findOne(id);
+    await this.recordTaskStatusHistory(
+      task,
+      fromStatus,
+      task.status,
+      hadAssignee ? 'task_reassigned' : 'task_assigned',
+      null,
+    );
     if (!dto.provisionWorkspace) {
       const notification =
         await this.notificationsService.notifyTaskAssigned(task);
@@ -527,53 +620,6 @@ export class TasksService implements OnModuleInit {
       workspace: workspaceResult.workspace,
       assignmentNotification: null,
       workspaceNotification: workspaceResult.notification,
-    };
-  }
-
-  async updateStatus(id: string, dto: UpdateTaskStatusDto) {
-    const patch: UpdateTaskDto = {
-      status: dto.status,
-      blockedReason: dto.blockedReason,
-    };
-    if (dto.status === TaskStatus.Completed) {
-      patch.progressPercent = '100';
-      patch.actualEndAt = new Date().toISOString();
-    }
-    const task = await this.update(id, patch);
-    const notification =
-      await this.notificationsService.notifyTaskStatusChanged(task);
-    return {
-      task,
-      notification,
-    };
-  }
-
-  async returnRevision(id: string, dto: ReturnTaskRevisionDto) {
-    const task = await this.findOne(id);
-    const fromStatus = task.status;
-    Object.assign(task, {
-      status: assertTaskStatusTransition(task.status, TaskStatus.InProgress),
-      progress_percent: Number(dto.progressPercent ?? 60),
-      blocked_reason: dto.reason,
-      actual_end_at: null,
-    });
-    const saved = await this.tasksRepository.save(task);
-    await this.recordTaskStatusHistory(
-      saved,
-      fromStatus,
-      saved.status,
-      'return_revision',
-      dto.reason,
-    );
-    const notification =
-      await this.notificationsService.notifyTaskReturnedForRevision(
-        saved,
-        dto.reason,
-      );
-
-    return {
-      task: saved,
-      notification,
     };
   }
 
@@ -601,27 +647,28 @@ export class TasksService implements OnModuleInit {
     };
   }
 
-  async getWorkspace(id: string) {
+  async getWorkspace(id: string, actingUserId: string | null) {
     const task = await this.findOne(id);
+    await this.assertCanViewTaskAssets(task, actingUserId);
     const workspace = await this.taskDirectoriesRepository.findOne({
       where: { task_id: id },
     });
     if (!workspace) {
       return null;
     }
+    const canEdit = task.assignee_user_id === actingUserId;
     return {
       ...workspace,
-      directory_url: this.ensureSignedLocalAssetSheetUrl(
-        task,
-        workspace.directory_url,
-      ),
+      access_mode: canEdit ? 'edit' : 'read_only',
+      directory_url: canEdit
+        ? this.ensureSignedLocalAssetSheetUrl(task, workspace.directory_url)
+        : `/asset-review.html?taskId=${encodeURIComponent(task.id)}`,
     };
   }
 
-  async getAssetSheetContext(id: string, token?: string, reopen = false) {
-    let task = await this.findOne(id);
+  async getAssetSheetContext(id: string, token?: string) {
+    const task = await this.findOne(id);
     this.assertAssetSheetAccess(task, token);
-    task = await this.markTaskInProgressWhenAssetOpened(task, reopen);
     const [project, requirementItem, assignee, workspace, files] =
       await Promise.all([
         this.projectsRepository.findOne({ where: { id: task.project_id } }),
@@ -681,6 +728,56 @@ export class TasksService implements OnModuleInit {
     };
   }
 
+  async startAssetSheetWork(id: string, token?: string) {
+    const task = await this.findOne(id);
+    this.assertAssetSheetAccess(task, token);
+    if (!task.assignee_user_id) {
+      throw new BadRequestException('任务尚未指派执行人');
+    }
+    if (task.status === TaskStatus.PendingReview) {
+      throw new BadRequestException('任务正在审核中，暂不能重新开始');
+    }
+    if (task.status === TaskStatus.Completed) {
+      throw new BadRequestException('任务已完成，如需返工请由管理者发起');
+    }
+    if (task.status === TaskStatus.InProgress) {
+      return {
+        task,
+        statusLabel: taskDisplayStatusLabel(
+          task.status,
+          task.review_stage,
+          task.blocked_reason,
+        ),
+        workflow: buildTaskWorkflowSnapshot(task),
+      };
+    }
+
+    const fromStatus = task.status;
+    task.status = assertTaskStatusTransition(
+      task.status,
+      TaskStatus.InProgress,
+    );
+    task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
+    task.actual_end_at = null;
+    const saved = await this.tasksRepository.save(task);
+    await this.recordTaskStatusHistory(
+      saved,
+      fromStatus,
+      saved.status,
+      'asset_sheet_started',
+      null,
+    );
+    return {
+      task: saved,
+      statusLabel: taskDisplayStatusLabel(
+        saved.status,
+        saved.review_stage,
+        saved.blocked_reason,
+      ),
+      workflow: buildTaskWorkflowSnapshot(saved),
+    };
+  }
+
   async getProgressFeedbackContext(id: string, token?: string) {
     const task = await this.findOne(id);
     this.assertAssetSheetAccess(task, token);
@@ -712,7 +809,7 @@ export class TasksService implements OnModuleInit {
           }
         : null,
       workspace,
-      statusLabel: this.publicTaskStatusLabel(task.status),
+      statusLabel: this.publicTaskStatusLabel(task),
       workflow: buildTaskWorkflowSnapshot(task),
       assigneeSession: await this.publicAssigneeSession(task),
       assetSheetUrl:
@@ -720,46 +817,24 @@ export class TasksService implements OnModuleInit {
     };
   }
 
-  async submitProgressFeedback(
+  async provisionWorkspace(
     id: string,
-    dto: SubmitTaskProgressFeedbackDto,
-    token?: string,
+    dto: ProvisionTaskWorkspaceDto,
+    actingUserId?: string | null,
   ) {
     const task = await this.findOne(id);
-    this.assertAssetSheetAccess(task, token);
-    const fromStatus = task.status;
-    task.status = assertTaskStatusTransition(task.status, dto.status);
-    if (dto.status === TaskStatus.InProgress) {
-      task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
-      task.actual_end_at = null;
+    if (actingUserId !== undefined) {
+      await this.assertCanAssignTask(task, actingUserId);
     }
-    if (dto.status === TaskStatus.Completed) {
-      task.progress_percent = 100;
-      task.actual_end_at = new Date();
-    }
-    const saved = await this.tasksRepository.save(task);
-    await this.recordTaskStatusHistory(
-      saved,
-      fromStatus,
-      saved.status,
-      'public_progress_feedback',
-      null,
-    );
-    return {
-      task: saved,
-      statusLabel: this.publicTaskStatusLabel(saved.status),
-      workflow: buildTaskWorkflowSnapshot(saved),
-      assigneeSession: await this.publicAssigneeSession(saved),
-      assetSheetUrl: this.buildLocalAssetSheetUrl(saved),
-    };
-  }
-
-  async provisionWorkspace(id: string, dto: ProvisionTaskWorkspaceDto) {
-    const task = await this.findOne(id);
-    const assigneeUserId = dto.assigneeUserId ?? task.assignee_user_id;
+    const assigneeUserId = task.assignee_user_id;
     if (!assigneeUserId) {
       throw new BadRequestException(
         'Task must have an assignee before provisioning workspace permission',
+      );
+    }
+    if (dto.assigneeUserId && dto.assigneeUserId !== assigneeUserId) {
+      throw new BadRequestException(
+        '资产目录执行人必须与任务执行人一致，请先使用改派功能',
       );
     }
 
@@ -903,6 +978,19 @@ export class TasksService implements OnModuleInit {
       throw new NotFoundException('Task asset sheet not found');
     }
     if (
+      [TaskStatus.PendingReview, TaskStatus.Completed].includes(
+        task.status as TaskStatus,
+      )
+    ) {
+      return {
+        task,
+        workspace,
+        syncedCount: 0,
+        skipped: true,
+        reason: '审核中或已完成的任务已锁定交付快照。',
+      };
+    }
+    if (
       workspace.permission_status !== 'sheet_ready' ||
       !workspace.feishu_folder_token
     ) {
@@ -973,10 +1061,7 @@ export class TasksService implements OnModuleInit {
     const assetCount = this.billableAssetCount(created);
     const reviewNotification =
       savedTask.status === TaskStatus.PendingReview && assetCount > 0
-        ? await this.notificationsService.notifyTaskAssetsSubmittedForReview(
-            savedTask,
-            assetCount,
-          )
+        ? await this.notifyProductReviewers(savedTask, assetCount)
         : null;
 
     return {
@@ -997,7 +1082,7 @@ export class TasksService implements OnModuleInit {
   ) {
     const task = await this.findOne(id);
     this.assertAssetSheetAccess(task, token);
-    const fromStatus = task.status;
+    this.assertTaskCanSubmitDelivery(task);
     const assetUrls = this.uniqueTextValues(
       new Set(
         (dto.assets ?? [])
@@ -1017,12 +1102,23 @@ export class TasksService implements OnModuleInit {
       );
     }
 
-    const { created, savedTask } = await this.dataSource.transaction(
-      async (manager) => {
+    const productReviewType = await this.resolveTaskProductReviewType(task);
+    const { created, savedTask, fromStatus, fromReviewStage } =
+      await this.dataSource.transaction(async (manager) => {
         const fileRepository = manager.getRepository(TaskResultFileEntity);
         const taskRepository = manager.getRepository(TaskEntity);
+        const lockedTask = await taskRepository.findOne({
+          where: { id: task.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!lockedTask) {
+          throw new NotFoundException(`Task ${task.id} not found`);
+        }
+        this.assertTaskCanSubmitDelivery(lockedTask);
+        const fromStatus = lockedTask.status;
+        const fromReviewStage = lockedTask.review_stage ?? TaskReviewStage.None;
         await fileRepository.softDelete({
-          task_id: task.id,
+          task_id: lockedTask.id,
           source: In([
             'local_asset_sheet',
             'local_asset_sheet_image',
@@ -1039,12 +1135,12 @@ export class TasksService implements OnModuleInit {
         }) => {
           const file = fileRepository.create({
             id: randomUUID(),
-            task_id: task.id,
-            project_id: task.project_id,
+            task_id: lockedTask.id,
+            project_id: lockedTask.project_id,
             file_name: input.fileName,
             file_url: input.fileUrl,
             feishu_file_token: null,
-            uploaded_by_user_id: task.assignee_user_id,
+            uploaded_by_user_id: lockedTask.assignee_user_id,
             source: input.source,
             remark: input.remark,
           });
@@ -1069,33 +1165,31 @@ export class TasksService implements OnModuleInit {
         }
         for (const [index, linkUrl] of linkUrls.entries()) {
           await createFile({
-            fileName: linkUrls.length > 1 ? `合作链接-${index + 1}` : '合作链接',
+            fileName:
+              linkUrls.length > 1 ? `合作链接-${index + 1}` : '合作链接',
             fileUrl: linkUrl,
             source: 'local_asset_sheet_link',
             remark: `来自本地任务通知页合作链接区第 ${index + 1} 条`,
           });
         }
 
-        const assetCount = this.billableAssetCount(created);
-        let savedTask = task;
-        if (
-          assetCount > 0 &&
-          task.status !== TaskStatus.Completed &&
-          task.status !== TaskStatus.PendingReview
-        ) {
-          task.status = assertTaskStatusTransition(
-            task.status,
-            TaskStatus.PendingReview,
-          );
-          task.progress_percent = Math.max(
-            Number(task.progress_percent ?? 0),
-            90,
-          );
-          savedTask = await taskRepository.save(task);
-        }
-        return { created, savedTask };
-      },
-    );
+        lockedTask.status = assertTaskStatusTransition(
+          lockedTask.status,
+          TaskStatus.PendingReview,
+        );
+        lockedTask.review_stage = TaskReviewStage.ProductReview;
+        lockedTask.product_review_type = productReviewType;
+        lockedTask.product_reviewer_user_id = null;
+        lockedTask.customer_reviewer_user_id = null;
+        lockedTask.progress_percent = Math.max(
+          Number(lockedTask.progress_percent ?? 0),
+          90,
+        );
+        lockedTask.blocked_reason = null;
+        lockedTask.actual_end_at = null;
+        const savedTask = await taskRepository.save(lockedTask);
+        return { created, savedTask, fromStatus, fromReviewStage };
+      });
     await this.recordTaskStatusHistory(
       savedTask,
       fromStatus,
@@ -1104,12 +1198,25 @@ export class TasksService implements OnModuleInit {
       null,
     );
     const assetCount = this.billableAssetCount(created);
+    if (
+      savedTask.status === TaskStatus.PendingReview &&
+      savedTask.review_stage === TaskReviewStage.ProductReview
+    ) {
+      await this.recordTaskReview(
+        savedTask,
+        TaskReviewStage.ProductReview,
+        'submitted',
+        null,
+        fromStatus,
+        savedTask.status,
+        fromReviewStage,
+        savedTask.review_stage,
+        null,
+      );
+    }
     const reviewNotification =
       savedTask.status === TaskStatus.PendingReview && assetCount > 0
-        ? await this.notificationsService.notifyTaskAssetsSubmittedForReview(
-            savedTask,
-            assetCount,
-          )
+        ? await this.notifyProductReviewers(savedTask, assetCount)
         : null;
 
     return {
@@ -1130,6 +1237,7 @@ export class TasksService implements OnModuleInit {
   ) {
     const task = await this.findOne(id);
     this.assertAssetSheetAccess(task, token);
+    this.assertTaskCanSubmitDelivery(task);
     await this.assertUploadCapacity(task.id);
     const match =
       /^data:image\/(png|jpe?g|webp|gif);base64,([a-z0-9+/=]+)$/i.exec(
@@ -1259,42 +1367,12 @@ export class TasksService implements OnModuleInit {
       .digest('hex');
   }
 
-  private async markTaskInProgressWhenAssetOpened(
-    task: TaskEntity,
-    reopen = false,
-  ) {
-    if (
-      [
-        TaskStatus.Todo,
-        TaskStatus.Pending,
-        TaskStatus.Assigned,
-        TaskStatus.Returned,
-        ...(reopen ? [TaskStatus.Completed] : []),
-      ].includes(task.status as TaskStatus) &&
-      task.assignee_user_id
-    ) {
-      const fromStatus = task.status;
-      task.status = assertTaskStatusTransition(
-        task.status,
-        TaskStatus.InProgress,
-      );
-      task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 30);
-      task.actual_end_at = null;
-      const saved = await this.tasksRepository.save(task);
-      await this.recordTaskStatusHistory(
-        saved,
-        fromStatus,
-        saved.status,
-        'asset_sheet_opened',
-        reopen ? 'reopen' : null,
-      );
-      return saved;
-    }
-    return task;
-  }
-
-  private publicTaskStatusLabel(status: string | null) {
-    return taskStatusLabel(status);
+  private publicTaskStatusLabel(task: TaskEntity) {
+    return taskDisplayStatusLabel(
+      task.status,
+      task.review_stage,
+      task.blocked_reason,
+    );
   }
 
   private async publicAssigneeSession(task: TaskEntity) {
@@ -1343,6 +1421,9 @@ export class TasksService implements OnModuleInit {
         },
         owned_business_category_codes:
           profile?.ownedBusinessCategoryCodes ?? [],
+        dispatch_customer_codes: profile?.dispatchCustomerCodes ?? [],
+        product_review_types: profile?.productReviewTypes ?? [],
+        customer_review_codes: profile?.customerReviewCodes ?? [],
         is_admin: profile?.isAdmin ?? false,
       },
     };
@@ -1356,6 +1437,29 @@ export class TasksService implements OnModuleInit {
     const ok = timingSafeEqual(Buffer.from(token), Buffer.from(expected));
     if (!ok) {
       throw new UnauthorizedException('Invalid task access token');
+    }
+  }
+
+  private assertTaskCanSubmitDelivery(task: TaskEntity) {
+    if (!task.assignee_user_id) {
+      throw new BadRequestException('任务尚未指派执行人');
+    }
+    if (task.status === TaskStatus.PendingReview) {
+      throw new ConflictException('任务正在审核中，请等待审核结果后再操作');
+    }
+    if (task.status === TaskStatus.Completed) {
+      throw new ConflictException('任务已完成，不能再修改交付内容');
+    }
+    const submittableStatuses = new Set<string>([
+      TaskStatus.Todo,
+      TaskStatus.Pending,
+      TaskStatus.Assigned,
+      TaskStatus.InProgress,
+      TaskStatus.Blocked,
+      TaskStatus.Returned,
+    ]);
+    if (!submittableStatuses.has(task.status)) {
+      throw new BadRequestException(`当前任务状态不能提交交付：${task.status}`);
     }
   }
 
@@ -1400,24 +1504,45 @@ export class TasksService implements OnModuleInit {
   ) {
     if (
       assetCount <= 0 ||
-      task.status === TaskStatus.Completed ||
-      task.status === TaskStatus.PendingReview
+      task.status === TaskStatus.PendingReview ||
+      task.status === TaskStatus.Completed
     ) {
       return task;
     }
 
     const fromStatus = task.status;
-    task.status = assertTaskStatusTransition(
-      task.status,
-      TaskStatus.PendingReview,
-    );
+    const fromReviewStage = task.review_stage ?? TaskReviewStage.None;
+    const productReviewType = await this.resolveTaskProductReviewType(task);
+    if (task.status !== TaskStatus.PendingReview) {
+      task.status = assertTaskStatusTransition(
+        task.status,
+        TaskStatus.PendingReview,
+      );
+    }
+    task.review_stage = TaskReviewStage.ProductReview;
+    task.product_review_type = productReviewType;
+    task.product_reviewer_user_id = null;
+    task.customer_reviewer_user_id = null;
     task.progress_percent = Math.max(Number(task.progress_percent ?? 0), 90);
+    task.blocked_reason = null;
+    task.actual_end_at = null;
     const saved = await this.tasksRepository.save(task);
     await this.recordTaskStatusHistory(
       saved,
       fromStatus,
       saved.status,
       'asset_submitted',
+      null,
+    );
+    await this.recordTaskReview(
+      saved,
+      TaskReviewStage.ProductReview,
+      'submitted',
+      null,
+      fromStatus,
+      saved.status,
+      fromReviewStage,
+      saved.review_stage,
       null,
     );
     return saved;
@@ -1482,6 +1607,48 @@ export class TasksService implements OnModuleInit {
     );
   }
 
+  private async recordTaskReview(
+    task: TaskEntity,
+    reviewStage: string,
+    reviewResult: string,
+    reviewerUserId: string | null,
+    fromStatus: string | null,
+    toStatus: string | null,
+    fromReviewStage: string | null,
+    toReviewStage: string | null,
+    reviewComment: string | null,
+  ) {
+    await this.dataSource.query(
+      `
+        INSERT INTO task_review_records (
+          id,
+          task_id,
+          review_stage,
+          review_result,
+          reviewer_user_id,
+          from_status,
+          to_status,
+          from_review_stage,
+          to_review_stage,
+          review_comment
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        randomUUID(),
+        task.id,
+        reviewStage,
+        reviewResult,
+        reviewerUserId,
+        fromStatus,
+        toStatus,
+        fromReviewStage,
+        toReviewStage,
+        reviewComment,
+      ],
+    );
+  }
+
   private async ensureTasksSchema() {
     await this.addColumnIfMissing(
       'tasks',
@@ -1492,6 +1659,31 @@ export class TasksService implements OnModuleInit {
       'tasks',
       'urgency_level',
       'urgency_level VARCHAR(32) NULL AFTER priority',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'review_stage',
+      "review_stage VARCHAR(32) NOT NULL DEFAULT 'none' AFTER status",
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'dispatcher_user_id',
+      'dispatcher_user_id CHAR(36) NULL AFTER reporter_user_id',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'product_reviewer_user_id',
+      'product_reviewer_user_id CHAR(36) NULL AFTER dispatcher_user_id',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'customer_reviewer_user_id',
+      'customer_reviewer_user_id CHAR(36) NULL AFTER product_reviewer_user_id',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'product_review_type',
+      'product_review_type VARCHAR(32) NULL AFTER review_stage',
     );
     await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_project_created', [
       'project_id',
@@ -1514,6 +1706,18 @@ export class TasksService implements OnModuleInit {
     await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_project_task_no', [
       'project_id',
       'task_no',
+    ]);
+    await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_review_stage', [
+      'review_stage',
+    ]);
+    await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_dispatcher', [
+      'dispatcher_user_id',
+    ]);
+    await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_product_reviewer', [
+      'product_reviewer_user_id',
+    ]);
+    await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_customer_reviewer', [
+      'customer_reviewer_user_id',
     ]);
     await ensureIndex(
       this.dataSource,
@@ -1568,6 +1772,100 @@ export class TasksService implements OnModuleInit {
         KEY idx_task_status_histories_task_created (task_id, created_at),
         CONSTRAINT fk_task_status_histories_task FOREIGN KEY (task_id) REFERENCES tasks (id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务状态历史表'
+    `);
+  }
+
+  private async ensureTaskReviewTables() {
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS task_review_records (
+        id CHAR(36) NOT NULL,
+        task_id CHAR(36) NOT NULL,
+        review_stage VARCHAR(32) NOT NULL,
+        review_result VARCHAR(32) NOT NULL,
+        reviewer_user_id CHAR(36) NULL,
+        from_status VARCHAR(32) NULL,
+        to_status VARCHAR(32) NULL,
+        from_review_stage VARCHAR(32) NULL,
+        to_review_stage VARCHAR(32) NULL,
+        review_comment VARCHAR(1000) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
+        PRIMARY KEY (id),
+        KEY idx_task_review_records_task_created (task_id, created_at),
+        KEY idx_task_review_records_reviewer (reviewer_user_id),
+        KEY idx_task_review_records_stage (review_stage)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务审核记录表'
+    `);
+    await ensureWorkflowConfigTables(this.dataSource);
+    await this.normalizeLegacyReviewStages();
+  }
+
+  private async normalizeLegacyReviewStages() {
+    await this.dataSource.query(`
+      UPDATE tasks
+      SET review_stage = 'customer_review',
+          updated_at = updated_at
+      WHERE deleted_at IS NULL
+        AND status = 'pending_review'
+        AND (review_stage IS NULL OR review_stage = 'none')
+    `);
+    await this.dataSource.query(`
+      UPDATE tasks
+      SET review_stage = 'done',
+          updated_at = updated_at
+      WHERE deleted_at IS NULL
+        AND status = 'completed'
+        AND (review_stage IS NULL OR review_stage = 'none')
+    `);
+    await this.dataSource.query(`
+      INSERT INTO task_review_records (
+        id,
+        task_id,
+        review_stage,
+        review_result,
+        reviewer_user_id,
+        from_status,
+        to_status,
+        from_review_stage,
+        to_review_stage,
+        review_comment
+      )
+      SELECT
+        UUID(),
+        task.id,
+        CASE
+          WHEN task.status = 'completed' THEN 'done'
+          ELSE 'customer_review'
+        END,
+        'legacy_migrated',
+        NULL,
+        task.status,
+        task.status,
+        'none',
+        task.review_stage,
+        '历史流程迁移：审核人信息未知，保留原业务结果。'
+      FROM tasks task
+      WHERE task.deleted_at IS NULL
+        AND (
+          (
+            task.status = 'completed'
+            AND task.review_stage = 'done'
+            AND task.customer_reviewer_user_id IS NULL
+          )
+          OR (
+            task.status = 'pending_review'
+            AND task.review_stage = 'customer_review'
+            AND task.product_reviewer_user_id IS NULL
+          )
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM task_review_records record
+          WHERE record.task_id = task.id
+            AND record.review_result = 'legacy_migrated'
+            AND record.deleted_at IS NULL
+        )
     `);
   }
 
@@ -2286,33 +2584,70 @@ export class TasksService implements OnModuleInit {
     });
   }
 
+  async listResultFilesForUser(id: string, actingUserId: string | null) {
+    const task = await this.findOne(id);
+    await this.assertCanViewTaskAssets(task, actingUserId);
+    return this.taskResultFilesRepository.find({
+      where: { task_id: id },
+      order: { created_at: 'DESC' },
+    });
+  }
+
   async getAssetReviewContext(
     id: string,
     token?: string,
     authorizationHeader?: string,
   ) {
     const task = await this.findOne(id);
-    await this.assertAssetReviewAccess(task, token, authorizationHeader);
-    const [project, requirementItem, assignee, reporter, files, detailRows] =
-      await Promise.all([
-        this.projectsRepository.findOne({ where: { id: task.project_id } }),
-        task.requirement_item_id
-          ? this.requirementItemsRepository.findOne({
-              where: { id: task.requirement_item_id },
-            })
-          : Promise.resolve(null),
-        task.assignee_user_id
-          ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
-          : Promise.resolve(null),
-        task.reporter_user_id
-          ? this.usersRepository.findOne({ where: { id: task.reporter_user_id } })
-          : Promise.resolve(null),
-        this.taskResultFilesRepository.find({
-          where: { task_id: id },
-          order: { created_at: 'ASC' },
-        }),
-        this.dataSource.query(
-          `
+    const access = await this.assertAssetReviewAccess(
+      task,
+      token,
+      authorizationHeader,
+    );
+    const [
+      project,
+      requirementItem,
+      assignee,
+      reporter,
+      dispatcher,
+      productReviewer,
+      customerReviewer,
+      files,
+      detailRows,
+    ] = await Promise.all([
+      this.projectsRepository.findOne({ where: { id: task.project_id } }),
+      task.requirement_item_id
+        ? this.requirementItemsRepository.findOne({
+            where: { id: task.requirement_item_id },
+          })
+        : Promise.resolve(null),
+      task.assignee_user_id
+        ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
+        : Promise.resolve(null),
+      task.reporter_user_id
+        ? this.usersRepository.findOne({ where: { id: task.reporter_user_id } })
+        : Promise.resolve(null),
+      task.dispatcher_user_id
+        ? this.usersRepository.findOne({
+            where: { id: task.dispatcher_user_id },
+          })
+        : Promise.resolve(null),
+      task.product_reviewer_user_id
+        ? this.usersRepository.findOne({
+            where: { id: task.product_reviewer_user_id },
+          })
+        : Promise.resolve(null),
+      task.customer_reviewer_user_id
+        ? this.usersRepository.findOne({
+            where: { id: task.customer_reviewer_user_id },
+          })
+        : Promise.resolve(null),
+      this.taskResultFilesRepository.find({
+        where: { task_id: id },
+        order: { created_at: 'ASC' },
+      }),
+      this.dataSource.query(
+        `
             SELECT
               requirement.id AS requirementId,
               requirement.requirement_code AS requirementCode,
@@ -2329,9 +2664,9 @@ export class TasksService implements OnModuleInit {
             WHERE task.id = ?
             LIMIT 1
           `,
-          [task.id],
-        ),
-      ]);
+        [task.id],
+      ),
+    ]);
     const detail = detailRows?.[0] ?? {};
     const imageFiles = files.filter((file) => this.isReviewImageFile(file));
     const linkFiles = files.filter((file) => this.isReviewLinkFile(file));
@@ -2339,11 +2674,36 @@ export class TasksService implements OnModuleInit {
       (file) => !this.isReviewImageFile(file) && !this.isReviewLinkFile(file),
     );
 
+    const isLegacyPendingReview =
+      task.status === TaskStatus.PendingReview &&
+      (!task.review_stage || task.review_stage === TaskReviewStage.None);
+    const canProductReview =
+      task.status === TaskStatus.PendingReview &&
+      task.review_stage === TaskReviewStage.ProductReview &&
+      Boolean(access.userId) &&
+      (await this.canProductReviewTask(task, access.userId));
+    const canCustomerReview =
+      task.status === TaskStatus.PendingReview &&
+      (task.review_stage === TaskReviewStage.CustomerReview ||
+        isLegacyPendingReview) &&
+      Boolean(access.userId) &&
+      (await this.canCustomerReviewTask(task, access.userId));
+    const reviewStageLabel = isLegacyPendingReview
+      ? taskReviewStageLabel(TaskReviewStage.CustomerReview)
+      : taskReviewStageLabel(task.review_stage);
+
     return {
       task: {
         ...task,
-        status_label: taskStatusLabel(task.status),
+        status_label: taskDisplayStatusLabel(
+          task.status,
+          task.review_stage,
+          task.blocked_reason,
+        ),
+        review_stage_label: reviewStageLabel,
       },
+      reviewStage: task.review_stage ?? TaskReviewStage.None,
+      reviewStageLabel: reviewStageLabel,
       project,
       requirement: {
         id: detail.requirementId ?? null,
@@ -2359,10 +2719,15 @@ export class TasksService implements OnModuleInit {
         customer_name: detail.customerName ?? project?.project_name ?? null,
       },
       requirementItem,
-      assignee: assignee
-        ? this.publicUserSummary(assignee)
-        : null,
+      assignee: assignee ? this.publicUserSummary(assignee) : null,
       reporter: reporter ? this.publicUserSummary(reporter) : null,
+      dispatcher: dispatcher ? this.publicUserSummary(dispatcher) : null,
+      productReviewer: productReviewer
+        ? this.publicUserSummary(productReviewer)
+        : null,
+      customerReviewer: customerReviewer
+        ? this.publicUserSummary(customerReviewer)
+        : null,
       assets: {
         images: imageFiles.map((file) => this.assetReviewFile(file)),
         links: linkFiles.map((file) => this.assetReviewFile(file)),
@@ -2371,7 +2736,9 @@ export class TasksService implements OnModuleInit {
         totalCount: files.length,
         billableCount: this.billableAssetCount(files),
       },
-      canReview: task.status === TaskStatus.PendingReview,
+      canProductReview,
+      canCustomerReview,
+      canReview: canProductReview || canCustomerReview,
     };
   }
 
@@ -2381,8 +2748,35 @@ export class TasksService implements OnModuleInit {
     authorizationHeader?: string,
   ) {
     const task = await this.findOne(id);
-    await this.assertAssetReviewAccess(task, token, authorizationHeader, true);
-    return this.updateStatus(id, { status: TaskStatus.Completed });
+    const access = await this.assertAssetReviewAccess(
+      task,
+      token,
+      authorizationHeader,
+      true,
+    );
+    const reviewerUserId = access.userId;
+    if (!reviewerUserId) {
+      throw new UnauthorizedException('No review user found');
+    }
+    if (
+      task.status === TaskStatus.PendingReview &&
+      task.review_stage === TaskReviewStage.ProductReview
+    ) {
+      return this.approveProductReview(task, reviewerUserId);
+    }
+    if (
+      task.status === TaskStatus.PendingReview &&
+      task.review_stage === TaskReviewStage.CustomerReview
+    ) {
+      return this.approveCustomerReview(task, reviewerUserId);
+    }
+    if (
+      task.status === TaskStatus.PendingReview &&
+      (!task.review_stage || task.review_stage === TaskReviewStage.None)
+    ) {
+      return this.approveCustomerReview(task, reviewerUserId);
+    }
+    throw new BadRequestException('当前任务不在可审核阶段');
   }
 
   async returnAssetReview(
@@ -2392,16 +2786,299 @@ export class TasksService implements OnModuleInit {
     authorizationHeader?: string,
   ) {
     const task = await this.findOne(id);
-    await this.assertAssetReviewAccess(task, token, authorizationHeader, true);
+    const access = await this.assertAssetReviewAccess(
+      task,
+      token,
+      authorizationHeader,
+      true,
+    );
+    const reviewerUserId = access.userId;
+    if (!reviewerUserId) {
+      throw new UnauthorizedException('No review user found');
+    }
     const trimmedReason = String(reason ?? '').trim();
     if (!trimmedReason) {
       throw new BadRequestException('请填写退回修改原因');
     }
-    return this.returnRevision(id, { reason: trimmedReason });
+    return this.returnReview(task, reviewerUserId, trimmedReason);
   }
 
-  async registerResultFile(id: string, dto: RegisterTaskResultFileDto) {
+  private async approveProductReview(task: TaskEntity, reviewerUserId: string) {
+    if (!(await this.canProductReviewTask(task, reviewerUserId))) {
+      throw new UnauthorizedException(
+        'No permission to approve product review',
+      );
+    }
+    const fromStatus = task.status;
+    const fromReviewStage = task.review_stage ?? TaskReviewStage.None;
+    const reviewer = await this.usersRepository.findOne({
+      where: { id: reviewerUserId },
+    });
+    const transition = await this.dataSource.query(
+      `
+        UPDATE tasks
+        SET review_stage = ?,
+            product_reviewer_user_id = ?,
+            progress_percent = GREATEST(COALESCE(progress_percent, 0), 95),
+            blocked_reason = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND deleted_at IS NULL
+          AND status = ?
+          AND review_stage = ?
+      `,
+      [
+        TaskReviewStage.CustomerReview,
+        reviewerUserId,
+        task.id,
+        TaskStatus.PendingReview,
+        TaskReviewStage.ProductReview,
+      ],
+    );
+    this.assertReviewTransitionWon(transition, '一审');
+    const saved = await this.findOne(task.id);
+    await this.recordTaskReview(
+      saved,
+      TaskReviewStage.ProductReview,
+      'approved',
+      reviewerUserId,
+      fromStatus,
+      saved.status,
+      fromReviewStage,
+      saved.review_stage,
+      null,
+    );
+    const customerReviewerIds = await this.customerReviewerIds(saved);
+    const notification =
+      await this.notificationsService.notifyTaskProductReviewApproved(
+        saved,
+        reviewer?.display_name ?? reviewer?.username ?? '成品负责人',
+        customerReviewerIds,
+      );
+    return {
+      task: saved,
+      workflow: buildTaskWorkflowSnapshot(saved),
+      notification,
+    };
+  }
+
+  private async approveCustomerReview(
+    task: TaskEntity,
+    reviewerUserId: string,
+  ) {
+    if (!(await this.canCustomerReviewTask(task, reviewerUserId))) {
+      throw new UnauthorizedException(
+        'No permission to approve customer review',
+      );
+    }
+    const fromStatus = task.status;
+    const fromReviewStage = task.review_stage ?? TaskReviewStage.None;
+    const completedStatus = assertTaskStatusTransition(
+      task.status,
+      TaskStatus.Completed,
+    );
+    const transition = await this.dataSource.query(
+      `
+        UPDATE tasks
+        SET status = ?,
+            review_stage = ?,
+            customer_reviewer_user_id = ?,
+            progress_percent = 100,
+            actual_end_at = CURRENT_TIMESTAMP,
+            blocked_reason = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND deleted_at IS NULL
+          AND status = ?
+          AND (
+            review_stage = ?
+            OR review_stage = ?
+            OR review_stage IS NULL
+          )
+      `,
+      [
+        completedStatus,
+        TaskReviewStage.Done,
+        reviewerUserId,
+        task.id,
+        TaskStatus.PendingReview,
+        TaskReviewStage.CustomerReview,
+        TaskReviewStage.None,
+      ],
+    );
+    this.assertReviewTransitionWon(transition, '二审');
+    const saved = await this.findOne(task.id);
+    await this.recordTaskStatusHistory(
+      saved,
+      fromStatus,
+      saved.status,
+      'customer_review_approved',
+      null,
+    );
+    await this.recordTaskReview(
+      saved,
+      TaskReviewStage.CustomerReview,
+      'approved',
+      reviewerUserId,
+      fromStatus,
+      saved.status,
+      fromReviewStage,
+      saved.review_stage,
+      null,
+    );
+    const assetCount = await this.taskResultFilesRepository.count({
+      where: { task_id: task.id },
+    });
+    const notification =
+      await this.notificationsService.notifyTaskCustomerReviewApproved(
+        saved,
+        assetCount,
+        await this.taskCompletionRecipientIds(saved),
+      );
+    return {
+      task: saved,
+      workflow: buildTaskWorkflowSnapshot(saved),
+      notification,
+    };
+  }
+
+  private async returnReview(
+    task: TaskEntity,
+    reviewerUserId: string,
+    reason: string,
+  ) {
+    const stage = task.review_stage ?? TaskReviewStage.None;
+    if (
+      stage === TaskReviewStage.ProductReview &&
+      !(await this.canProductReviewTask(task, reviewerUserId))
+    ) {
+      throw new UnauthorizedException('No permission to return product review');
+    }
+    if (
+      stage === TaskReviewStage.CustomerReview &&
+      !(await this.canCustomerReviewTask(task, reviewerUserId))
+    ) {
+      throw new UnauthorizedException(
+        'No permission to return customer review',
+      );
+    }
+    if (
+      stage === TaskReviewStage.None &&
+      !(await this.canCustomerReviewTask(task, reviewerUserId))
+    ) {
+      throw new UnauthorizedException(
+        'No permission to return customer review',
+      );
+    }
+    const fromStatus = task.status;
+    const fromReviewStage = task.review_stage ?? TaskReviewStage.None;
+    const reviewer = await this.usersRepository.findOne({
+      where: { id: reviewerUserId },
+    });
+    const inProgressStatus = assertTaskStatusTransition(
+      task.status,
+      TaskStatus.InProgress,
+    );
+    const stageCondition =
+      stage === TaskReviewStage.None
+        ? '(review_stage = ? OR review_stage IS NULL)'
+        : 'review_stage = ?';
+    const transition = await this.dataSource.query(
+      `
+        UPDATE tasks
+        SET status = ?,
+            review_stage = ?,
+            progress_percent = 60,
+            blocked_reason = ?,
+            actual_end_at = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND deleted_at IS NULL
+          AND status = ?
+          AND ${stageCondition}
+      `,
+      [
+        inProgressStatus,
+        TaskReviewStage.None,
+        reason,
+        task.id,
+        TaskStatus.PendingReview,
+        stage,
+      ],
+    );
+    this.assertReviewTransitionWon(
+      transition,
+      stage === TaskReviewStage.ProductReview ? '一审' : '二审',
+    );
+    const saved = await this.findOne(task.id);
+    await this.recordTaskStatusHistory(
+      saved,
+      fromStatus,
+      saved.status,
+      'review_returned',
+      reason,
+    );
+    await this.recordTaskReview(
+      saved,
+      stage,
+      'returned',
+      reviewerUserId,
+      fromStatus,
+      saved.status,
+      fromReviewStage,
+      saved.review_stage,
+      reason,
+    );
+    const notification =
+      await this.notificationsService.notifyTaskReviewReturned(
+        saved,
+        taskReviewStageLabel(stage),
+        reviewer?.display_name ?? reviewer?.username ?? '审核人',
+        reason,
+        await this.taskReturnRecipientIds(saved),
+      );
+    return {
+      task: saved,
+      workflow: buildTaskWorkflowSnapshot(saved),
+      notification,
+    };
+  }
+
+  private assertReviewTransitionWon(result: unknown, stageLabel: string) {
+    const queryResult = result as {
+      affectedRows?: number;
+      0?: { affectedRows?: number };
+    };
+    const affectedRows = Number(
+      queryResult?.affectedRows ?? queryResult?.[0]?.affectedRows ?? 0,
+    );
+    if (!affectedRows) {
+      throw new ConflictException(
+        `该任务已由其他${stageLabel}人员处理，请刷新后查看最新状态`,
+      );
+    }
+  }
+
+  private assertAssignmentClaimWon(result: unknown) {
+    const queryResult = result as {
+      affectedRows?: number;
+      0?: { affectedRows?: number };
+    };
+    const affectedRows = Number(
+      queryResult?.affectedRows ?? queryResult?.[0]?.affectedRows ?? 0,
+    );
+    if (!affectedRows) {
+      throw new ConflictException('该任务已由其他派发人接管，请刷新后查看');
+    }
+  }
+
+  async registerResultFile(
+    id: string,
+    dto: RegisterTaskResultFileDto,
+    actingUserId: string | null,
+  ) {
     const task = await this.findOne(id);
+    await this.assertCanSubmitTaskAssets(task, actingUserId);
     const file = this.taskResultFilesRepository.create({
       id: randomUUID(),
       task_id: task.id,
@@ -2468,6 +3145,224 @@ export class TasksService implements OnModuleInit {
     };
   }
 
+  private async notifyProductReviewers(task: TaskEntity, assetCount: number) {
+    const reviewerIds = await this.productReviewerIds(task);
+    return this.notificationsService.notifyTaskAssetsSubmittedForProductReview(
+      task,
+      assetCount,
+      reviewerIds,
+    );
+  }
+
+  private async assertCanViewTaskAssets(
+    task: TaskEntity,
+    actingUserId: string | null,
+  ) {
+    if (!actingUserId) {
+      throw new ForbiddenException('请先登录后查看任务资产');
+    }
+    const user = await this.usersRepository.findOne({
+      where: { id: actingUserId, status: 'active' },
+    });
+    if (!user) {
+      throw new ForbiddenException('当前账号不可用');
+    }
+    const profile = await buildAccessProfile(this.dataSource, user);
+    if (
+      profile.isAdmin ||
+      [
+        task.assignee_user_id,
+        task.dispatcher_user_id,
+        task.reporter_user_id,
+        task.product_reviewer_user_id,
+        task.customer_reviewer_user_id,
+      ].includes(actingUserId)
+    ) {
+      return;
+    }
+    const fallbackOwnerId = task.reporter_user_id
+      ? null
+      : await this.projectOwnerUserId(task.project_id);
+    if (fallbackOwnerId === actingUserId) {
+      return;
+    }
+    const facts = await this.taskReviewFacts(task);
+    const businessCategory = normalizeAccessBusinessCategory(
+      facts.businessCategory,
+    );
+    const customerCode = String(facts.customerCode ?? '').trim();
+    if (
+      profile.ownedBusinessCategoryCodes.includes(businessCategory) ||
+      profile.productReviewTypes.includes(businessCategory) ||
+      profile.dispatchCustomerCodes.includes(customerCode) ||
+      profile.customerReviewCodes.includes(customerCode)
+    ) {
+      return;
+    }
+    throw new ForbiddenException('当前账号无权查看该任务资产');
+  }
+
+  private async assertCanAssignTask(
+    task: TaskEntity,
+    actingUserId: string | null,
+  ) {
+    if (!actingUserId) {
+      throw new ForbiddenException('A signed-in dispatcher is required');
+    }
+    const user = await this.usersRepository.findOne({
+      where: { id: actingUserId, status: 'active' },
+    });
+    if (!user) {
+      throw new ForbiddenException('Active dispatcher not found');
+    }
+    const profile = await buildAccessProfile(this.dataSource, user);
+    if (profile.isAdmin || task.dispatcher_user_id === actingUserId) {
+      return;
+    }
+    if (task.dispatcher_user_id) {
+      throw new ForbiddenException('该任务已由其他派发人负责');
+    }
+
+    const facts = await this.taskReviewFacts(task);
+    const customerCode = String(facts.customerCode ?? '').trim();
+    const dispatcherIds = customerCode
+      ? await this.workflowConfigsService.findCustomerMemberIds(
+          customerCode,
+          'dispatcher',
+        )
+      : [];
+    if (dispatcherIds.includes(actingUserId)) {
+      return;
+    }
+    if (!customerCode) {
+      throw new BadRequestException('任务尚未关联基金，无法校验派发团队');
+    }
+    if (!dispatcherIds.length) {
+      throw new BadRequestException('该基金尚未配置派发团队');
+    }
+    throw new ForbiddenException('当前账号不能派发该基金的任务');
+  }
+
+  private async assertCanSubmitTaskAssets(
+    task: TaskEntity,
+    actingUserId: string | null,
+  ) {
+    if (!actingUserId) {
+      throw new ForbiddenException('请先登录后再登记交付资产');
+    }
+    const user = await this.usersRepository.findOne({
+      where: { id: actingUserId, status: 'active' },
+    });
+    if (!user) {
+      throw new ForbiddenException('当前账号不可用');
+    }
+    const profile = await buildAccessProfile(this.dataSource, user);
+    if (profile.isAdmin || task.assignee_user_id === actingUserId) {
+      return;
+    }
+    throw new ForbiddenException('只有当前执行人可以登记交付资产');
+  }
+
+  private async productReviewerIds(task: TaskEntity) {
+    const reviewType =
+      task.product_review_type ??
+      (await this.resolveTaskProductReviewType(task));
+    return this.workflowConfigsService.findBusinessCategoryReviewerIds(
+      reviewType,
+    );
+  }
+
+  private async customerReviewerIds(task: TaskEntity) {
+    const facts = await this.taskReviewFacts(task);
+    return this.workflowConfigsService.findCustomerMemberIds(
+      facts.customerCode,
+      'customer_reviewer',
+    );
+  }
+
+  private async taskCompletionRecipientIds(task: TaskEntity) {
+    return [
+      ...new Set(
+        [
+          task.assignee_user_id,
+          task.dispatcher_user_id,
+          task.reporter_user_id,
+        ].filter((id): id is string => Boolean(id)),
+      ),
+    ];
+  }
+
+  private async taskReturnRecipientIds(task: TaskEntity) {
+    return [
+      ...new Set(
+        [task.assignee_user_id, task.dispatcher_user_id].filter(
+          (id): id is string => Boolean(id),
+        ),
+      ),
+    ];
+  }
+
+  private async canProductReviewTask(task: TaskEntity, userId: string | null) {
+    if (!userId) return false;
+    const reviewerIds = await this.productReviewerIds(task);
+    if (reviewerIds.includes(userId)) return true;
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) return false;
+    const profile = await buildAccessProfile(this.dataSource, user);
+    return profile.isAdmin;
+  }
+
+  private async canCustomerReviewTask(task: TaskEntity, userId: string | null) {
+    if (!userId) return false;
+    const reviewerIds = await this.customerReviewerIds(task);
+    if (reviewerIds.includes(userId)) return true;
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) return false;
+    const profile = await buildAccessProfile(this.dataSource, user);
+    return profile.isAdmin;
+  }
+
+  private async resolveTaskProductReviewType(task: TaskEntity) {
+    const facts = await this.taskReviewFacts(task);
+    return facts.reviewType;
+  }
+
+  private async taskReviewFacts(task: TaskEntity): Promise<TaskReviewFacts> {
+    const rows: Array<{
+      businessCategory: string | null;
+      customerCode: string | null;
+      customerName: string | null;
+      businessPlatform: string | null;
+    }> = await this.dataSource.query(
+      `
+        SELECT
+          requirement.business_category AS businessCategory,
+          COALESCE(requirement.customer_code, project.customer_code) AS customerCode,
+          COALESCE(requirement_customer.customer_name, project_customer.customer_name) AS customerName,
+          requirement.business_platform AS businessPlatform
+        FROM tasks task
+        LEFT JOIN requirement_items item ON item.id = task.requirement_item_id
+        LEFT JOIN requirements requirement ON requirement.id = item.requirement_id
+        LEFT JOIN projects project ON project.id = task.project_id
+        LEFT JOIN customers requirement_customer ON requirement_customer.customer_code = requirement.customer_code
+        LEFT JOIN customers project_customer ON project_customer.customer_code = project.customer_code
+        WHERE task.id = ?
+        LIMIT 1
+      `,
+      [task.id],
+    );
+    const row = rows?.[0] ?? {};
+    const businessCategory = row.businessCategory ?? null;
+    const reviewType = normalizeAccessBusinessCategory(businessCategory);
+    return {
+      businessCategory,
+      reviewType: reviewType || null,
+      customerCode: row.customerCode ?? null,
+      customerName: row.customerName ?? null,
+      businessPlatform: row.businessPlatform ?? null,
+    };
+  }
+
   private async assertAssetReviewAccess(
     task: TaskEntity,
     token?: string,
@@ -2476,33 +3371,44 @@ export class TasksService implements OnModuleInit {
   ): Promise<AssetReviewAccess> {
     const reviewerIds = await this.assetReviewReviewerIds(task);
     const matchedReviewerId = reviewerIds.find((reviewerId) =>
-      this.safeTokenEqual(
-        token,
-        this.assetReviewToken(task, reviewerId),
-      ),
+      this.safeTokenEqual(token, this.assetReviewToken(task, reviewerId)),
     );
     if (matchedReviewerId) {
       return { mode: 'token', userId: matchedReviewerId };
     }
 
-    const currentUser = await this.userFromAuthorizationHeader(
-      authorizationHeader,
-    );
+    const currentUser =
+      await this.userFromAuthorizationHeader(authorizationHeader);
     if (!currentUser) {
       throw new UnauthorizedException('Invalid asset review access token');
     }
     const profile = await buildAccessProfile(this.dataSource, currentUser);
-    const canReview = hasPermission(profile, 'task.accept_owned');
     const isOwner = task.reporter_user_id === currentUser.id;
+    const isDispatcher = task.dispatcher_user_id === currentUser.id;
+    const isAssignee = task.assignee_user_id === currentUser.id;
     const fallbackOwnerId = task.reporter_user_id
       ? null
       : await this.projectOwnerUserId(task.project_id);
     const isFallbackOwner = fallbackOwnerId === currentUser.id;
+    const canProductReview = await this.canProductReviewTask(
+      task,
+      currentUser.id,
+    );
+    const canCustomerReview = await this.canCustomerReviewTask(
+      task,
+      currentUser.id,
+    );
 
     if (
       profile.isAdmin ||
-      ((isOwner || isFallbackOwner) &&
-        (!requireReviewPermission || canReview))
+      (!requireReviewPermission &&
+        (isOwner ||
+          isFallbackOwner ||
+          isDispatcher ||
+          isAssignee ||
+          canProductReview ||
+          canCustomerReview)) ||
+      (requireReviewPermission && (canProductReview || canCustomerReview))
     ) {
       return { mode: 'session', userId: currentUser.id };
     }
@@ -2511,9 +3417,16 @@ export class TasksService implements OnModuleInit {
   }
 
   private async assetReviewReviewerIds(task: TaskEntity) {
-    const ids = [task.reporter_user_id];
-    if (!task.reporter_user_id) {
-      ids.push(await this.projectOwnerUserId(task.project_id));
+    const ids = [
+      ...(await this.productReviewerIds(task)),
+      ...(await this.customerReviewerIds(task)),
+      task.reporter_user_id,
+      task.dispatcher_user_id,
+      task.assignee_user_id,
+    ].filter((id): id is string => Boolean(id));
+    if (!ids.length) {
+      const ownerId = await this.projectOwnerUserId(task.project_id);
+      if (ownerId) ids.push(ownerId);
     }
     return [...new Set(ids.filter((id): id is string => Boolean(id)))];
   }

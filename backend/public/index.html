@@ -175,6 +175,14 @@
     .ai-preview-panel { padding: 14px 16px 16px; }
     .ai-preview-panel .section-title { margin-bottom: 10px; }
     .ai-preview-panel .panel-note { margin-bottom: 10px; color: #667163; font-size: 13px; }
+    .ai-preview-tabs { align-items: center; }
+    .ai-preview-tabs button { flex: 0 0 auto; white-space: nowrap; }
+    .ai-preview-tabs .filter-select {
+      flex: 0 1 180px;
+      width: 180px;
+      min-width: 132px;
+      max-width: 220px;
+    }
     .ai-preview-list { display: grid; gap: 10px; }
     .ai-preview-card {
       display: grid;
@@ -1337,6 +1345,125 @@
       border-radius: 10px;
       padding: 7px 12px;
     }
+    .workflow-config-panel { padding: 0; overflow: hidden; }
+    .workflow-config-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 18px;
+      border-bottom: 1px solid #e2e8da;
+    }
+    .workflow-config-head h3 { margin: 2px 0 5px; font-size: 19px; }
+    .workflow-config-head p { margin: 0; color: #667163; font-size: 13px; }
+    .workflow-role-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 8px 18px;
+      border-bottom: 1px solid #e2e8da;
+      background: #f7f9f4;
+    }
+    .workflow-role-tabs button {
+      min-height: 34px;
+      border: 0;
+      border-radius: 8px;
+      padding: 7px 13px;
+      background: transparent;
+      color: #5d685c;
+    }
+    .workflow-role-tabs button.active {
+      background: #fff;
+      color: #203026;
+      box-shadow: inset 0 0 0 1px #cfd9ca;
+      font-weight: 800;
+    }
+    .workflow-config-layout {
+      display: grid;
+      grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+      min-height: 500px;
+    }
+    .workflow-scope-pane {
+      padding: 14px;
+      border-right: 1px solid #e2e8da;
+      background: #fbfcf9;
+    }
+    .workflow-config-search { margin-bottom: 10px; }
+    .workflow-scope-list { display: grid; gap: 5px; max-height: 560px; overflow: auto; }
+    .workflow-scope-item {
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 52px;
+      padding: 8px 10px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      text-align: left;
+    }
+    .workflow-scope-item:hover { background: #f0f5ed; }
+    .workflow-scope-item.active { border-color: #9eb99f; background: #edf5ee; }
+    .workflow-scope-item strong,
+    .workflow-scope-item span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .workflow-scope-item span { margin-top: 3px; color: #758074; font-size: 11px; }
+    .workflow-scope-count {
+      min-width: 26px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: #dfe9dc;
+      color: #315c3d;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .workflow-member-pane { min-width: 0; padding: 16px 18px; }
+    .workflow-member-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 13px;
+    }
+    .workflow-member-head h4 { margin: 0 0 4px; font-size: 17px; }
+    .workflow-member-head p { margin: 0; color: #6a7567; font-size: 12px; }
+    .workflow-member-toolbar {
+      display: grid;
+      grid-template-columns: minmax(200px, 340px) auto;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .workflow-member-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      max-height: 430px;
+      overflow: auto;
+      padding-right: 3px;
+    }
+    .workflow-member-option {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 9px;
+      align-items: center;
+      min-height: 50px;
+      margin: 0;
+      padding: 8px 10px;
+      border: 1px solid #dfe5d8;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .workflow-member-option.selected { border-color: #7fa284; background: #f1f7ef; }
+    .workflow-member-option input { width: 16px; margin: 0; }
+    .workflow-member-option strong,
+    .workflow-member-option span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .workflow-member-option span { margin-top: 2px; color: #7a8378; font-size: 11px; }
+    .workflow-config-empty { padding: 36px 14px; color: #758074; text-align: center; }
     .hidden { display: none !important; }
     @media (max-width: 980px) {
       .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .quote-action.with-contract, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
@@ -1346,6 +1473,8 @@
       .edit-panel { grid-template-columns: 1fr; }
       .quotation-import-actions { flex-wrap: wrap; }
       .reject-reason-grid { grid-template-columns: 1fr; }
+      .workflow-config-layout { grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); }
+      .workflow-member-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .side { position: static; flex-wrap: wrap; }
       .side-stack, .requirements-compose {
         position: static;
@@ -1361,6 +1490,11 @@
       .login-card { border-radius: 18px; }
       .login-form { padding: 28px 22px 24px; }
       .login-form h2 { font-size: 24px; margin-bottom: 22px; }
+      .workflow-config-layout { grid-template-columns: 1fr; }
+      .workflow-scope-pane { border-right: 0; border-bottom: 1px solid #e2e8da; }
+      .workflow-scope-list { max-height: 230px; }
+      .workflow-member-list { grid-template-columns: 1fr; }
+      .workflow-member-toolbar { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -1413,6 +1547,7 @@
         <button data-view="settlement" onclick="switchView('settlement')">结算统计</button>
         <button data-view="dashboard" onclick="switchView('dashboard')">需求面板</button>
         <button data-view="groups" onclick="switchView('groups')">群管理</button>
+        <button data-view="workflow" onclick="switchView('workflow')">流程配置</button>
         <button data-view="messages" onclick="switchView('messages')">消息记录</button>
       </nav>
       <button id="logoutButton" class="btn warn" onclick="logout()">退出登录</button>
@@ -1522,9 +1657,9 @@
                 <div class="kicker">AI Preview</div>
                 <h3>AI预览需求</h3>
               </div>
-              <span class="tag">等待负责人确认</span>
+              <span class="tag">等待派发团队确认</span>
             </div>
-            <div class="panel-note" id="aiPreviewNote">自动读取AI识别到的预览候选，按业务大类分配给负责人确认。</div>
+            <div class="panel-note" id="aiPreviewNote">自动读取AI识别到的预览候选，按基金分配给派发团队，需人工确认后进入真实需求库。</div>
             <div id="aiPreviewBoard"></div>
           </div>
           <div id="requirementMetrics" class="summary-strip requirement-metrics"></div>
@@ -1791,7 +1926,7 @@
           <div>
             <div class="kicker">独立统计</div>
             <h3>人员任务排行</h3>
-            <p>不跟随饼图下钻，只按上方起止时间统计负责人和执行员工的任务量。</p>
+            <p>不跟随饼图下钻，只按上方起止时间统计派发人和执行员工的任务量。</p>
           </div>
         </div>
         <div class="dashboard-board-grid">
@@ -1808,8 +1943,8 @@
           <div class="panel dashboard-card">
             <div class="section-title">
               <div>
-                <div class="kicker">负责人维度</div>
-                <h3>负责人任务看板</h3>
+                <div class="kicker">派发人维度</div>
+                <h3>派发人任务看板</h3>
               </div>
               <span class="tag">仅受起止时间影响</span>
             </div>
@@ -1872,6 +2007,47 @@
             </div>
           </div>
           <div id="groupManagementBoard" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="view-workflow" class="grid hidden">
+        <div class="panel workflow-config-panel">
+          <div class="workflow-config-head">
+            <div>
+              <div class="kicker">Workflow Teams</div>
+              <h3>任务流程团队配置</h3>
+              <p>派发和二审按基金配置，一审按业务大类配置；每个范围均可选择多名员工。</p>
+            </div>
+            <button class="btn" onclick="loadWorkflowConfiguration(true)">刷新</button>
+          </div>
+          <div class="workflow-role-tabs" role="tablist">
+            <button data-workflow-role="dispatcher" class="active" onclick="setWorkflowConfigRole('dispatcher')">派发团队</button>
+            <button data-workflow-role="product_reviewer" onclick="setWorkflowConfigRole('product_reviewer')">一审团队</button>
+            <button data-workflow-role="customer_reviewer" onclick="setWorkflowConfigRole('customer_reviewer')">二审团队</button>
+          </div>
+          <div class="workflow-config-layout">
+            <aside class="workflow-scope-pane">
+              <input id="workflowScopeSearch" class="workflow-config-search" placeholder="搜索基金或业务大类" oninput="setWorkflowScopeSearch(this.value)" />
+              <div id="workflowScopeList" class="workflow-scope-list"></div>
+            </aside>
+            <div class="workflow-member-pane">
+              <div class="workflow-member-head">
+                <div>
+                  <h4 id="workflowMemberTitle">请选择配置范围</h4>
+                  <p id="workflowMemberSummary">选择左侧基金或业务大类后维护团队成员。</p>
+                </div>
+                <span id="workflowSelectedCount" class="tag">0 人</span>
+              </div>
+              <div class="workflow-member-toolbar">
+                <input id="workflowMemberSearch" placeholder="搜索员工姓名" oninput="setWorkflowMemberSearch(this.value)" />
+                <div class="btns">
+                  <button class="btn" onclick="clearWorkflowMembers()">清空</button>
+                  <button id="saveWorkflowMembersButton" class="btn primary" onclick="saveWorkflowMembers()">保存配置</button>
+                </div>
+              </div>
+              <div id="workflowMemberList" class="workflow-member-list"></div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1952,6 +2128,13 @@
       contactContexts: [],
       groupMappings: [],
       groupCreateOpen: false,
+      workflowConfig: null,
+      workflowConfigRole: "dispatcher",
+      workflowConfigScopeCode: "",
+      workflowConfigScopeSearch: "",
+      workflowConfigMemberSearch: "",
+      workflowConfigSelectedUserIds: [],
+      workflowConfigSaving: false,
       groupFilters: {
         customerCode: "all",
         businessPlatform: "all",
@@ -1960,7 +2143,6 @@
       },
       businessPlatformDimensions: [],
       businessCategoryRelations: [],
-      businessCategoryOwners: [],
       requirements: [],
       requirementItems: [],
       copiedRequirementSource: null,
@@ -2064,6 +2246,7 @@
         settlement: "page.settlement",
         dashboard: "page.dashboard",
         groups: "page.group_management",
+        workflow: "permission.manage",
         messages: "page.messages",
       }[view] || null;
     }
@@ -2077,7 +2260,7 @@
       });
       qs("manualIntakePanel")?.classList.toggle("hidden", !can("requirement.create"));
       qs("aiPreviewPanel")?.classList.toggle("hidden", !(can("ai_preview.view_all") || can("ai_preview.view_owned")));
-      if (["quotations", "mappings", "settlement", "dashboard", "groups", "messages"].some(view => isViewActive(view) && !canView(view))) {
+      if (["quotations", "mappings", "settlement", "dashboard", "groups", "workflow", "messages"].some(view => isViewActive(view) && !canView(view))) {
         switchView("requirements");
       }
     }
@@ -2335,7 +2518,7 @@
       state.businessPlatformDimensions = appData.businessPlatformDimensions || [];
       applyBusinessPlatformDimensions(state.businessPlatformDimensions);
       state.businessCategoryRelations = appData.businessCategoryRelations || [];
-      state.businessCategoryOwners = appData.businessCategoryOwners || [];
+      state.workflowConfig = appData.workflowConfig || state.workflowConfig;
       state.users = appData.users;
       const refreshedUser = state.users.find(user => user.id === state.user?.id || user.username === state.user?.username);
       if (refreshedUser) {
@@ -2363,8 +2546,11 @@
       renderLoginUsers();
       const fundCustomers = state.customers.filter(c => c.industry === "公募基金");
       const customers = [...state.customers].sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
+      const intakeScopedCustomers = intakeCustomers(customers);
       const fundScopedCustomers = [...(fundCustomers.length ? fundCustomers : state.customers)].sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
-      qs("customerSelect").innerHTML = customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_name || c.customer_code || "客户")}</option>`).join("");
+      qs("customerSelect").innerHTML = intakeScopedCustomers.length
+        ? intakeScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_name || c.customer_code || "客户")}</option>`).join("")
+        : `<option value="">当前账号未配置可派发基金</option>`;
       qs("quoteCustomerSelect").innerHTML = fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
       qs("mappingCustomerSelect").innerHTML = fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
       qs("mappingQuarterSelect").innerHTML = quarterOptions().map(item => `<option value="${item.value}">${item.label}</option>`).join("");
@@ -2386,10 +2572,11 @@
       syncQuoteProjectSelection(false);
       const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
       qs("requirementTitle").value ||= `客户需求-${stamp}`;
-      qs("requirementContent").value ||= "客户提交业务需求后，负责人可生成任务并指派执行人。执行人收到飞书通知后登记交付资产，管理者在需求面板完成验收与跟踪。";
+      qs("requirementContent").value ||= "客户提交业务需求后，派发人确认需求并指派执行人。执行人登记交付资产后，依次进入一审和二审。";
       qs("aiRequirementTitle").value ||= `AI需求文件-${stamp}`;
       renderAiPreviewBoard();
       renderRequirementBoard();
+      if (state.workflowConfig) renderWorkflowConfiguration();
       if (can("quote.view_all")) {
         renderQuotationsBoard();
         renderQuotationMetrics([]);
@@ -2442,7 +2629,11 @@
     function renderContactContextOptions() {
       const select = qs("contactContextSelect");
       if (!select) return;
-      const activeContexts = expandedContactContexts().filter(item => item.status !== "inactive");
+      const dispatchCodes = new Set(state.user?.dispatch_customer_codes || []);
+      const activeContexts = expandedContactContexts().filter(item =>
+        item.status !== "inactive" &&
+        (isAdminUser() || dispatchCodes.has(item.customer_code))
+      );
       select.innerHTML = [
         `<option value="">手动选择客户和平台</option>`,
         ...activeContexts.map(item => `<option value="${escapeAttr(item.id)}" data-option-key="${escapeAttr(item.optionKey)}">${escapeHtml(item.contact_name || "需求方")}</option>`),
@@ -2851,6 +3042,209 @@
       };
       renderGroupManagement();
     }
+    function intakeCustomers(customers = state.customers) {
+      if (isAdminUser()) return [...customers];
+      const codes = new Set(state.user?.dispatch_customer_codes || []);
+      return [...customers].filter(customer => codes.has(customer.customer_code));
+    }
+    function workflowRoleDefinition(role = state.workflowConfigRole) {
+      return {
+        dispatcher: {
+          label: "派发团队",
+          scopeLabel: "基金",
+          description: "可确认该基金的需求并指派执行人",
+        },
+        product_reviewer: {
+          label: "一审团队",
+          scopeLabel: "业务大类",
+          description: "审核交付物是否符合制作与交付标准",
+        },
+        customer_reviewer: {
+          label: "二审团队",
+          scopeLabel: "基金",
+          description: "确认交付物是否符合基金客户需求",
+        },
+      }[role] || null;
+    }
+    function workflowConfigScopes() {
+      if (state.workflowConfigRole === "product_reviewer") {
+        const configured = state.workflowConfig?.businessCategories || [];
+        const source = configured.length
+          ? configured
+          : businessCategoryDefinitions().map(item => ({ code: item.value, name: item.label }));
+        return source.map(item => ({
+          code: item.code || item.value,
+          name: item.name || item.label || item.code,
+        })).filter(item => item.code);
+      }
+      return [...state.customers]
+        .filter(customer => customer.status !== "inactive" && customer.customer_code)
+        .sort((left, right) => String(left.customer_name || left.customer_code).localeCompare(String(right.customer_name || right.customer_code), "zh-Hans-CN"))
+        .map(customer => ({
+          code: customer.customer_code,
+          name: customer.customer_name || customer.customer_code,
+        }));
+    }
+    function workflowConfiguredMembers(scopeCode, role = state.workflowConfigRole) {
+      if (!state.workflowConfig || !scopeCode) return [];
+      if (role === "product_reviewer") {
+        return (state.workflowConfig.businessCategoryReviewers || []).filter(row =>
+          row.businessCategoryCode === scopeCode && row.status !== "inactive"
+        );
+      }
+      return (state.workflowConfig.customerMembers || []).filter(row =>
+        row.customerCode === scopeCode && row.roleCode === role && row.status !== "inactive"
+      );
+    }
+    function workflowScopeByCode(scopeCode = state.workflowConfigScopeCode) {
+      return workflowConfigScopes().find(scope => scope.code === scopeCode) || null;
+    }
+    function syncWorkflowSelectedMembers() {
+      const rows = workflowConfiguredMembers(state.workflowConfigScopeCode);
+      state.workflowConfigSelectedUserIds = [...new Set(rows.map(row => row.userId).filter(Boolean))];
+    }
+    async function loadWorkflowConfiguration(force = false) {
+      if (!isAdminUser()) return;
+      if (state.workflowConfig && !force) {
+        renderWorkflowConfiguration();
+        return;
+      }
+      const scopeList = qs("workflowScopeList");
+      if (scopeList) scopeList.innerHTML = `<div class="workflow-config-empty">正在加载配置...</div>`;
+      try {
+        state.workflowConfig = await request("/workflow-config");
+        const scopes = workflowConfigScopes();
+        if (!scopes.some(scope => scope.code === state.workflowConfigScopeCode)) {
+          state.workflowConfigScopeCode = scopes[0]?.code || "";
+        }
+        syncWorkflowSelectedMembers();
+        renderWorkflowConfiguration();
+      } catch (error) {
+        if (scopeList) scopeList.innerHTML = `<div class="workflow-config-empty">${safeText(error.message || "配置加载失败")}</div>`;
+        toast(error.message || "配置加载失败");
+      }
+    }
+    function setWorkflowConfigRole(role) {
+      if (!workflowRoleDefinition(role)) return;
+      state.workflowConfigRole = role;
+      state.workflowConfigScopeSearch = "";
+      state.workflowConfigMemberSearch = "";
+      if (qs("workflowScopeSearch")) qs("workflowScopeSearch").value = "";
+      if (qs("workflowMemberSearch")) qs("workflowMemberSearch").value = "";
+      state.workflowConfigScopeCode = workflowConfigScopes()[0]?.code || "";
+      syncWorkflowSelectedMembers();
+      renderWorkflowConfiguration();
+    }
+    function setWorkflowConfigScope(scopeCode) {
+      state.workflowConfigScopeCode = scopeCode || "";
+      state.workflowConfigMemberSearch = "";
+      if (qs("workflowMemberSearch")) qs("workflowMemberSearch").value = "";
+      syncWorkflowSelectedMembers();
+      renderWorkflowConfiguration();
+    }
+    function setWorkflowScopeSearch(value) {
+      state.workflowConfigScopeSearch = String(value || "").trim().toLowerCase();
+      renderWorkflowConfiguration();
+    }
+    function setWorkflowMemberSearch(value) {
+      state.workflowConfigMemberSearch = String(value || "").trim().toLowerCase();
+      renderWorkflowConfiguration();
+    }
+    function toggleWorkflowMember(userId, checked) {
+      const selected = new Set(state.workflowConfigSelectedUserIds);
+      if (checked) selected.add(userId);
+      else selected.delete(userId);
+      state.workflowConfigSelectedUserIds = [...selected];
+      renderWorkflowConfiguration();
+    }
+    function clearWorkflowMembers() {
+      state.workflowConfigSelectedUserIds = [];
+      renderWorkflowConfiguration();
+    }
+    function renderWorkflowConfiguration() {
+      document.querySelectorAll("[data-workflow-role]").forEach(button => {
+        button.classList.toggle("active", button.dataset.workflowRole === state.workflowConfigRole);
+      });
+      const scopeList = qs("workflowScopeList");
+      const memberList = qs("workflowMemberList");
+      if (!scopeList || !memberList) return;
+      if (!state.workflowConfig) {
+        scopeList.innerHTML = `<div class="workflow-config-empty">尚未加载配置</div>`;
+        memberList.innerHTML = "";
+        return;
+      }
+      const role = workflowRoleDefinition();
+      const scopeKeyword = state.workflowConfigScopeSearch;
+      const scopes = workflowConfigScopes().filter(scope =>
+        !scopeKeyword || `${scope.name} ${scope.code}`.toLowerCase().includes(scopeKeyword)
+      );
+      scopeList.innerHTML = scopes.length ? scopes.map(scope => {
+        const members = workflowConfiguredMembers(scope.code);
+        const memberNames = members.map(member => member.userName || member.username).filter(Boolean).join("、");
+        return `
+          <button class="workflow-scope-item ${scope.code === state.workflowConfigScopeCode ? "active" : ""}" onclick="setWorkflowConfigScope('${escapeAttr(scope.code)}')">
+            <span><strong>${safeText(scope.name)}</strong><span title="${escapeAttr(memberNames)}">${safeText(memberNames || "尚未配置")}</span></span>
+            <b class="workflow-scope-count">${members.length}</b>
+          </button>
+        `;
+      }).join("") : `<div class="workflow-config-empty">没有匹配的${safeText(role.scopeLabel)}</div>`;
+
+      const scope = workflowScopeByCode();
+      const selected = new Set(state.workflowConfigSelectedUserIds);
+      const memberKeyword = state.workflowConfigMemberSearch;
+      const users = [...state.users]
+        .filter(user => user.id && user.status !== "inactive")
+        .filter(user => !memberKeyword || `${user.display_name || ""} ${user.username || ""}`.toLowerCase().includes(memberKeyword))
+        .sort((left, right) => String(left.display_name || left.username).localeCompare(String(right.display_name || right.username), "zh-Hans-CN"));
+      qs("workflowMemberTitle").textContent = scope ? `${scope.name} · ${role.label}` : `请选择${role.scopeLabel}`;
+      qs("workflowMemberSummary").textContent = scope ? role.description : `选择左侧${role.scopeLabel}后维护团队成员。`;
+      qs("workflowSelectedCount").textContent = `${selected.size} 人`;
+      const saveButton = qs("saveWorkflowMembersButton");
+      if (saveButton) {
+        saveButton.disabled = !scope || state.workflowConfigSaving;
+        saveButton.textContent = state.workflowConfigSaving ? "保存中..." : "保存配置";
+      }
+      memberList.innerHTML = !scope
+        ? `<div class="workflow-config-empty">请选择左侧${safeText(role.scopeLabel)}</div>`
+        : users.length
+          ? users.map(user => {
+              const checked = selected.has(user.id);
+              return `
+                <label class="workflow-member-option ${checked ? "selected" : ""}">
+                  <input type="checkbox" ${checked ? "checked" : ""} onchange="toggleWorkflowMember('${escapeAttr(user.id)}', this.checked)" />
+                  <span><strong>${safeText(user.display_name || user.username)}</strong><span>${safeText(user.username || "员工账号")}</span></span>
+                </label>
+              `;
+            }).join("")
+          : `<div class="workflow-config-empty">没有匹配的员工</div>`;
+    }
+    async function saveWorkflowMembers() {
+      const scope = workflowScopeByCode();
+      if (!scope || state.workflowConfigSaving) return;
+      const role = state.workflowConfigRole;
+      const path = role === "dispatcher"
+        ? `/workflow-config/customer-dispatchers/${encodeURIComponent(scope.code)}`
+        : role === "product_reviewer"
+          ? `/workflow-config/product-reviewers/${encodeURIComponent(scope.code)}`
+          : `/workflow-config/customer-reviewers/${encodeURIComponent(scope.code)}`;
+      state.workflowConfigSaving = true;
+      renderWorkflowConfiguration();
+      try {
+        state.workflowConfig = await request(path, {
+          method: "PUT",
+          body: { userIds: state.workflowConfigSelectedUserIds },
+        });
+        syncWorkflowSelectedMembers();
+        renderWorkflowConfiguration();
+        toast(`${scope.name}的${workflowRoleDefinition(role).label}已保存`);
+        state.users = unwrap(await request("/users"));
+      } catch (error) {
+        toast(error.message || "配置保存失败");
+      } finally {
+        state.workflowConfigSaving = false;
+        renderWorkflowConfiguration();
+      }
+    }
     async function login() {
       const username = qs("loginUser").value;
       const loginKey = qs("loginKey")?.value.trim() || undefined;
@@ -2948,7 +3342,7 @@
         view = "requirements";
       }
       document.querySelectorAll(".nav button").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
-      ["requirements", "quotations", "mappings", "settlement", "dashboard", "groups", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
+      ["requirements", "quotations", "mappings", "settlement", "dashboard", "groups", "workflow", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
       const titles = {
         requirements: ["需求与指派", "录入客户需求后自动生成任务，并在同一页完成员工指派。"],
         quotations: ["合同报价录入", "上传合同报价并拆成最细粒度子项，为后续需求任务挂靠做准备。"],
@@ -2956,6 +3350,7 @@
         settlement: ["结算统计", "按基金、平台和业务分类统计结算金额与资产数量。"],
         dashboard: ["需求面板", "按不同维度查看需求进度、任务状态、延期风险和资产交付情况。"],
         groups: ["群管理", "拉DP入群-->新增群信息-->DP微信号备注客户真名"],
+        workflow: ["流程配置", "按基金和业务大类维护派发、一审与二审团队。"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
       };
       qs("pageTitle").textContent = titles[view][0];
@@ -2965,6 +3360,7 @@
       if (view === "mappings") loadQuarterMappingWorkbench(false);
       if (view === "settlement") loadSettlementStatement(false);
       if (view === "groups") refreshGroupManagement();
+      if (view === "workflow") loadWorkflowConfiguration();
       if (view === "messages") refreshMessages();
       applyRoleVisibility();
     }
@@ -3011,12 +3407,22 @@
         assigned: "已指派",
         in_progress: "进行中",
         blocked: "受阻",
-        pending_review: "待验收",
-        completed: "已验收",
+        pending_review: "待审核",
+        completed: "已完成",
         cancelled: "已取消",
         returned: "已退回",
       };
       return labels[status] || status || "未生成";
+    }
+    function taskDisplayStatusLabel(task) {
+      if (!task) return "未生成";
+      if (task.status === "pending_review") {
+        if (task.review_stage === "product_review") return "待成品审核";
+        if (task.review_stage === "customer_review") return "待客户确认";
+      }
+      if (task.status === "completed") return "已完成";
+      if (task.status === "in_progress" && task.blocked_reason) return "修改中";
+      return taskStatusLabel(task.status);
     }
     function invalidateLookupMaps() {
       state.lookupMaps = null;
@@ -3111,6 +3517,17 @@
     function taskReporterName(task) {
       if (!task?.reporter_user_id) return "未配置负责人";
       return assigneeName(task.reporter_user_id);
+    }
+    function taskDispatcherName(task) {
+      return task?.dispatcher_user_id ? assigneeName(task.dispatcher_user_id) : "待派发";
+    }
+    function taskProductReviewerName(task) {
+      if (task?.product_reviewer_user_id) return assigneeName(task.product_reviewer_user_id);
+      return task?.review_stage === "product_review" ? "待一审" : "未开始";
+    }
+    function taskCustomerReviewerName(task) {
+      if (task?.customer_reviewer_user_id) return assigneeName(task.customer_reviewer_user_id);
+      return task?.review_stage === "customer_review" ? "待二审" : "未开始";
     }
     function resetDimensionFilters() {
       state.dimensionFilters = {
@@ -3666,7 +4083,7 @@
     function displayTaskStatus(task) {
       if (!task) return "未生成";
       if (task.status === "todo" && task.assignee_user_id) return "已指派";
-      return taskStatusLabel(task.status);
+      return taskDisplayStatusLabel(task);
     }
     function requirementRows() {
       return state.requirements.map(requirement => {
@@ -3806,34 +4223,26 @@
       return target === "design" ? "设计" : "运营";
     }
     function aiPreviewOwnerOptions() {
-      const options = new Map();
-      (state.businessCategoryOwners || []).forEach(row => {
-        if (!row?.ownerUserId || row.status === "inactive") return;
-        const categoryName = row.businessCategoryName || projectTypeLabel(row.businessCategoryCode);
-        const ownerName = row.ownerName || row.ownerUsername || row.ownerUserId;
-        if (!options.has(row.ownerUserId)) {
-          options.set(row.ownerUserId, { value: row.ownerUserId, ownerName, categories: [] });
-        }
-        const option = options.get(row.ownerUserId);
-        if (categoryName && !option.categories.includes(categoryName)) option.categories.push(categoryName);
-      });
-      return Array.from(options.values()).map(item => ({
-        value: item.value,
-        label: `${item.ownerName}${item.categories.length ? `（${item.categories.join("、")}）` : ""}`,
-      }));
+      return state.users
+        .filter(user => user.id && Array.isArray(user.dispatch_customer_codes) && user.dispatch_customer_codes.length)
+        .map(user => ({
+          value: user.id,
+          label: user.display_name || user.username,
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, "zh-Hans-CN"));
     }
     function aiPreviewOwnerLabel() {
-      if (!state.aiPreviewOwnerId || state.aiPreviewOwnerId === "all") return "全部待确认";
-      return aiPreviewOwnerOptions().find(item => item.value === state.aiPreviewOwnerId)?.label || "全部待确认";
+      if (!state.aiPreviewOwnerId || state.aiPreviewOwnerId === "all") return "全部待派发";
+      return aiPreviewOwnerOptions().find(item => item.value === state.aiPreviewOwnerId)?.label || "全部待派发";
     }
     function renderAiPreviewScopeControls(scope) {
       const canViewAll = can("ai_preview.view_all");
       const ownerOptions = aiPreviewOwnerOptions();
       return `
-        <button class="${scope === "mine" ? "active" : ""}" onclick="setAiPreviewScope('mine')">我的待确认</button>
+        <button class="${scope === "mine" ? "active" : ""}" onclick="setAiPreviewScope('mine')">我的待派发</button>
         ${canViewAll ? `
-          <select class="filter-select ${scope === "all" ? "active" : ""}" onchange="setAiPreviewOwnerFilter(this.value)" title="按负责人筛选待确认需求">
-            <option value="all" ${state.aiPreviewOwnerId === "all" ? "selected" : ""}>全部待确认</option>
+          <select class="filter-select ${scope === "all" ? "active" : ""}" onchange="setAiPreviewOwnerFilter(this.value)" title="按派发人筛选待确认需求">
+            <option value="all" ${state.aiPreviewOwnerId === "all" ? "selected" : ""}>全部待派发</option>
             ${ownerOptions.map(item => `<option value="${escapeAttr(item.value)}" ${state.aiPreviewOwnerId === item.value ? "selected" : ""}>${safeText(item.label)}</option>`).join("")}
           </select>
           <button class="${scope === "processed" ? "active" : ""}" onclick="setAiPreviewScope('processed')">历史真实需求</button>
@@ -3861,15 +4270,15 @@
       panel.classList.remove("hidden");
       const scope = state.aiPreviewScope || "mine";
       const scopeLabels = can("ai_preview.view_all") ? {
-        mine: "我的待确认",
+        mine: "我的待派发",
         all: aiPreviewOwnerLabel(),
         processed: "历史真实需求",
-      } : { mine: "我的待确认" };
+      } : { mine: "我的待派发" };
       const scopeNote = {
-        mine: "只显示分配给当前登录负责人的候选需求。",
+        mine: "只显示当前登录人负责基金下的候选需求。",
         all: state.aiPreviewOwnerId && state.aiPreviewOwnerId !== "all"
-          ? `只显示 ${aiPreviewOwnerLabel()} 名下仍待确认的候选需求。`
-          : "显示所有仍待确认的候选需求，可用于管理员兜底和转派前排查。",
+          ? `只显示 ${aiPreviewOwnerLabel()} 可派发基金下的候选需求。`
+          : "显示所有仍待派发的候选需求，可用于管理员排查基金和派发团队配置。",
         processed: "显示已确认入库的真实需求和已标记伪需求的候选记录。",
       }[scope] || "自动读取AI识别到的预览候选，需人工确认后进入真实需求库。";
       if (!rows.length) {
@@ -3910,7 +4319,7 @@
                   <span>${safeText(row.chat_name || row.customer_name || "-")}</span>
                   ${row.owner_name ? `<span>需求方 ${safeText(row.owner_name)}</span>` : ""}
                   <span>${safeText(row.business_platform || "-")}</span>
-                  <span>负责人 ${safeText(row.review_owner_name || "未分配")}</span>
+                  <span>派发团队 ${safeText(row.dispatcher_names || row.review_owner_name || "未配置")}</span>
                   <span>置信度 ${safeText(previewConfidenceText(row.confidence))}</span>
                   ${row.copy_source ? `<span>由文案复制至${safeText(aiCopyTargetLabel(normalizedBusinessCategory(row.business_category)))}</span>` : ""}
                   <span>${safeText(row.review_status || row.status || "pending")}</span>
@@ -3993,7 +4402,7 @@
         if (result?.copied === false && result?.reason === "already_exists") {
           toast(`已存在复制至${targetLabel}的预览需求`);
         } else {
-          toast(`已复制至${targetLabel}，等待对应负责人确认`);
+          toast(`已复制至${targetLabel}，等待基金派发团队确认`);
         }
         await refreshAiPreviewBoard();
       } catch (error) {
@@ -4212,7 +4621,7 @@
         total: rows.length,
         pending: rows.filter(row => !row.task || row.taskStatus === "待指派").length,
         assigned: rows.filter(row => row.taskStatus === "已指派" || row.taskStatus === "进行中").length,
-        pendingReview: rows.filter(row => row.taskStatus === "待验收").length,
+        pendingReview: rows.filter(row => row.task?.status === "pending_review").length,
         quoteReady: rows.filter(row => row.item?.quote_scope_status === "matched").length,
         quotePending: rows.filter(isPendingQuoteRow).length,
       };
@@ -4222,7 +4631,7 @@
           ["total", "全部需求", metrics.total],
           canManageAssignment ? ["pending", "待指派", metrics.pending] : null,
           ["assigned", "处理中", metrics.assigned],
-          ["pending_review", "待验收", metrics.pendingReview],
+          ["pending_review", "待审核", metrics.pendingReview],
           ["quote_ready", "报价已确认", metrics.quoteReady],
           ["quote_pending", "报价待处理", metrics.quotePending],
         ].filter(Boolean)
@@ -4234,8 +4643,8 @@
         ["all", "全部"],
         canManageAssignment ? ["pending", "待指派"] : null,
         ["assigned", "处理中"],
-        ["pending_review", "待验收"],
-        ["completed", "已验收"],
+        ["pending_review", "待审核"],
+        ["completed", "已完成"],
         ["quote_pending", "待报价"],
       ].filter(Boolean);
       const visibleFilters = filters.filter(([key]) => {
@@ -4300,8 +4709,8 @@
         if (state.requirementFilter === "pending") return !row.task || row.taskStatus === "待指派";
         if (state.requirementFilter === "quote_pending") return isPendingQuoteRow(row);
         if (state.requirementFilter === "assigned") return row.taskStatus === "已指派" || row.taskStatus === "进行中";
-        if (state.requirementFilter === "pending_review") return row.taskStatus === "待验收";
-        if (state.requirementFilter === "completed") return row.taskStatus === "已验收";
+        if (state.requirementFilter === "pending_review") return row.task?.status === "pending_review";
+        if (state.requirementFilter === "completed") return row.task?.status === "completed";
         return true;
       });
       const boardEl = qs("requirementsBoard");
@@ -4335,7 +4744,7 @@
                     <span class="tag">任务：${safeText(row.taskStatus)}</span>
                     ${quoteVisible ? `<span class="tag">报价：${safeText(row.quoteStatus)}</span>` : ""}
                   </div>
-                  <div class="row-sub">负责人：${safeText(taskReporterName(row.task))} · 执行人：${safeText(assigneeName(row.task?.assignee_user_id))}</div>
+                  <div class="row-sub">派发人：${safeText(taskDispatcherName(row.task))} · 执行人：${safeText(assigneeName(row.task?.assignee_user_id))}</div>
                 </div>
                 ${renderRequirementEditAction(row)}
               </div>
@@ -4344,8 +4753,10 @@
                   row.contactContext ? `需求方：${safeText(row.contactContext)}` : "",
                   taskPlanDateRangeText(row.task) ? `计划：${taskPlanDateRangeText(row.task)}` : "",
                   `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
-                  `负责人：${safeText(taskReporterName(row.task))}`,
+                  `派发人：${safeText(taskDispatcherName(row.task))}`,
                   `执行人：${safeText(assigneeName(row.task?.assignee_user_id))}`,
+                  `一审：${safeText(taskProductReviewerName(row.task))}`,
+                  `二审：${safeText(taskCustomerReviewerName(row.task))}`,
                 ].filter(Boolean).join(" · ")}</div>
                 ${quoteVisible ? renderRequirementQuoteAction(row) : ""}
                 ${renderAssignAction(row)}
@@ -4617,7 +5028,7 @@
       `;
     }
     function editCustomerOptions(selectedCustomerId) {
-      const customers = [...state.customers]
+      const customers = intakeCustomers(state.customers)
         .sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""));
       return customers.map(customer => `<option value="${customer.customer_code}" ${customer.customer_code === selectedCustomerId ? "selected" : ""}>${customer.customer_code || "客户"} · ${customer.customer_name}</option>`).join("");
     }
@@ -4637,17 +5048,38 @@
       const hint = qs(`edit-project-hint-${requirementId}`);
       if (hint) hint.textContent = editProjectHint(customerId, projectType);
     }
+    function normalizedBusinessCategoryCode(value) {
+      const normalized = String(value || "").trim();
+      const match = businessCategoryDefinitions().find(item =>
+        item.value === normalized || item.label === normalized
+      );
+      return match?.value || normalized;
+    }
+    function canCurrentUserDispatchRow(row) {
+      if (!can("task.assign_owned")) return false;
+      if (isAdminUser()) return true;
+      if (row.task?.dispatcher_user_id === state.user?.id) return true;
+      const customerCode = String(row.requirement?.customer_code || "").trim();
+      return Boolean(customerCode) && new Set(state.user?.dispatch_customer_codes || []).has(customerCode);
+    }
+    function canCurrentUserReviewRow(row) {
+      if (!(can("task.accept_owned") || can("task.return_owned"))) return false;
+      if (isAdminUser()) return true;
+      const stage = row.task?.review_stage || "none";
+      if (stage === "product_review") {
+        const categoryCode = normalizedBusinessCategoryCode(row.requirement?.business_category);
+        return new Set(state.user?.product_review_types || []).has(categoryCode);
+      }
+      if (stage === "customer_review" || stage === "none") {
+        const customerCode = String(row.requirement?.customer_code || "").trim();
+        return new Set(state.user?.customer_review_codes || []).has(customerCode);
+      }
+      return false;
+    }
     function renderAssignAction(row) {
       if (!row.task) return `<span class="muted">任务生成中</span>`;
-      if (row.task.status === "pending_review" && !(can("task.accept_owned") || can("task.return_owned"))) {
-        return `
-          <div class="assign-action compact" onclick="event.stopPropagation()">
-            <span class="done-text">待管理者验收</span>
-            ${renderTaskAssetDirectoryButton(row.task)}
-          </div>
-        `;
-      }
-      if (!can("task.assign_owned") && !["pending_review", "completed"].includes(row.task.status)) {
+      if (row.task.status === "pending_review") return renderReviewAction(row);
+      if (!canCurrentUserDispatchRow(row) && row.task.status !== "completed") {
         return `
           <div class="assign-action compact" onclick="event.stopPropagation()">
             <span class="done-text">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
@@ -4655,11 +5087,10 @@
           </div>
         `;
       }
-      if (row.taskStatus === "待验收") return renderReviewAction(row);
-      if (row.taskStatus === "已验收") {
+      if (row.task.status === "completed") {
         return `
           <div class="assign-action compact" onclick="event.stopPropagation()">
-            <span class="done-text">已验收</span>
+            <span class="done-text">${safeText(row.taskStatus)}</span>
             <button class="btn" onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
             ${renderTaskAssetDirectoryButton(row.task)}
           </div>
@@ -4699,14 +5130,14 @@
     }
     function renderReviewAction(row) {
       const isBusy = state.busyActionId === row.task.id;
-      if (!can("task.accept_owned") && !can("task.return_owned")) {
-        return `<span class="done-text">待管理者验收</span>`;
-      }
+      const canAct = canCurrentUserReviewRow(row);
+      const approveText = row.task.review_stage === "product_review" ? "成品通过" : row.task.review_stage === "customer_review" ? "客户确认通过" : "通过验收";
       return `
         <div class="assign-action" onclick="event.stopPropagation()">
+          <span class="done-text">${safeText(row.taskStatus)}</span>
           <button class="btn" ${isBusy ? "disabled" : ""} onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
-          ${can("task.accept_owned") ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "通过验收"}</button>` : ""}
-          ${can("task.return_owned") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>` : ""}
+          ${canAct && can("task.accept_owned") ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : approveText}</button>` : ""}
+          ${canAct && can("task.return_owned") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>` : ""}
           ${renderTaskAssetDirectoryButton(row.task)}
         </div>
       `;
@@ -4719,10 +5150,20 @@
       if (!taskId) return;
       try {
         const workspace = await request(`/tasks/${encodeURIComponent(taskId)}/workspace`);
-        const url = workspace?.directory_url;
+        let url = workspace?.directory_url;
         if (!url) {
           toast("项目资产目录还未生成，可能是历史任务，请重新指派或生成资产页");
           return;
+        }
+        const task = state.tasks.find(item => item.id === taskId);
+        if (
+          url.includes("/asset-sheet.html") &&
+          task?.assignee_user_id === state.user?.id &&
+          !["pending_review", "completed"].includes(task.status)
+        ) {
+          const parsed = new URL(url, location.origin);
+          parsed.searchParams.set("start", "1");
+          url = parsed.toString();
         }
         window.open(url, "_blank", "noopener");
       } catch (error) {
@@ -6252,20 +6693,16 @@
             businessCategory: qs("projectTypeSelect").value || undefined,
             secondaryCategory: secondaryCategory || undefined,
             tertiaryCategory,
+            sourceCandidateId: selectedCandidateId || undefined,
           },
         });
         state.requirement = result.requirement;
         state.item = result.item;
         state.task = result.task;
         if (selectedCandidateId) {
-          try {
-            await request(`/requirements/ai-preview-candidates/${selectedCandidateId}/confirm`, { method: "POST" });
-            state.aiPreviewCandidates = state.aiPreviewCandidates.filter(item => String(item.candidate_id) !== String(selectedCandidateId));
-            state.selectedAiPreviewCandidateId = null;
-            await refreshAiPreviewBoard();
-          } catch (error) {
-            console.warn("AI preview confirm failed", error);
-          }
+          state.aiPreviewCandidates = state.aiPreviewCandidates.filter(item => String(item.candidate_id) !== String(selectedCandidateId));
+          state.selectedAiPreviewCandidateId = null;
+          await refreshAiPreviewBoard();
         }
         state.requirements.unshift(state.requirement);
         state.requirementItems = [state.item, ...state.requirementItems.filter(existing => existing.id !== state.item.id)];
@@ -6414,13 +6851,13 @@
       state.busyActionId = taskId;
       renderRequirementBoard();
       try {
-        const result = await request(`/tasks/${taskId}/status`, {
+        const result = await request(`/tasks/${taskId}/asset-review/approve`, {
           method: "POST",
-          body: { status: "completed" },
+          body: {},
         });
         state.tasks = state.tasks.map(item => item.id === taskId ? result.task : item);
-        addLog("任务验收通过", result);
-        toast("已通过验收，状态已更新为已验收");
+        addLog("任务审核通过", result);
+        toast(result.task?.status === "completed" ? "客户确认通过，任务已完成" : "成品审核通过，已进入客户确认");
         refreshMessages();
         refreshAnalytics();
       } catch (error) {
@@ -6439,7 +6876,7 @@
       state.busyActionId = taskId;
       renderRequirementBoard();
       try {
-        const result = await request(`/tasks/${taskId}/return-revision`, {
+        const result = await request(`/tasks/${taskId}/asset-review/return`, {
           method: "POST",
           body: { reason: trimmedReason },
         });
@@ -6515,8 +6952,8 @@
         qs("metrics").innerHTML = [
           ["需求总数", scopedRequirements.length, scopeText],
           ["进行中任务", inProgressCount, "员工正在处理的任务"],
-          ["待验收任务", pendingReviewCount, "员工已提交，等待管理者验收"],
-          ["已验收需求", completedDemandCount, "管理者已通过验收的需求"],
+          ["待审核任务", pendingReviewCount, "员工已提交，等待成品审核或客户确认"],
+          ["已完成需求", completedDemandCount, "客户确认通过并已归档的需求"],
           ["延期任务", overdueCount, `3天内到期 ${dueSoonCount} 项`],
           ["交付资产数", totalAssets, "自动读取资产表中的图片和交付链接"],
         ].map(([label, value, hint]) => `<div class="panel metric"><span>${label}</span><strong>${value}</strong><span>${hint}</span></div>`).join("");
@@ -6679,8 +7116,8 @@
         const statusCounts = [
           ["未开始", Number(row.notStartedCount || 0) + Number(row.missingTaskCount || 0)],
           ["进行中", Number(row.inProgressCount || 0)],
-          ["待验收", Number(row.pendingReviewCount || 0)],
-          ["已验收", Number(row.completedCount || 0)],
+          ["待审核", Number(row.pendingReviewCount || 0)],
+          ["已完成", Number(row.completedCount || 0)],
         ].filter(([, count]) => count > 0);
         const statusCountTotal = statusCounts.reduce((sum, [, count]) => sum + count, 0);
         if (totalCount > statusCountTotal) statusCounts.push(["其他", totalCount - statusCountTotal]);
@@ -6871,8 +7308,8 @@
         <div class="dashboard-stat-row">
           <div class="dashboard-stat-card"><span>任务数</span><strong>${total}</strong></div>
           <div class="dashboard-stat-card warn"><span>延期任务</span><strong>${overdue}</strong></div>
-          <div class="dashboard-stat-card neutral"><span>待验收任务</span><strong>${pendingReview}</strong></div>
-          <div class="dashboard-stat-card ok"><span>已验收任务</span><strong>${completed}</strong></div>
+          <div class="dashboard-stat-card neutral"><span>待审核任务</span><strong>${pendingReview}</strong></div>
+          <div class="dashboard-stat-card ok"><span>已完成任务</span><strong>${completed}</strong></div>
         </div>
       `;
     }
@@ -6968,8 +7405,8 @@
       const labels = {
         notStarted: "待开始",
         inProgress: "进行中",
-        pendingReview: "待验收",
-        completed: "已验收",
+        pendingReview: "待审核",
+        completed: "已完成",
       };
       const groups = Object.fromEntries(Object.keys(labels).map(key => [key, { label: labels[key], normal: 0, overdue: 0, total: 0 }]));
       visibleTasks.forEach(task => {
@@ -6992,7 +7429,7 @@
         return;
       }
       box.innerHTML = `
-        <div class="key-task-scope">关联范围：${escapeHtml(dashboardDimensionScopeText())} · 优先展示延期、待验收、P0/P1 和即将到期任务</div>
+        <div class="key-task-scope">关联范围：${escapeHtml(dashboardDimensionScopeText())} · 优先展示延期、待审核、P0/P1 和即将到期任务</div>
         <table>
           <thead><tr><th>编号</th><th>基金客户</th><th>业务维度</th><th>任务名称</th><th>任务详情</th><th>执行人</th><th>状态</th><th>优先级</th><th>资产</th><th>截止时间</th></tr></thead>
           <tbody>
@@ -7107,7 +7544,7 @@
         groups.set(task.assignee_user_id, current);
       }
       const rows = [...groups.values()].sort((a, b) => b.assigned - a.assigned || b.completed - a.completed || b.assets - a.assets).slice(0, 10);
-      renderSimpleTable("employeeTopBox", rows, ["员工", "执行任务", "已验收", "延期", "资产数"], row => [
+      renderSimpleTable("employeeTopBox", rows, ["员工", "执行任务", "已完成", "延期", "资产数"], row => [
         safeText(row.name),
         row.assigned,
         row.completed,
@@ -7118,10 +7555,10 @@
     function renderOwnerTaskBoard(tasks) {
       const groups = new Map();
       for (const task of tasks) {
-        const ownerKey = task.reporter_user_id || "unassigned_owner";
+        const ownerKey = task.dispatcher_user_id || "unassigned_dispatcher";
         const current = groups.get(ownerKey) || {
-          ownerId: task.reporter_user_id || "",
-          name: task.reporter_user_id ? assigneeName(task.reporter_user_id) : "未配置负责人",
+          ownerId: task.dispatcher_user_id || "",
+          name: task.dispatcher_user_id ? assigneeName(task.dispatcher_user_id) : "待派发",
           total: 0,
           inProgress: 0,
           pendingReview: 0,
@@ -7137,14 +7574,14 @@
         groups.set(ownerKey, current);
       }
       const rows = [...groups.values()].sort((a, b) => b.total - a.total || b.pendingReview - a.pendingReview || b.overdue - a.overdue).slice(0, 10);
-      renderSimpleTable("ownerTaskBoard", rows, ["负责人", "负责任务", "进行中", "待验收", "已验收", "延期"], row => [
+      renderSimpleTable("ownerTaskBoard", rows, ["派发人", "派发任务", "进行中", "待审核", "已完成", "延期"], row => [
         safeText(row.name),
         row.total,
         row.inProgress,
         row.pendingReview,
         row.completed,
         row.overdue,
-      ], "暂无负责人任务数据");
+      ], "暂无派发人任务数据");
     }
     function renderSimpleTable(elementId, rows, headers, toCells, emptyText) {
       const box = qs(elementId);

@@ -18,11 +18,8 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { ExportTaskAssetsPptDto } from './dto/export-task-assets-ppt.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
-import { ReturnTaskRevisionDto } from './dto/return-task-revision.dto';
 import { SaveLocalAssetSheetDto } from './dto/save-local-asset-sheet.dto';
-import { SubmitTaskProgressFeedbackDto } from './dto/submit-task-progress-feedback.dto';
 import { UploadLocalAssetImageDto } from './dto/upload-local-asset-image.dto';
-import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TasksService } from './tasks.service';
 
@@ -74,18 +71,27 @@ export class TasksController {
   }
 
   @Get(':id/status-history')
-  listStatusHistory(@Param('id') id: string) {
-    return this.tasksService.listStatusHistory(id);
+  listStatusHistory(
+    @Param('id') id: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.listStatusHistory(id, request?.user?.id ?? null);
   }
 
   @Get(':id/workflow')
-  getWorkflow(@Param('id') id: string) {
-    return this.tasksService.getWorkflow(id);
+  getWorkflow(
+    @Param('id') id: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.getWorkflow(id, request?.user?.id ?? null);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.tasksService.findOne(id);
+  findOne(
+    @Param('id') id: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.findOneForUser(id, request?.user?.id ?? null);
   }
 
   @Post()
@@ -102,19 +108,30 @@ export class TasksController {
 
   @Patch(':id')
   @Permission('task.assign_owned')
-  update(@Param('id') id: string, @Body() dto: UpdateTaskDto) {
-    return this.tasksService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskDto,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.update(id, dto, request?.user?.id ?? null);
   }
 
   @Post(':id/assign')
   @Permission('task.assign_owned')
-  assign(@Param('id') id: string, @Body() dto: AssignTaskDto) {
-    return this.tasksService.assign(id, dto);
+  assign(
+    @Param('id') id: string,
+    @Body() dto: AssignTaskDto,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.assign(id, dto, request?.user?.id ?? null);
   }
 
   @Get(':id/workspace')
-  getWorkspace(@Param('id') id: string) {
-    return this.tasksService.getWorkspace(id);
+  getWorkspace(
+    @Param('id') id: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.getWorkspace(id, request?.user?.id ?? null);
   }
 
   @Public()
@@ -122,9 +139,14 @@ export class TasksController {
   getAssetSheetContext(
     @Param('id') id: string,
     @Query('token') token?: string,
-    @Query('reopen') reopen?: string,
   ) {
-    return this.tasksService.getAssetSheetContext(id, token, reopen === '1');
+    return this.tasksService.getAssetSheetContext(id, token);
+  }
+
+  @Public()
+  @Post(':id/asset-sheet/start')
+  startAssetSheetWork(@Param('id') id: string, @Query('token') token?: string) {
+    return this.tasksService.startAssetSheetWork(id, token);
   }
 
   @Post(':id/workspace/provision')
@@ -132,13 +154,24 @@ export class TasksController {
   provisionWorkspace(
     @Param('id') id: string,
     @Body() dto: ProvisionTaskWorkspaceDto,
+    @Req() request?: Request & { user?: UserEntity },
   ) {
-    return this.tasksService.provisionWorkspace(id, dto);
+    return this.tasksService.provisionWorkspace(
+      id,
+      dto,
+      request?.user?.id ?? null,
+    );
   }
 
   @Get(':id/result-files')
-  listResultFiles(@Param('id') id: string) {
-    return this.tasksService.listResultFiles(id);
+  listResultFiles(
+    @Param('id') id: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.listResultFilesForUser(
+      id,
+      request?.user?.id ?? null,
+    );
   }
 
   @Public()
@@ -221,34 +254,18 @@ export class TasksController {
     return this.tasksService.getProgressFeedbackContext(id, token);
   }
 
-  @Public()
-  @Post(':id/progress-feedback/status')
-  submitProgressFeedback(
-    @Param('id') id: string,
-    @Query('token') token: string | undefined,
-    @Body() dto: SubmitTaskProgressFeedbackDto,
-  ) {
-    return this.tasksService.submitProgressFeedback(id, dto, token);
-  }
-
   @Post(':id/result-files')
+  @Permission('task.submit_assigned')
   registerResultFile(
     @Param('id') id: string,
     @Body() dto: RegisterTaskResultFileDto,
+    @Req() request?: Request & { user?: UserEntity },
   ) {
-    return this.tasksService.registerResultFile(id, dto);
-  }
-
-  @Post(':id/status')
-  @Permission('task.accept_owned')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateTaskStatusDto) {
-    return this.tasksService.updateStatus(id, dto);
-  }
-
-  @Post(':id/return-revision')
-  @Permission('task.return_owned')
-  returnRevision(@Param('id') id: string, @Body() dto: ReturnTaskRevisionDto) {
-    return this.tasksService.returnRevision(id, dto);
+    return this.tasksService.registerResultFile(
+      id,
+      dto,
+      request?.user?.id ?? null,
+    );
   }
 
   @Post(':id/ai-assignment-suggestion')

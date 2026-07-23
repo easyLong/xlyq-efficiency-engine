@@ -21,6 +21,9 @@ export class TaskEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 32 })
   status!: string;
 
+  @Column({ type: 'varchar', length: 32, default: 'none' })
+  review_stage!: string;
+
   @Column({ type: 'varchar', length: 32, nullable: true })
   priority!: string | null;
 
@@ -32,6 +35,18 @@ export class TaskEntity extends BaseSoftDeleteEntity {
 
   @Column({ type: 'char', length: 36, nullable: true })
   reporter_user_id!: string | null;
+
+  @Column({ type: 'char', length: 36, nullable: true })
+  dispatcher_user_id!: string | null;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  product_review_type!: string | null;
+
+  @Column({ type: 'char', length: 36, nullable: true })
+  product_reviewer_user_id!: string | null;
+
+  @Column({ type: 'char', length: 36, nullable: true })
+  customer_reviewer_user_id!: string | null;
 
   @Column({ type: 'decimal', precision: 8, scale: 2, nullable: true })
   estimated_hours!: string | null;
