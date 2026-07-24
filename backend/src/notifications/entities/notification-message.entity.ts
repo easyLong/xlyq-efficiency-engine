@@ -1,10 +1,16 @@
-import { Column, Entity } from 'typeorm';
+import { Column, Entity, Index } from 'typeorm';
 import { BaseSoftDeleteEntity } from '../../common/entities/base-soft-delete.entity';
 
 @Entity('notification_messages')
+@Index('uq_notification_messages_idempotency_key', ['idempotency_key'], {
+  unique: true,
+})
 export class NotificationMessageEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'char', length: 36, nullable: true })
   recipient_user_id!: string | null;
+
+  @Column({ type: 'varchar', length: 191, nullable: true })
+  idempotency_key!: string | null;
 
   @Column({ type: 'varchar', length: 128 })
   title!: string;

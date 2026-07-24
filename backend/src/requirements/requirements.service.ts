@@ -457,7 +457,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
   ) {
     const normalizedLimit = Math.max(1, Math.min(100, Number(limit) || 12));
     await this.assignAiPreviewReviewOwners();
-    await this.notifyAiPreviewReviewOwners();
     const profile = currentUser
       ? await buildAccessProfile(this.dataSource, currentUser)
       : null;
@@ -1139,22 +1138,27 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     );
 
     for (const row of rows) {
-      await this.notificationsService.send({
-        recipientUserId: row.dispatcherUserId,
-        title: `AI需求待派发：${row.demandTitle ?? row.businessName ?? '未命名需求'}`,
-        content: [
-          `需求名称：${row.demandTitle ?? row.businessName ?? '-'}`,
-          `客户平台：${[row.customerName, row.businessPlatform].filter(Boolean).join('-') || '-'}`,
-          `业务类型：${row.businessCategory ?? '-'}`,
-          `识别置信度：${this.previewConfidenceText(row.confidence)}`,
-          '请进入工作台确认需求并指派执行人。',
-        ].join('\n'),
-        objectType: 'ai_preview_candidate',
-        objectId: row.id,
-        channels: ['in_app', 'feishu_app'],
-        actionUrl: this.buildDispatcherWorkbenchUrl(row.id),
-        actionText: '查看并确认',
-      });
+      await this.notificationsService.send(
+        {
+          recipientUserId: row.dispatcherUserId,
+          title: `AI需求待派发：${row.demandTitle ?? row.businessName ?? '未命名需求'}`,
+          content: [
+            `需求名称：${row.demandTitle ?? row.businessName ?? '-'}`,
+            `客户平台：${[row.customerName, row.businessPlatform].filter(Boolean).join('-') || '-'}`,
+            `业务类型：${row.businessCategory ?? '-'}`,
+            `识别置信度：${this.previewConfidenceText(row.confidence)}`,
+            '请进入工作台确认需求并指派执行人。',
+          ].join('\n'),
+          objectType: 'ai_preview_candidate',
+          objectId: row.id,
+          channels: ['in_app', 'feishu_app'],
+          actionUrl: this.buildDispatcherWorkbenchUrl(row.id),
+          actionText: '查看并确认',
+        },
+        {
+          idempotencyKey: `ai-preview-candidate:${row.id}:dispatcher:${row.dispatcherUserId}`,
+        },
+      );
     }
   }
 

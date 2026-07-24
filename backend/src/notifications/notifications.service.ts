@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { randomUUID } from 'node:crypto';
-import { MoreThanOrEqual, Repository } from 'typeorm';
+import { createHmac, randomUUID } from 'node:crypto';
+import { DataSource, MoreThanOrEqual, Repository } from 'typeorm';
 import {
   addWorkflowHandoffToAppUrl,
   buildAppPublicUrl,
@@ -25,10 +25,15 @@ import { ScanTaskProgressFeedbackDto } from './dto/scan-task-progress-feedback.d
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { SendWorklogRemindersDto } from './dto/send-worklog-reminders.dto';
 import { NotificationMessageEntity } from './entities/notification-message.entity';
-import { createHmac } from 'node:crypto';
+
+type SendNotificationOptions = {
+  idempotencyKey?: string;
+};
 
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleInit {
+  private notificationSchemaPromise: Promise<void> | null = null;
+
   constructor(
     @InjectRepository(NotificationMessageEntity)
     private readonly notificationsRepository: Repository<NotificationMessageEntity>,
@@ -45,7 +50,12 @@ export class NotificationsService {
     @InjectRepository(FeishuSyncLogEntity)
     private readonly feishuSyncLogsRepository: Repository<FeishuSyncLogEntity>,
     private readonly feishuService: FeishuService,
+    private readonly dataSource: DataSource,
   ) {}
+
+  async onModuleInit() {
+    await this.ensureNotificationSchema();
+  }
 
   findAll(recipientUserId?: string, status?: string) {
     return this.notificationsRepository.find({
@@ -68,13 +78,18 @@ export class NotificationsService {
     return message;
   }
 
-  async send(dto: SendNotificationDto) {
+  async send(dto: SendNotificationDto, options: SendNotificationOptions = {}) {
+    const idempotencyKey = this.normalizeIdempotencyKey(options.idempotencyKey);
+    if (idempotencyKey) {
+      await this.ensureNotificationSchema();
+    }
     const channels = dto.channels?.length
       ? dto.channels
       : ['in_app', 'feishu_app'];
-    const message = this.notificationsRepository.create({
+    let message = this.notificationsRepository.create({
       id: randomUUID(),
       recipient_user_id: dto.recipientUserId ?? null,
+      idempotency_key: idempotencyKey,
       title: dto.title,
       content: dto.content,
       object_type: dto.objectType ?? null,
@@ -86,7 +101,21 @@ export class NotificationsService {
       read_at: null,
       error_message: null,
     });
-    await this.notificationsRepository.save(message);
+    try {
+      message = await this.notificationsRepository.save(message);
+    } catch (error) {
+      if (!idempotencyKey || !this.isDuplicateEntryError(error)) {
+        throw error;
+      }
+      const existing = await this.notificationsRepository.findOne({
+        where: { idempotency_key: idempotencyKey },
+        withDeleted: true,
+      });
+      if (!existing) {
+        throw error;
+      }
+      return existing;
+    }
 
     const result: Record<string, unknown> = {
       in_app: channels.includes('in_app') ? 'saved' : 'skipped',
@@ -101,10 +130,7 @@ export class NotificationsService {
           actionText: dto.actionText,
           actions: dto.actions?.map((action) => ({
             ...action,
-            url: this.recipientAppUrl(
-              action.url,
-              message.recipient_user_id,
-            ),
+            url: this.recipientAppUrl(action.url, message.recipient_user_id),
           })),
         });
       } catch (error) {
@@ -137,6 +163,103 @@ export class NotificationsService {
       : null;
     message.sent_at = new Date();
     return this.notificationsRepository.save(message);
+  }
+
+  private normalizeIdempotencyKey(value: string | null | undefined) {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) {
+      return null;
+    }
+    if (normalized.length > 191) {
+      throw new Error('Notification idempotency key exceeds 191 characters');
+    }
+    return normalized;
+  }
+
+  private isDuplicateEntryError(error: unknown) {
+    const candidate = error as {
+      code?: unknown;
+      errno?: unknown;
+      driverError?: { code?: unknown; errno?: unknown };
+    };
+    return (
+      candidate?.code === 'ER_DUP_ENTRY' ||
+      candidate?.driverError?.code === 'ER_DUP_ENTRY' ||
+      Number(candidate?.errno) === 1062 ||
+      Number(candidate?.driverError?.errno) === 1062
+    );
+  }
+
+  private ensureNotificationSchema() {
+    if (!this.notificationSchemaPromise) {
+      this.notificationSchemaPromise = this.prepareNotificationSchema().catch(
+        (error) => {
+          this.notificationSchemaPromise = null;
+          throw error;
+        },
+      );
+    }
+    return this.notificationSchemaPromise;
+  }
+
+  private async prepareNotificationSchema() {
+    const columns = (await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = 'notification_messages'
+          AND column_name = 'idempotency_key'
+      `,
+    )) as Array<{ count: number | string }>;
+    if (Number(columns?.[0]?.count ?? 0) === 0) {
+      try {
+        await this.dataSource.query(`
+          ALTER TABLE notification_messages
+          ADD COLUMN idempotency_key VARCHAR(191) NULL AFTER recipient_user_id
+        `);
+      } catch (error) {
+        if (!this.isMysqlSchemaRace(error, 'ER_DUP_FIELDNAME', 1060)) {
+          throw error;
+        }
+      }
+    }
+
+    const indexes = (await this.dataSource.query(
+      `
+        SELECT COUNT(*) AS count
+        FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name = 'notification_messages'
+          AND index_name = 'uq_notification_messages_idempotency_key'
+      `,
+    )) as Array<{ count: number | string }>;
+    if (Number(indexes?.[0]?.count ?? 0) === 0) {
+      try {
+        await this.dataSource.query(`
+          CREATE UNIQUE INDEX uq_notification_messages_idempotency_key
+          ON notification_messages (idempotency_key)
+        `);
+      } catch (error) {
+        if (!this.isMysqlSchemaRace(error, 'ER_DUP_KEYNAME', 1061)) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  private isMysqlSchemaRace(error: unknown, code: string, errno: number) {
+    const candidate = error as {
+      code?: unknown;
+      errno?: unknown;
+      driverError?: { code?: unknown; errno?: unknown };
+    };
+    return (
+      candidate?.code === code ||
+      candidate?.driverError?.code === code ||
+      Number(candidate?.errno) === errno ||
+      Number(candidate?.driverError?.errno) === errno
+    );
   }
 
   private collectDeliveryErrors(result: Record<string, unknown>) {
