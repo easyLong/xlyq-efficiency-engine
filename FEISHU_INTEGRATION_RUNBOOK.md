@@ -19,11 +19,13 @@ FEISHU_APP_SECRET=
 FEISHU_DEFAULT_DEPARTMENT_ID=0
 APP_PUBLIC_BASE_URL=https://your-public-domain.example.com
 TASK_ACCESS_TOKEN_SECRET=replace-with-a-long-random-secret
+WORKFLOW_HANDOFF_SECRET=replace-with-another-long-random-secret
+WORKFLOW_HANDOFF_TTL_SECONDS=604800
 ```
 
 ## 飞书通知链接免登录
 
-飞书卡片按钮面向执行员工，不进入管理后台登录页。链接形态如下：
+飞书卡片按钮按实际收件人生成签名身份交接凭证。派发人、执行人、一审和二审从消息进入时会自动切换为自己的系统账号；凭证默认 7 天有效。任务访问链接形态如下：
 
 ```text
 https://your-public-domain.example.com/asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<taskToken>

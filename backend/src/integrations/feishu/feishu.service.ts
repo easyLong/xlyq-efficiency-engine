@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { isPublicHttpsAppBaseUrl } from '../../common/app-public-url';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   createLarkChannel,
@@ -40,11 +41,7 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
     const publicBaseUrl = String(
       this.configService.get<string>('APP_PUBLIC_BASE_URL') ?? '',
     ).trim();
-    const localSheetPubliclyReachable =
-      Boolean(publicBaseUrl) &&
-      /^https?:\/\/(?!localhost(?::|\/|$)|127\.0\.0\.1(?::|\/|$))/i.test(
-        publicBaseUrl,
-      );
+    const localSheetPubliclyReachable = isPublicHttpsAppBaseUrl(publicBaseUrl);
 
     return {
       appIdConfigured: Boolean(this.configService.get<string>('FEISHU_APP_ID')),

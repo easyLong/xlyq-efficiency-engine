@@ -4,9 +4,11 @@ import { json, urlencoded } from 'express';
 import { join } from 'node:path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { assertProductionAppPublicBaseUrl } from './common/app-public-url';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  assertProductionAppPublicBaseUrl();
   const port = Number(process.env.PORT ?? 3000);
   const host = process.env.HOST ?? '0.0.0.0';
   app.use(json({ limit: '12mb' }));

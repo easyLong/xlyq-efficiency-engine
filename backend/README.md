@@ -65,6 +65,8 @@ PORT=3000
 HOST=0.0.0.0
 APP_PUBLIC_BASE_URL=http://192.168.1.100:3000
 TASK_ACCESS_TOKEN_SECRET=replace-with-a-long-random-secret
+WORKFLOW_HANDOFF_SECRET=replace-with-another-long-random-secret
+WORKFLOW_HANDOFF_TTL_SECONDS=604800
 
 DB_HOST=127.0.0.1
 DB_PORT=3306
@@ -115,9 +117,12 @@ APP_PUBLIC_BASE_URL=http://<本机局域网IP>:9000
 PORT=9000
 HOST=127.0.0.1
 APP_PUBLIC_BASE_URL=https://<你的域名>
+TASK_ACCESS_TOKEN_SECRET=<任务访问签名密钥>
+WORKFLOW_HANDOFF_SECRET=<飞书账号交接签名密钥>
 ```
 
 其中 `APP_PUBLIC_BASE_URL` 会出现在飞书卡片按钮和员工交付登记链接里，必须是使用者能访问到的地址。
+`NODE_ENV=production` 时系统只接受公网 HTTPS 地址；`TASK_ACCESS_TOKEN_SECRET` 与 `WORKFLOW_HANDOFF_SECRET` 应使用不同的随机字符串，并只保存在服务器环境变量中。
 
 ## 常用脚本
 

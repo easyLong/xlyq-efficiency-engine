@@ -1,6 +1,8 @@
 import {
   addWorkflowHandoffToAppUrl,
+  assertProductionAppPublicBaseUrl,
   buildAppPublicUrl,
+  isPublicHttpsAppBaseUrl,
   rebaseAppPublicUrl,
   resolveAppPublicBaseUrl,
 } from './app-public-url';
@@ -32,6 +34,28 @@ describe('app public URL', () => {
       expect(() => resolveAppPublicBaseUrl(value)).toThrow();
     },
   );
+
+  it('accepts only public HTTPS URLs for cloud deployment', () => {
+    expect(isPublicHttpsAppBaseUrl('https://efficiency.example.com')).toBe(
+      true,
+    );
+    expect(isPublicHttpsAppBaseUrl('http://efficiency.example.com')).toBe(
+      false,
+    );
+    expect(isPublicHttpsAppBaseUrl('https://192.168.10.5:3000')).toBe(false);
+    expect(() =>
+      assertProductionAppPublicBaseUrl(
+        'production',
+        'http://192.168.10.5:3000',
+      ),
+    ).toThrow('public HTTPS URL');
+    expect(() =>
+      assertProductionAppPublicBaseUrl(
+        'development',
+        'http://192.168.10.5:3000',
+      ),
+    ).not.toThrow();
+  });
 
   it('adds a signed recipient session only to this application URL', () => {
     const previousSecret = process.env.WORKFLOW_HANDOFF_SECRET;
