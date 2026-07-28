@@ -352,7 +352,7 @@
                     <span class="step-pill">1</span>
                     <div>
                       <h3>上传图片资产</h3>
-                      <p>PNG、JPG、WEBP、GIF，单张不超过 8MB。</p>
+                      <p id="imageLimitHint">PNG、JPG、WEBP、GIF，单张不超过 500MB。</p>
                     </div>
                   </div>
                   <button class="secondary" data-delivery-control onclick="document.getElementById('fileInput').click()">选择图片</button>
@@ -433,7 +433,6 @@
     </div>
   </div>
 
-  <script src="/js/workflow-session.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const taskId = params.get("taskId") || "default";
@@ -444,13 +443,13 @@
     const legacyStorageKey = `asset-sheet:${taskId}`;
     const maxImageCount = 80;
     const maxUrlLength = 500;
+    let maxImageSizeMb = 500;
     let context = null;
     let deliveryEditable = false;
     let startAttempted = false;
     let pendingImagePreviews = [];
     let pendingConfirmResolve = null;
     let lastPointerPosition = null;
-    let workflowSessionEstablished = false;
 
     document.addEventListener("pointerdown", event => {
       if (!event.target?.closest?.("#confirmBackdrop")) {
@@ -716,8 +715,8 @@
       for (const file of selectedFiles) {
         const previewId = `${Date.now()}-${Math.random()}-${file.name}`;
         try {
-          if (file.size > 8 * 1024 * 1024) {
-            throw new Error(`${file.name} 超过 8MB`);
+          if (file.size > maxImageSizeMb * 1024 * 1024) {
+            throw new Error(`${file.name} 超过 ${maxImageSizeMb}MB`);
           }
           const dataUrl = await readFileAsDataUrl(file);
           pendingImagePreviews.push({ id: previewId, url: dataUrl });
@@ -785,9 +784,6 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || "读取任务失败");
         context = result;
-        if (!workflowSessionEstablished) {
-          window.XlyqWorkflowSession.store(result.assigneeSession);
-        }
         if (
           shouldStartWork &&
           !startAttempted &&
@@ -809,12 +805,24 @@
           };
         }
         renderTaskDetails();
+        applyUploadConfig(result.config);
         syncDeliveryDraft(result.delivery);
         applyDeliveryMode();
         renderAssets();
       } catch (error) {
         setStatus(`读取任务详情失败：${error.message}`, "error");
         renderFallback();
+      }
+    }
+
+    function applyUploadConfig(config = {}) {
+      const configuredMax = Number(config.maxImageSizeMb);
+      if (Number.isFinite(configuredMax) && configuredMax > 0) {
+        maxImageSizeMb = configuredMax;
+      }
+      const hint = document.getElementById("imageLimitHint");
+      if (hint) {
+        hint.textContent = `PNG、JPG、WEBP、GIF，单张不超过 ${maxImageSizeMb}MB。`;
       }
     }
 
@@ -947,8 +955,7 @@
         context = { ...(context || {}), task: result.task || context?.task, workflow: result.workflow || context?.workflow };
         renderTaskDetails();
         applyDeliveryMode();
-        setStatus(`已提交 ${imageUrls.length} 张图片${linkUrls.length ? `和 ${linkUrls.length} 个链接` : ""}，任务已进入待成品审核。正在返回执行人工作台...`, "ok");
-        returnToAssigneeWorkspace(result.assigneeSession || context?.assigneeSession);
+        setStatus(`已提交 ${imageUrls.length} 张图片${linkUrls.length ? `和 ${linkUrls.length} 个链接` : ""}，任务已进入待成品审核。`, "ok");
       } catch (error) {
         setStatus(`提交失败：${error.message}`, "error");
       } finally {
@@ -964,61 +971,8 @@
       }
     }
 
-    function closeAfterSubmit() {
-      setTimeout(() => {
-        window.close();
-        setStatus("已提交成功，可以关闭当前页面。", "ok");
-      }, 900);
-    }
-
-    function returnToAssigneeWorkspace(session) {
-      const switched = workflowSessionEstablished || applyAssigneeSession(session);
-      setTimeout(() => {
-        if (switched) {
-          location.replace("/?taskSession=1");
-          return;
-        }
-        window.close();
-        setStatus("已提交成功，可以关闭当前页面。", "ok");
-      }, 900);
-    }
-
-    async function openAssigneeWorkspace() {
-      if (workflowSessionEstablished) {
-        location.href = "/?taskSession=1";
-        return;
-      }
-      let session = context?.assigneeSession;
-      if (!session && taskId !== "default") {
-        setStatus("正在读取个人任务主页身份...", "");
-        try {
-          const response = await fetch(taskAssetApi("context"));
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.message || "读取任务失败");
-          context = result;
-          renderTaskDetails();
-          syncDeliveryDraft(result.delivery);
-          renderAssets();
-          session = result.assigneeSession;
-        } catch (error) {
-          setStatus(`进入个人任务主页失败：${error.message}`, "error");
-          return;
-        }
-      }
-      const switched = applyAssigneeSession(session);
-      if (!switched) {
-        setStatus("暂时无法进入个人任务主页：未读取到执行人身份。", "error");
-        return;
-      }
+    function openAssigneeWorkspace() {
       location.href = "/?taskSession=1";
-    }
-
-    function applyAssigneeSession(session) {
-      const user = session?.user;
-      const accessToken = session?.accessToken;
-      if (!user?.username || !accessToken) return false;
-      sessionStorage.setItem("xlyqTaskSession", JSON.stringify({ user, accessToken }));
-      return true;
     }
 
     function setupUploadInteractions() {
@@ -1123,13 +1077,6 @@
     }
 
     async function bootstrapAssetSheet() {
-      try {
-        workflowSessionEstablished = Boolean(
-          await window.XlyqWorkflowSession.establishFromLocation(),
-        );
-      } catch (error) {
-        console.warn("Workflow account handoff failed", error);
-      }
       setupUploadInteractions();
       renderAssets();
       await reloadContext();

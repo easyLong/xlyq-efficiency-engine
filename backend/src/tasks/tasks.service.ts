@@ -806,7 +806,9 @@ export class TasksService implements OnModuleInit {
       workspace,
       files,
       workflow: buildTaskWorkflowSnapshot(task),
-      assigneeSession: await this.publicAssigneeSession(task),
+      config: {
+        maxImageSizeMb: this.assetImageMaxMb(),
+      },
       delivery: {
         imageUrls: (localImages.length ? localImages : legacyLocalAssets).map(
           (file) => file.file_url,
@@ -1351,7 +1353,6 @@ export class TasksService implements OnModuleInit {
     return {
       task: savedTask,
       workflow: buildTaskWorkflowSnapshot(savedTask),
-      assigneeSession: await this.publicAssigneeSession(savedTask),
       assetCount,
       syncedCount: created.length,
       created,
@@ -1384,8 +1385,11 @@ export class TasksService implements OnModuleInit {
     if (bytes.length <= 0) {
       throw new BadRequestException('Uploaded image is empty');
     }
-    if (bytes.length > 8 * 1024 * 1024) {
-      throw new BadRequestException('Uploaded image must be smaller than 8MB');
+    const maxBytes = this.assetImageMaxBytes();
+    if (bytes.length > maxBytes) {
+      throw new BadRequestException(
+        `Uploaded image must be smaller than ${this.assetImageMaxMb()}MB`,
+      );
     }
 
     const uploadDir = join(
@@ -1494,6 +1498,18 @@ export class TasksService implements OnModuleInit {
     return createHmac('sha256', secret)
       .update(`${task.id}:${task.task_no}`)
       .digest('hex');
+  }
+
+  private assetImageMaxMb() {
+    const configured = Number(process.env.TASK_ASSET_IMAGE_MAX_MB);
+    if (Number.isFinite(configured) && configured > 0) {
+      return configured;
+    }
+    return 500;
+  }
+
+  private assetImageMaxBytes() {
+    return this.assetImageMaxMb() * 1024 * 1024;
   }
 
   private publicTaskStatusLabel(task: TaskEntity) {

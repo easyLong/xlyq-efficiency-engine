@@ -129,6 +129,7 @@ HOST=127.0.0.1
 NODE_ENV=production
 APP_PUBLIC_BASE_URL=https://your-domain.example.com
 TASK_ACCESS_TOKEN_SECRET=replace-with-a-long-random-secret
+TASK_ASSET_IMAGE_MAX_MB=500
 WORKFLOW_HANDOFF_SECRET=replace-with-another-long-random-secret
 WORKFLOW_HANDOFF_TTL_SECONDS=604800
 
@@ -156,6 +157,7 @@ OPENAI_MODEL=gpt-4.1-mini
 - 如果暂时只在局域网访问，可设为 `HOST=0.0.0.0`，并把 `APP_PUBLIC_BASE_URL` 配成 `http://服务器局域网IP:9000`。
 - `APP_PUBLIC_BASE_URL` 会写入飞书按钮和交付登记链接；上线后必须是用户能访问到的地址。
 - `TASK_ACCESS_TOKEN_SECRET` 必须换成足够长的随机字符串。
+- `TASK_ASSET_IMAGE_MAX_MB` 控制资产登记页单张图片上传大小，默认 500MB。
 - `WORKFLOW_HANDOFF_SECRET` 用于飞书消息按收件人自动登录，必须与任务访问密钥不同；默认有效期为 604800 秒（7 天）。
 - `NODE_ENV=production` 会强制校验 `APP_PUBLIC_BASE_URL` 为公网 HTTPS 地址，避免误把 localhost、局域网 IP 或 HTTP 链接发送给员工。
 - 数据库变量名是 `DB_USER` 和 `DB_NAME`。
