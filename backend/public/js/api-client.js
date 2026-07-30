@@ -6,6 +6,16 @@
   }
 
   function create({ apiBase, getAccessToken, canAccess }) {
+    function dateKey(value = new Date()) {
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0"),
+      ].join("-");
+    }
+
     async function request(path, options = {}) {
       return window.XlyqAppShell.request({
         apiBase,
@@ -33,6 +43,17 @@
         canAccess?.("ai_preview.view_all") || canAccess?.("ai_preview.view_owned"),
       );
       const workflowConfigVisible = Boolean(canAccess?.("permission.manage"));
+      const today = new Date();
+      const businessCalendarStart = new Date(
+        today.getFullYear(),
+        today.getMonth() - 2,
+        today.getDate(),
+      );
+      const businessCalendarEnd = new Date(
+        today.getFullYear(),
+        today.getMonth() + 8,
+        today.getDate(),
+      );
       const [
         projects,
         customers,
@@ -43,6 +64,7 @@
         quotations,
         businessPlatformDimensions,
         businessCategoryRelations,
+        businessCalendar,
         workflowConfig,
         health,
       ] = await Promise.all([
@@ -57,6 +79,9 @@
         quoteVisible ? request("/quotations") : Promise.resolve([]),
         request("/dimensions?type=business_platform").catch(() => []),
         request("/dimensions/business-category-relations").catch(() => []),
+        request(
+          `/business-calendar/range?start=${dateKey(businessCalendarStart)}&end=${dateKey(businessCalendarEnd)}`,
+        ).catch(() => []),
         workflowConfigVisible ? request("/workflow-config").catch(() => null) : Promise.resolve(null),
         request("/health"),
       ]);
@@ -74,6 +99,7 @@
         aiPreviewCandidates: unwrap(aiPreviewCandidates),
         businessPlatformDimensions: unwrap(businessPlatformDimensions),
         businessCategoryRelations: unwrap(businessCategoryRelations),
+        businessCalendar: unwrap(businessCalendar),
         workflowConfig,
         health,
       };

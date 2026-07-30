@@ -19,6 +19,7 @@ import { UsersModule } from './users/users.module';
 import { WeeklyReportsModule } from './weekly-reports/weekly-reports.module';
 import { WorklogsModule } from './worklogs/worklogs.module';
 import { WorkflowConfigsModule } from './workflow-configs/workflow-configs.module';
+import { BusinessCalendarModule } from './common/business-calendar.module';
 import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
 
 @Module({
@@ -40,6 +41,7 @@ import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
         logging: false,
       }),
     }),
+    BusinessCalendarModule,
     HealthModule,
     ContactContextsModule,
     FeishuModule,

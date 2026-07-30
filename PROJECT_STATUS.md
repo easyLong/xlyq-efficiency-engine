@@ -263,3 +263,11 @@ npm run test:e2e -- --runInBand
 - 可变价、区间价或按实际需求定价的报价项使用 `pricing_mode = variable`、`match_status = price_missing`，原价格说明写入 `remark`。
 - 中金基金和中欧基金的报价子项编码已统一为短格式 `ITEM-001`、`ITEM-002`，与前面合同保持一致。
 - 合同报价列表优先使用关联项目的 `project_name` 作为展示名，便于显示“某某基金2026年合同报价”等业务名称。
+
+## 2026-07-30 最新补充
+
+- 任务到期、逾期、预警、优先级统一切到工作日口径，默认周一到周五为工作日。
+- 新增 `business_calendar` 工作日历表，可覆盖节假日和调休。
+- 新增 `GET /api/v1/business-calendar/range`，前端会加载日期窗口用于到期判断和看板统计。
+- 需求录入的自动优先级、需求面板的延期提示、通知扫描、风险识别均已同步更新。
+- 已补充单测并通过 `npm test -- --runInBand` 和 `npm run build` 验证。

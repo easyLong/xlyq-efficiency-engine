@@ -229,3 +229,10 @@ npm run migrate:project-tables -- --execute
 - `quote-mappings/quote-mappings.service.ts`：报价映射幂等保存，旧有效映射置为 `obsolete`。
 - `requirements/requirements.service.ts`：历史看板完整拉取最新需求下的子项、任务、报价映射。
 - `quotations/quotations.service.ts`：合同报价支持起止月份，CSV 合同报价优先按结构化表格解析最细粒度子项、单位和单价。
+
+## 2026-07-30 最新补充
+
+- 新增 `business_calendar` 工作日历表和只读接口 `GET /api/v1/business-calendar/range`。
+- `.env` 暂不需要新增配置；默认按周一到周五计算工作日。
+- 如需补节假日/调休，直接维护 `business_calendar` 即可。
+- 前端会读取日历窗口，任务面板和需求录入的到期提示会自动同步。

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
 import {
@@ -6,6 +6,7 @@ import {
   buildAccessProfile,
   normalizeAccessBusinessCategory,
 } from '../common/access-control';
+import { BusinessCalendarService } from '../common/business-calendar.service';
 import { UserEntity } from '../users/entities/user.entity';
 import { TaskEntity } from './entities/task.entity';
 import { TaskReviewStage, TaskStatus } from './task-status';
@@ -87,7 +88,10 @@ type WorkItemRow = {
 
 @Injectable()
 export class TaskWorkflowRuntimeService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    @Optional() private readonly businessCalendar?: BusinessCalendarService,
+  ) {}
 
   async ensureSchema() {
     await this.dataSource.query(`
@@ -567,6 +571,7 @@ export class TaskWorkflowRuntimeService {
       this.loadWorkItems(taskIds),
       this.loadTaskFacts(taskIds),
     ]);
+    const overdueTaskIds = await this.resolveOverdueTaskIds(tasks);
     const itemsByTaskId = new Map<string, WorkItemRow[]>();
     for (const item of workItems) {
       const rows = itemsByTaskId.get(item.taskId) ?? [];
@@ -584,8 +589,49 @@ export class TaskWorkflowRuntimeService {
             businessCategory: null,
             customerCode: null,
           },
+          overdueTaskIds.has(task.id),
         ),
       }),
+    );
+  }
+
+  private async resolveOverdueTaskIds(tasks: TaskEntity[]) {
+    if (!tasks.length) {
+      return new Set<string>();
+    }
+    if (this.businessCalendar) {
+      const flags = await Promise.all(
+        tasks.map((task) =>
+          this.businessCalendar!.isOverdue(task.planned_end_at),
+        ),
+      );
+      return new Set(
+        tasks.filter((_, index) => flags[index]).map((task) => task.id),
+      );
+    }
+    const today = new Date();
+    const localToday = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+    return new Set(
+      tasks
+        .filter((task) => {
+          const due = task.planned_end_at
+            ? new Date(task.planned_end_at)
+            : null;
+          if (!due || Number.isNaN(due.getTime())) {
+            return false;
+          }
+          const dueDay = new Date(
+            due.getFullYear(),
+            due.getMonth(),
+            due.getDate(),
+          );
+          return dueDay.getTime() < localToday.getTime();
+        })
+        .map((task) => task.id),
     );
   }
 
@@ -812,6 +858,7 @@ export function buildTaskWorkflowView(
   currentUser: UserEntity | null,
   profile: AccessProfile | null,
   facts: TaskFacts,
+  isOverdue = false,
 ): TaskWorkflowView {
   const step = deriveTaskWorkflowStep(task);
   const version = Number(task.delivery_version ?? 0);
@@ -888,8 +935,7 @@ export function buildTaskWorkflowView(
   if (activeItem && !activeItem.candidates.length) riskTags.push('人员未配置');
   if (task.status === TaskStatus.Blocked) riskTags.push('任务受阻');
   if (
-    task.planned_end_at &&
-    new Date(task.planned_end_at).getTime() < Date.now() &&
+    isOverdue &&
     ![TaskStatus.Completed, TaskStatus.Cancelled].includes(
       task.status as TaskStatus,
     )

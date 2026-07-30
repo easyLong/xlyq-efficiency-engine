@@ -48,6 +48,11 @@ describe('NotificationsService idempotency', () => {
         sql.includes('information_schema') ? [{ count: 1 }] : [],
       ),
     };
+    const businessCalendar = {
+      dueSearchEnd: jest.fn(),
+      isOverdue: jest.fn(),
+      isDueWithinWorkdays: jest.fn(),
+    };
     const unusedRepository = {};
     const service = new NotificationsService(
       notificationsRepository as never,
@@ -59,6 +64,7 @@ describe('NotificationsService idempotency', () => {
       unusedRepository as never,
       feishuService as never,
       dataSource as never,
+      businessCalendar as never,
     );
     const dto = {
       recipientUserId: '11111111-1111-4111-8111-111111111111',

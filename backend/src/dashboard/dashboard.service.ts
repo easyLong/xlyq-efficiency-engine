@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Not, Repository } from 'typeorm';
+import { DataSource, Not, Repository } from 'typeorm';
 import { buildAccessProfile } from '../common/access-control';
+import { BusinessCalendarService } from '../common/business-calendar.service';
 import { ProjectEntity } from '../projects/entities/project.entity';
 import { QuotationEntity } from '../quotations/entities/quotation.entity';
 import { RequirementQuotationMappingEntity } from '../quotations/entities/requirement-quotation-mapping.entity';
@@ -20,6 +21,7 @@ export class DashboardService {
     @InjectRepository(RequirementQuotationMappingEntity)
     private readonly mappingsRepository: Repository<RequirementQuotationMappingEntity>,
     private readonly dataSource: DataSource,
+    private readonly businessCalendar: BusinessCalendarService,
   ) {}
 
   async overview(currentUser: UserEntity | null = null) {
@@ -27,7 +29,6 @@ export class DashboardService {
       ? await buildAccessProfile(this.dataSource, currentUser)
       : null;
     const quoteVisible = profile?.dataScope.quotes === 'all';
-    const now = new Date();
     const [
       inProgressProjects,
       pendingTasks,
@@ -59,12 +60,17 @@ export class DashboardService {
             .getRawOne()
         : Promise.resolve(null),
     ]);
-    const trueOverdueTasks = await this.tasksRepository
+    const overdueCandidates = await this.tasksRepository
       .createQueryBuilder('task')
       .where('task.status != :completed', { completed: 'completed' })
       .andWhere('task.planned_end_at IS NOT NULL')
-      .andWhere('task.planned_end_at < :now', { now })
-      .getCount();
+      .getMany();
+    const overdueFlags = await Promise.all(
+      overdueCandidates.map((task) =>
+        this.businessCalendar.isOverdue(task.planned_end_at),
+      ),
+    );
+    const trueOverdueTasks = overdueFlags.filter(Boolean).length;
 
     return {
       inProgressProjects,
@@ -72,7 +78,9 @@ export class DashboardService {
       overdueTasks: trueOverdueTasks,
       pendingMappings,
       pendingQuotations,
-      totalQuotationAmount: quoteVisible ? Number(quotationAmount?.total ?? 0) : null,
+      totalQuotationAmount: quoteVisible
+        ? Number(quotationAmount?.total ?? 0)
+        : null,
     };
   }
 }

@@ -2188,6 +2188,7 @@
       workflowConfigMemberSearch: "",
       workflowConfigSelectedUserIds: [],
       workflowConfigSaving: false,
+      businessCalendar: [],
       groupFilters: {
         customerCode: "all",
         businessPlatform: "all",
@@ -2572,6 +2573,7 @@
       applyBusinessPlatformDimensions(state.businessPlatformDimensions);
       state.businessCategoryRelations = appData.businessCategoryRelations || [];
       state.workflowConfig = appData.workflowConfig || state.workflowConfig;
+      state.businessCalendar = appData.businessCalendar || [];
       state.users = appData.users;
       const refreshedUser = state.users.find(user => user.id === state.user?.id || user.username === state.user?.username);
       if (refreshedUser) {
@@ -4124,12 +4126,57 @@
       if (Number.isNaN(date.getTime())) return null;
       return new Date(date.getFullYear(), date.getMonth(), date.getDate());
     }
+    function localDateKey(value = new Date()) {
+      const date = startOfLocalDay(value);
+      if (!date) return "";
+      return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0"),
+      ].join("-");
+    }
+    function businessCalendarEntry(value) {
+      const key = localDateKey(value);
+      if (!key) return null;
+      return (state.businessCalendar || []).find(item => String(item.date || item.calendar_date || "").slice(0, 10) === key) || null;
+    }
+    function isBusinessWorkday(value) {
+      const day = startOfLocalDay(value);
+      if (!day) return false;
+      const entry = businessCalendarEntry(day);
+      if (entry) {
+        if (Object.prototype.hasOwnProperty.call(entry, "isWorkday")) return Boolean(entry.isWorkday);
+        if (Object.prototype.hasOwnProperty.call(entry, "is_workday")) return Boolean(Number(entry.is_workday));
+      }
+      const weekday = day.getDay();
+      return weekday >= 1 && weekday <= 5;
+    }
+    function effectiveBusinessDeadlineDay(value) {
+      const day = startOfLocalDay(value);
+      if (!day) return null;
+      for (let offset = 0; offset <= 14; offset += 1) {
+        const candidate = new Date(day.getFullYear(), day.getMonth(), day.getDate() + offset);
+        if (isBusinessWorkday(candidate)) return candidate;
+      }
+      return day;
+    }
+    function businessWorkdaysUntil(deadlineValue, fromValue = new Date()) {
+      const fromDay = startOfLocalDay(fromValue);
+      const dueDay = effectiveBusinessDeadlineDay(deadlineValue);
+      if (!fromDay || !dueDay) return null;
+      if (localDateKey(fromDay) === localDateKey(dueDay)) return 0;
+      const start = dueDay < fromDay ? dueDay : fromDay;
+      const end = dueDay < fromDay ? fromDay : dueDay;
+      let count = 0;
+      for (let cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1); cursor <= end; cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1)) {
+        if (isBusinessWorkday(cursor)) count += 1;
+      }
+      return dueDay < fromDay ? -count : count;
+    }
     function priorityValueFromDeadline(deadlineValue) {
-      const due = startOfLocalDay(deadlineValue);
-      const today = startOfLocalDay();
-      if (!due || !today) return "";
-      const diffDays = Math.min(4, Math.max(0, Math.ceil((due.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))));
-      return `p${diffDays}`;
+      const diffDays = businessWorkdaysUntil(deadlineValue);
+      if (diffDays === null) return "";
+      return `p${Math.min(4, Math.max(0, diffDays))}`;
     }
     function updateRequirementPriorityFromDeadline() {
       const input = qs("requirementPriorityInput");
@@ -7110,7 +7157,7 @@
           ["进行中任务", inProgressCount, "员工正在处理的任务"],
           ["待审核任务", pendingReviewCount, "员工已提交，等待成品审核或客户确认"],
           ["已完成需求", completedDemandCount, "客户确认通过并已归档的需求"],
-          ["延期任务", overdueCount, `3天内到期 ${dueSoonCount} 项`],
+          ["延期任务", overdueCount, `3个工作日内到期 ${dueSoonCount} 项`],
           ["交付资产数", totalAssets, "自动读取资产表中的图片和交付链接"],
         ].map(([label, value, hint]) => `<div class="panel metric"><span>${label}</span><strong>${value}</strong><span>${hint}</span></div>`).join("");
         const analyticsContext = {
@@ -7412,14 +7459,13 @@
       return task?.status === "completed";
     }
     function isTaskOverdue(task) {
-      const due = taskDueDate(task);
-      return !!due && due.getTime() < Date.now() && !isTaskCompleted(task) && task?.status !== "cancelled";
+      const remaining = businessWorkdaysUntil(taskDueDate(task));
+      return remaining !== null && remaining < 0 && !isTaskCompleted(task) && task?.status !== "cancelled";
     }
     function isTaskDueSoon(task) {
-      const due = taskDueDate(task);
-      if (!due || isTaskCompleted(task)) return false;
-      const diff = due.getTime() - Date.now();
-      return diff >= 0 && diff <= 3 * 24 * 60 * 60 * 1000;
+      const remaining = businessWorkdaysUntil(taskDueDate(task));
+      if (remaining === null || isTaskCompleted(task)) return false;
+      return remaining >= 0 && remaining <= 3;
     }
     function taskProgressGroup(task) {
       if (isTaskCompleted(task)) return "completed";

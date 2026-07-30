@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
-import { LessThan, Not, Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
+import { BusinessCalendarService } from '../common/business-calendar.service';
 import { RiskAlertEntity } from '../common/entities/risk-alert.entity';
 import { TaskEntity } from '../tasks/entities/task.entity';
 
@@ -12,9 +13,15 @@ export class RiskAlertsService {
     private readonly riskAlertsRepository: Repository<RiskAlertEntity>,
     @InjectRepository(TaskEntity)
     private readonly tasksRepository: Repository<TaskEntity>,
+    private readonly businessCalendar: BusinessCalendarService,
   ) {}
 
-  async findAll(projectId?: string, status?: string, severity?: string, alertType?: string) {
+  async findAll(
+    projectId?: string,
+    status?: string,
+    severity?: string,
+    alertType?: string,
+  ) {
     const where = {
       ...(projectId ? { project_id: projectId } : {}),
       ...(status ? { status } : {}),
@@ -29,14 +36,20 @@ export class RiskAlertsService {
   }
 
   async detect(projectId: string) {
-    const now = new Date();
-    const overdueTasks = await this.tasksRepository.find({
+    const overdueCandidates = await this.tasksRepository.find({
       where: {
         project_id: projectId,
         status: Not('completed'),
-        planned_end_at: LessThan(now),
       },
     });
+    const overdueFlags = await Promise.all(
+      overdueCandidates.map((task) =>
+        this.businessCalendar.isOverdue(task.planned_end_at),
+      ),
+    );
+    const overdueTasks = overdueCandidates.filter(
+      (_, index) => overdueFlags[index],
+    );
     const blockedTasks = await this.tasksRepository.find({
       where: {
         project_id: projectId,
@@ -71,7 +84,7 @@ export class RiskAlertsService {
             : `任务逾期：${task.task_name}`,
         content:
           alertType === 'blocked'
-            ? task.blocked_reason ?? '任务被标记为阻塞'
+            ? (task.blocked_reason ?? '任务被标记为阻塞')
             : `计划结束时间 ${task.planned_end_at?.toISOString() ?? ''} 已逾期`,
         status: 'open',
         triggered_at: new Date(),
@@ -88,7 +101,9 @@ export class RiskAlertsService {
   }
 
   async acknowledge(alertId: string) {
-    const alert = await this.riskAlertsRepository.findOne({ where: { id: alertId } });
+    const alert = await this.riskAlertsRepository.findOne({
+      where: { id: alertId },
+    });
     if (!alert) {
       return null;
     }
@@ -97,7 +112,9 @@ export class RiskAlertsService {
   }
 
   async resolve(alertId: string) {
-    const alert = await this.riskAlertsRepository.findOne({ where: { id: alertId } });
+    const alert = await this.riskAlertsRepository.findOne({
+      where: { id: alertId },
+    });
     if (!alert) {
       return null;
     }

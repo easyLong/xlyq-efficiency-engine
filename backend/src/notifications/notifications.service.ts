@@ -7,6 +7,7 @@ import {
   buildAppPublicUrl,
   rebaseAppPublicUrl,
 } from '../common/app-public-url';
+import { BusinessCalendarService } from '../common/business-calendar.service';
 import { WorklogEntity } from '../common/entities/worklog.entity';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
 import { FeishuService } from '../integrations/feishu/feishu.service';
@@ -51,6 +52,7 @@ export class NotificationsService implements OnModuleInit {
     private readonly feishuSyncLogsRepository: Repository<FeishuSyncLogEntity>,
     private readonly feishuService: FeishuService,
     private readonly dataSource: DataSource,
+    private readonly businessCalendar: BusinessCalendarService,
   ) {}
 
   async onModuleInit() {
@@ -659,8 +661,11 @@ export class NotificationsService implements OnModuleInit {
 
   async scanTaskDeadlines(dto: ScanTaskDeadlinesDto) {
     const now = new Date();
-    const daysAhead = Number(dto.daysAhead ?? 1);
-    const dueBefore = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+    const workdaysAhead = Number(dto.daysAhead ?? 1);
+    const dueBefore = await this.businessCalendar.dueSearchEnd(
+      workdaysAhead,
+      now,
+    );
 
     const qb = this.tasksRepository
       .createQueryBuilder('task')
@@ -672,13 +677,25 @@ export class NotificationsService implements OnModuleInit {
       qb.andWhere('task.project_id = :projectId', { projectId: dto.projectId });
     }
 
-    const tasks = await qb.orderBy('task.planned_end_at', 'ASC').getMany();
+    const candidates = await qb.orderBy('task.planned_end_at', 'ASC').getMany();
+    const taskChecks = await Promise.all(
+      candidates.map(async (task) => {
+        const overdue = await this.businessCalendar.isOverdue(
+          task.planned_end_at,
+          now,
+        );
+        const dueSoon = await this.businessCalendar.isDueWithinWorkdays(
+          task.planned_end_at,
+          workdaysAhead,
+          now,
+        );
+        return { task, overdue, dueSoon };
+      }),
+    );
+    const tasks = taskChecks.filter((row) => row.overdue || row.dueSoon);
     let notificationCount = 0;
 
-    for (const task of tasks) {
-      const overdue = task.planned_end_at
-        ? task.planned_end_at.getTime() < now.getTime()
-        : false;
+    for (const { task, overdue } of tasks) {
       const recipients = await this.getTaskStakeholders(task);
       const messages = await this.sendToUsers(recipients, {
         title: `${overdue ? '任务已逾期' : '任务即将逾期'}：${task.task_name}`,

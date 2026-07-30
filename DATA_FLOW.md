@@ -433,3 +433,9 @@ ITEM-002
 ```
 
 长服务说明、字数范围、屏数限制、结算条件等放入 `quotation_items.remark`。区间价、按实际需求定价、询价项统一按可变价处理：`pricing_mode = variable`、`unit_price = 0`、`match_status = price_missing`。
+
+## 2026-07-30 最新补充
+
+- 到期判断由自然日改为工作日：默认周一到周五，`business_calendar` 可覆盖节假日/调休。
+- 前端会从 `GET /api/v1/business-calendar/range` 读取日期窗口，统一用于优先级、延期提示、看板统计。
+- 后端通知扫描、风险识别、任务工作流风险标签都改为同一套工作日口径。

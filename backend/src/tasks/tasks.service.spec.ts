@@ -227,16 +227,7 @@ describe('TasksService delivery flow', () => {
       1,
       ['reviewer-1'],
     );
-    expect(result.assigneeSession).toEqual(
-      expect.objectContaining({
-        accessToken: 'mvp-user-1',
-        user: expect.objectContaining({
-          id: 'user-1',
-          username: 'member.user',
-          permissions: expect.arrayContaining(['task.view_assigned']),
-        }),
-      }),
-    );
+    expect(result.assigneeSession).toBeUndefined();
     expect(taskStatusHistoriesRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         from_status: TaskStatus.Assigned,
