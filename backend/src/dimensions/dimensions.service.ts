@@ -215,7 +215,7 @@ export class DimensionsService implements OnModuleInit {
 
   private defaultDimensions(): SeedDimension[] {
     return [
-      ...['招行', '工行', '交行', '理财通', '蚂蚁', '天天基金', '京东金融', '其它'].map(
+      ...['招行', '工行', '交行', '建行', '理财通', '蚂蚁', '天天基金', '京东金融', '其它'].map(
         (name, index) => ({
           dimensionType: 'business_platform',
           dimensionCode: this.slug(name),
@@ -307,6 +307,7 @@ export class DimensionsService implements OnModuleInit {
       招行: 'cmb',
       工行: 'icbc',
       交行: 'bocom',
+      建行: 'ccb',
       理财通: 'licaitong',
       蚂蚁: 'ant',
       天天基金: 'eastmoney',

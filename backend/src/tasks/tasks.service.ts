@@ -412,6 +412,9 @@ export class TasksService implements OnModuleInit {
         requirement?.business_category,
       );
       const customerCode = String(requirement?.customer_code ?? '').trim();
+      if (customerCode && dispatchCustomers.has(customerCode)) {
+        return true;
+      }
       const isOpenDispatch = [TaskStatus.Todo, TaskStatus.Pending].includes(
         task.status as TaskStatus,
       );

@@ -323,6 +323,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       );
       const hasConfiguredScope = Boolean(
         ownedCategories.has(requirementCategory) ||
+        dispatchCustomers.has(requirement.customer_code) ||
         (task &&
           ['todo', 'pending'].includes(task.status) &&
           !task.dispatcher_user_id &&
