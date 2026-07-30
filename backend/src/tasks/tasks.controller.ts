@@ -268,6 +268,14 @@ export class TasksController {
     );
   }
 
+  @Post(':id/remind-progress')
+  remindProgress(
+    @Param('id') id: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.remindTaskProgress(id, request?.user?.id ?? null);
+  }
+
   @Post(':id/ai-assignment-suggestion')
   @Permission('task.assign_owned')
   aiAssignmentSuggestion(@Param('id') id: string) {

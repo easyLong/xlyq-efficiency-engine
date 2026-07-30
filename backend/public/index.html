@@ -5333,10 +5333,12 @@
     function renderReviewAction(row) {
       const isBusy = state.busyActionId === row.task.id;
       const canAct = canCurrentUserReviewRow(row);
+      const canRemind = row.task?.assignee_user_id === state.user?.id && row.task?.status === "pending_review";
       const approveText = row.task.review_stage === "product_review" ? "一审通过" : row.task.review_stage === "customer_review" ? "二审通过" : "通过验收";
       return `
         <div class="review-action" onclick="event.stopPropagation()">
           <button class="btn" ${isBusy ? "disabled" : ""} onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
+          ${canRemind ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="remindTaskProgress('${row.task.id}')">${isBusy ? "处理中..." : "催进度"}</button>` : ""}
           ${canAct && can("task.accept_owned") ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : approveText}</button>` : ""}
           ${canAct && can("task.return_owned") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>` : ""}
           ${renderTaskAssetDirectoryButton(row.task)}
@@ -5346,6 +5348,24 @@
     function openTaskAssetReview(taskId) {
       if (!taskId) return;
       window.open(`/asset-review.html?taskId=${encodeURIComponent(taskId)}`, "_blank", "noopener");
+    }
+    async function remindTaskProgress(taskId) {
+      if (!taskId || state.busyActionId) return;
+      state.busyActionId = taskId;
+      renderRequirementBoard();
+      try {
+        const result = await request(`/tasks/${encodeURIComponent(taskId)}/remind-progress`, {
+          method: "POST",
+          body: {},
+        });
+        toast(result?.recipientCount ? `已提醒 ${result.recipientCount} 人处理审核` : "已提醒审核人");
+        refreshMessages();
+      } catch (error) {
+        toast(error.message || "提醒失败");
+      } finally {
+        state.busyActionId = null;
+        renderRequirementBoard();
+      }
     }
     async function openTaskAssetSheet(taskId) {
       if (!taskId) return;

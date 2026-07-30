@@ -232,6 +232,10 @@ npm run migrate:project-tables -- --execute
 
 ## 2026-07-30 最新补充
 
+- 任务需求列表新增“催进度”按钮：仅当前执行人在 `pending_review` 阶段可见，可手动提醒当前审核阶段负责人。
+- 新增接口 `POST /api/v1/tasks/:id/remind-progress`，并新增 `task_progress_reminders` 记录表用于频控和审计。
+- 该功能不改任务状态，只发消息，不影响现有交付/验收流程。
+
 - 新增 `business_calendar` 工作日历表和只读接口 `GET /api/v1/business-calendar/range`。
 - `.env` 暂不需要新增配置；默认按周一到周五计算工作日。
 - 如需补节假日/调休，直接维护 `business_calendar` 即可。

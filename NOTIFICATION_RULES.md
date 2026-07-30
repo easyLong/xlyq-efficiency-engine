@@ -61,3 +61,7 @@
 - 群机器人只用于项目级重要事件或人工显式选择 `feishu_bot`。
 - 所有飞书投递失败都不会阻断主业务流程，只记录在 `notification_messages.delivery_result_json` 和 `error_message` 中。
 - 定时扫描类通知后续需要增加去重策略，避免同一任务在短时间内重复提醒。
+- 新增“催进度”通知：仅当前执行人在 `pending_review` 阶段可手动触发。
+- 接收方按审核阶段决定：`product_review` 发给一审负责人，`customer_review` 发给二审负责人。
+- 通知渠道默认走 `in_app` + `feishu_app`，卡片按钮继续使用“查看交付资产”。
+- 同一任务、同一执行人、同一阶段 6 小时内只允许提醒一次。

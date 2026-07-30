@@ -419,6 +419,12 @@
 ### `POST /tasks/{taskId}/ai-assignment-suggestion`
 - 说明：生成 AI 智能分配建议
 
+### `POST /tasks/{taskId}/remind-progress`
+- 说明：执行人在任务进入待审核后手动催进度，通知当前审核阶段负责人处理。
+- 权限：必须为当前任务执行人；任务状态必须为 `pending_review`。
+- 频控：同一任务、同一执行人、同一审核阶段 6 小时内只能触发一次。
+- 返回：`ok`、`taskId`、`reviewStage`、`recipientCount`。
+
 ### `GET /tasks/board`
 - 说明：看板视图
 - 查询：`projectId`、`liveAssetCount`

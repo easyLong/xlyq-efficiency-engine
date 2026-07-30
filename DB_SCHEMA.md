@@ -98,6 +98,7 @@ projects 1---n ai_execution_logs
 users n---n roles (via user_roles)
 projects n---n users (via project_members)
 tasks 1---n task_status_histories
+tasks 1---n task_progress_reminders
 dimension_dictionaries self parent_code/dimension_code hierarchy
 group_contact_mappings maps group + contact to customer + platform
 business_category_secondary_categories stores category-secondary relation
@@ -119,6 +120,27 @@ business_category_owner_configs maps business category to requirement owner
 | trigger_source | varchar(64) | 触发来源 |
 | remark | varchar(500) | 备注 |
 | created_at | datetime | 创建时间 |
+
+### `task_progress_reminders`
+
+执行人催进度记录表。该表不改变任务状态，只记录提醒行为和频控依据。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | char(36) | 主键 |
+| task_id | char(36) | 任务 ID |
+| sender_user_id | char(36) | 触发提醒的执行人 |
+| recipient_user_ids_json | json | 本次提醒的接收人用户 ID 列表 |
+| task_status | varchar(32) | 触发时任务状态，当前要求为 `pending_review` |
+| review_stage | varchar(32), null | 触发时审核阶段 |
+| message | varchar(1000), null | 提醒摘要 |
+| created_at / updated_at / deleted_at | datetime | 时间字段 |
+
+索引：
+
+- `(task_id, created_at)`
+- `(sender_user_id, created_at)`
+- `(review_stage, created_at)`
 
 ### `dimension_dictionaries`
 

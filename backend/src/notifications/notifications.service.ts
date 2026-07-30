@@ -466,6 +466,54 @@ export class NotificationsService implements OnModuleInit {
     });
   }
 
+  async notifyTaskProgressReminder(
+    task: TaskEntity,
+    senderName: string,
+    recipientUserIds: string[],
+    reviewStage: string | null,
+  ) {
+    const recipients = [...new Set(recipientUserIds.filter(Boolean))];
+    if (!recipients.length) {
+      return null;
+    }
+    const [project, assignee] = await Promise.all([
+      this.projectsRepository.findOne({ where: { id: task.project_id } }),
+      task.assignee_user_id
+        ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
+        : Promise.resolve(null),
+    ]);
+    const fundPlatformLabel = await this.taskFundPlatformLabel(task, project);
+    const taskDetail = await this.taskDetailForNotification(task);
+    const stageLabel =
+      reviewStage === 'customer_review'
+        ? '二审'
+        : reviewStage === 'product_review'
+          ? '一审'
+          : '审核';
+    return Promise.all(
+      recipients.map((recipientUserId) =>
+        this.send({
+          recipientUserId,
+          title: `任务进度提醒：${task.task_name}`,
+          content: [
+            `执行人：${senderName}`,
+            `当前阶段：${stageLabel}`,
+            `任务：${task.task_name}`,
+            ...(taskDetail ? [`任务详情：${taskDetail}`] : []),
+            `基金平台：${fundPlatformLabel}`,
+            `交付人：${assignee?.display_name ?? '-'}`,
+            '执行人已提醒你处理该任务，请尽快查看并完成审核。',
+          ].join('\n'),
+          objectType: 'task_progress_reminder',
+          objectId: task.id,
+          channels: ['in_app', 'feishu_app'],
+          actionUrl: this.buildTaskAssetReviewUrl(task, recipientUserId),
+          actionText: '查看交付资产',
+        }),
+      ),
+    );
+  }
+
   async notifyTaskAssetsSubmittedForProductReview(
     task: TaskEntity,
     assetCount: number,

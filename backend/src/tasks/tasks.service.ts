@@ -108,6 +108,16 @@ type TaskReviewFacts = {
   businessPlatform: string | null;
 };
 
+type TaskProgressReminderLog = {
+  id: string;
+  task_id: string;
+  sender_user_id: string;
+  recipient_user_ids_json: string;
+  task_status: string;
+  review_stage: string | null;
+  message: string | null;
+};
+
 @Injectable()
 export class TasksService implements OnModuleInit {
   private readonly liveAssetSyncTtlMs = 2 * 60 * 1000;
@@ -146,6 +156,7 @@ export class TasksService implements OnModuleInit {
     await this.ensureTasksSchema();
     await this.ensureTaskStatusHistoryTable();
     await this.ensureTaskReviewTables();
+    await this.ensureTaskProgressReminderTable();
     await this.taskWorkflowRuntime.ensureSchema();
     await this.taskWorkflowRuntime.normalizeLegacyTaskState();
     await this.taskWorkflowRuntime.reconcileOpenWorkItems();
@@ -1360,6 +1371,92 @@ export class TasksService implements OnModuleInit {
     };
   }
 
+  async remindTaskProgress(taskId: string, actingUserId: string | null) {
+    if (!actingUserId) {
+      throw new UnauthorizedException('请先登录后再提醒进度');
+    }
+    const task = await this.findOne(taskId);
+    if (task.assignee_user_id !== actingUserId) {
+      throw new ForbiddenException('只有当前执行人可以催进度');
+    }
+    if (task.status !== TaskStatus.PendingReview) {
+      throw new BadRequestException('当前任务不在待审核阶段');
+    }
+
+    const user = await this.usersRepository.findOne({
+      where: { id: actingUserId, status: 'active' },
+    });
+    if (!user) {
+      throw new ForbiddenException('当前账号不可用');
+    }
+
+    const reviewStage = String(task.review_stage ?? TaskReviewStage.None);
+    const senderName = user.display_name ?? user.username ?? '执行人';
+    const recent = await this.dataSource.query(
+      `
+        SELECT id
+        FROM task_progress_reminders
+        WHERE task_id = ?
+          AND sender_user_id = ?
+          AND review_stage = ?
+          AND created_at >= DATE_SUB(NOW(), INTERVAL 6 HOUR)
+          AND deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      [task.id, actingUserId, reviewStage],
+    );
+    if (recent?.length) {
+      throw new ConflictException('该任务已提醒过，请 6 小时后再试');
+    }
+
+    const recipients = await this.taskProgressReminderRecipientIds(task);
+    if (!recipients.length) {
+      throw new BadRequestException('当前阶段暂无可提醒人员');
+    }
+
+    await this.notificationsService.notifyTaskProgressReminder(
+      task,
+      senderName,
+      recipients,
+      reviewStage,
+    );
+    const message = `${senderName}提醒${recipients.length}人处理${task.task_name}`;
+
+    await this.dataSource.query(
+      `
+        INSERT INTO task_progress_reminders (
+          id,
+          task_id,
+          sender_user_id,
+          recipient_user_ids_json,
+          task_status,
+          review_stage,
+          message,
+          created_at,
+          updated_at,
+          deleted_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL)
+      `,
+      [
+        randomUUID(),
+        task.id,
+        actingUserId,
+        JSON.stringify(recipients),
+        task.status,
+        reviewStage,
+        message,
+      ],
+    );
+
+    return {
+      ok: true,
+      taskId: task.id,
+      reviewStage,
+      recipientCount: recipients.length,
+    };
+  }
+
   async uploadLocalAssetImage(
     id: string,
     dto: UploadLocalAssetImageDto,
@@ -1992,6 +2089,27 @@ export class TasksService implements OnModuleInit {
     `);
     await ensureWorkflowConfigTables(this.dataSource);
     await this.normalizeLegacyReviewStages();
+  }
+
+  private async ensureTaskProgressReminderTable() {
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS task_progress_reminders (
+        id CHAR(36) NOT NULL,
+        task_id CHAR(36) NOT NULL,
+        sender_user_id CHAR(36) NOT NULL,
+        recipient_user_ids_json JSON NOT NULL,
+        task_status VARCHAR(32) NOT NULL,
+        review_stage VARCHAR(32) NULL,
+        message VARCHAR(1000) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
+        PRIMARY KEY (id),
+        KEY idx_task_progress_reminders_task_created (task_id, created_at),
+        KEY idx_task_progress_reminders_sender (sender_user_id, created_at),
+        KEY idx_task_progress_reminders_stage (review_stage, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务催进度记录表'
+    `);
   }
 
   private async normalizeLegacyReviewStages() {
@@ -3522,6 +3640,13 @@ export class TasksService implements OnModuleInit {
       facts.customerCode,
       'customer_reviewer',
     );
+  }
+
+  private async taskProgressReminderRecipientIds(task: TaskEntity) {
+    if (task.review_stage === TaskReviewStage.CustomerReview) {
+      return this.customerReviewerIds(task);
+    }
+    return this.productReviewerIds(task);
   }
 
   private async taskCompletionRecipientIds(task: TaskEntity) {
