@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { ConflictException, Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
 import {
@@ -22,8 +22,15 @@ export type TaskRoleCode =
   | 'dispatcher'
   | 'executor'
   | 'first_reviewer'
-  | 'second_reviewer'
-  | 'owner';
+  | 'second_reviewer';
+
+export type TaskStepClaim = {
+  workItemId: string;
+  status: TaskWorkItemStatus;
+  claimedByUserId: string | null;
+  claimedByName: string | null;
+  claimedAt: Date | string | null;
+};
 
 export type TaskRoleState = {
   roleCode: TaskRoleCode;
@@ -82,6 +89,7 @@ type WorkItemRow = {
   result: string | null;
   remark: string | null;
   openedAt: Date | string | null;
+  claimedAt: Date | string | null;
   closedAt: Date | string | null;
   candidates: WorkItemCandidate[];
 };
@@ -336,21 +344,64 @@ export class TaskWorkflowRuntimeService {
   async syncTaskCurrentStep(
     task: TaskEntity,
     options: { manager?: EntityManager; forceNew?: boolean } = {},
-  ) {
-    const executor = options.manager ?? this.dataSource;
-    const step = deriveTaskWorkflowStep(task);
+  ): Promise<string | null> {
+    if (!options.manager) {
+      return this.dataSource.transaction((manager) =>
+        this.syncTaskCurrentStep(task, { ...options, manager }),
+      );
+    }
+    const executor = options.manager;
+    const lockedRows: Array<
+      Pick<
+        TaskEntity,
+        | 'status'
+        | 'review_stage'
+        | 'current_step'
+        | 'delivery_version'
+        | 'returned_from_step'
+        | 'assignee_user_id'
+        | 'dispatcher_user_id'
+        | 'product_reviewer_user_id'
+        | 'customer_reviewer_user_id'
+      >
+    > = await executor.query(
+      `
+        SELECT
+          status,
+          review_stage,
+          current_step,
+          delivery_version,
+          returned_from_step,
+          assignee_user_id,
+          dispatcher_user_id,
+          product_reviewer_user_id,
+          customer_reviewer_user_id
+        FROM tasks
+        WHERE id = ? AND deleted_at IS NULL
+        FOR UPDATE
+      `,
+      [task.id],
+    );
+    if (!lockedRows.length) return null;
+    const workflowTask = { ...task, ...lockedRows[0] } as TaskEntity;
+    const step = deriveTaskWorkflowStep(workflowTask);
     if ([TaskWorkflowStep.Done, TaskWorkflowStep.Cancelled].includes(step)) {
       await this.cancelOpenWorkItems(
-        task.id,
+        workflowTask.id,
         'workflow_finished',
         null,
         executor,
       );
       return null;
     }
-    const version = Number(task.delivery_version ?? 0);
+    const version = Number(workflowTask.delivery_version ?? 0);
     if (options.forceNew) {
-      await this.cancelOpenWorkItems(task.id, 'superseded', null, executor);
+      await this.cancelOpenWorkItems(
+        workflowTask.id,
+        'superseded',
+        null,
+        executor,
+      );
     } else {
       await executor.query(
         `
@@ -364,7 +415,7 @@ export class TaskWorkflowRuntimeService {
             AND status IN ('open', 'claimed')
             AND (step_type <> ? OR delivery_version <> ?)
         `,
-        [task.id, step, version],
+        [workflowTask.id, step, version],
       );
     }
 
@@ -380,7 +431,7 @@ export class TaskWorkflowRuntimeService {
         ORDER BY created_at DESC
         LIMIT 1
       `,
-      [task.id, step, version],
+      [workflowTask.id, step, version],
     );
     const workItemId = existing[0]?.id ?? randomUUID();
     if (!existing.length) {
@@ -390,10 +441,14 @@ export class TaskWorkflowRuntimeService {
             id, task_id, step_type, delivery_version, status, opened_at
           ) VALUES (?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)
         `,
-        [workItemId, task.id, step, version],
+        [workItemId, workflowTask.id, step, version],
       );
     }
-    const candidateIds = await this.resolveCandidateIds(task, step, executor);
+    const candidateIds = await this.resolveCandidateIds(
+      workflowTask,
+      step,
+      executor,
+    );
     for (const userId of candidateIds) {
       await executor.query(
         `
@@ -421,27 +476,72 @@ export class TaskWorkflowRuntimeService {
   ) {
     const workItem = await this.latestOpenWorkItem(taskId, step, executor);
     if (!workItem) return null;
-    await executor.query(
+    if (workItem.claimedByUserId) {
+      if (workItem.claimedByUserId === actorUserId) {
+        return workItem;
+      }
+      throw new ConflictException(
+        `该工作项已由${workItem.claimedByName || '其他人员'}领取`,
+      );
+    }
+    const claimResult = await executor.query(
       `
         UPDATE task_work_items
         SET status = 'claimed',
-            claimed_by_user_id = COALESCE(claimed_by_user_id, ?),
-            claimed_at = COALESCE(claimed_at, CURRENT_TIMESTAMP),
+            claimed_by_user_id = ?,
+            claimed_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND status IN ('open', 'claimed')
+        WHERE id = ?
+          AND status = 'open'
+          AND claimed_by_user_id IS NULL
       `,
-      [actorUserId, workItem.id],
+      [actorUserId, workItem.workItemId],
+    );
+    if (affectedRows(claimResult) !== 1) {
+      const current = await this.latestOpenWorkItem(taskId, step, executor);
+      if (current?.claimedByUserId === actorUserId) {
+        return current;
+      }
+      throw new ConflictException(
+        current?.claimedByUserId
+          ? `该工作项已由${current.claimedByName || '其他人员'}领取`
+          : '该工作项已被其他人员处理',
+      );
+    }
+    await executor.query(
+      `
+        INSERT INTO task_work_item_candidates (
+          id, work_item_id, user_id, status, candidate_source
+        ) VALUES (?, ?, ?, 'claimed', 'actual_actor')
+        ON DUPLICATE KEY UPDATE
+          status = 'claimed',
+          deleted_at = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      `,
+      [randomUUID(), workItem.workItemId, actorUserId],
     );
     await executor.query(
       `
         UPDATE task_work_item_candidates
-        SET status = CASE WHEN user_id = ? THEN 'claimed' ELSE status END,
+        SET status = CASE
+              WHEN user_id = ? THEN 'claimed'
+              WHEN status IN ('open', 'claimed') THEN 'claimed_by_other'
+              ELSE status
+            END,
             updated_at = CURRENT_TIMESTAMP
         WHERE work_item_id = ? AND deleted_at IS NULL
       `,
-      [actorUserId, workItem.id],
+      [actorUserId, workItem.workItemId],
     );
-    return workItem.id;
+    return this.latestOpenWorkItem(taskId, step, executor);
+  }
+
+  async getStepClaim(
+    taskId: string,
+    step: TaskWorkflowStep,
+    executor: QueryExecutor = this.dataSource,
+  ) {
+    return this.latestOpenWorkItem(taskId, step, executor);
   }
 
   async completeStep(
@@ -454,7 +554,7 @@ export class TaskWorkflowRuntimeService {
   ) {
     let workItem = await this.latestOpenWorkItem(taskId, step, executor);
     if (!workItem) {
-      workItem = { id: randomUUID() };
+      const workItemId = randomUUID();
       await executor.query(
         `
           INSERT INTO task_work_items (
@@ -468,7 +568,7 @@ export class TaskWorkflowRuntimeService {
           FROM tasks WHERE id = ? AND deleted_at IS NULL
         `,
         [
-          workItem.id,
+          workItemId,
           step,
           actorUserId,
           result,
@@ -477,6 +577,13 @@ export class TaskWorkflowRuntimeService {
           taskId,
         ],
       );
+      workItem = {
+        workItemId,
+        status: 'completed',
+        claimedByUserId: actorUserId,
+        claimedByName: null,
+        claimedAt: actorUserId ? new Date() : null,
+      };
     } else {
       await executor.query(
         `
@@ -493,7 +600,7 @@ export class TaskWorkflowRuntimeService {
               updated_at = CURRENT_TIMESTAMP
           WHERE id = ? AND status IN ('open', 'claimed')
         `,
-        [actorUserId, result, remark ?? null, actorUserId, workItem.id],
+        [actorUserId, result, remark ?? null, actorUserId, workItem.workItemId],
       );
     }
     if (actorUserId) {
@@ -504,23 +611,23 @@ export class TaskWorkflowRuntimeService {
           ) VALUES (?, ?, ?, 'handled', 'actual_actor')
           ON DUPLICATE KEY UPDATE status = 'handled', updated_at = CURRENT_TIMESTAMP
         `,
-        [randomUUID(), workItem.id, actorUserId],
+        [randomUUID(), workItem.workItemId, actorUserId],
       );
       await executor.query(
         `
           UPDATE task_work_item_candidates
           SET status = CASE
                 WHEN user_id = ? THEN 'handled'
-                WHEN status IN ('open', 'claimed') THEN 'handled_by_other'
+                WHEN status IN ('open', 'claimed', 'claimed_by_other') THEN 'handled_by_other'
                 ELSE status
               END,
               updated_at = CURRENT_TIMESTAMP
           WHERE work_item_id = ? AND deleted_at IS NULL
         `,
-        [actorUserId, workItem.id],
+        [actorUserId, workItem.workItemId],
       );
     }
-    return workItem.id;
+    return workItem.workItemId;
   }
 
   async cancelOpenWorkItems(
@@ -548,7 +655,7 @@ export class TaskWorkflowRuntimeService {
         UPDATE task_work_item_candidates candidate
         JOIN task_work_items item ON item.id = candidate.work_item_id
         SET candidate.status = CASE
-              WHEN candidate.status IN ('open', 'claimed') THEN 'cancelled'
+              WHEN candidate.status IN ('open', 'claimed', 'claimed_by_other') THEN 'cancelled'
               ELSE candidate.status
             END,
             candidate.updated_at = CURRENT_TIMESTAMP
@@ -738,15 +845,23 @@ export class TaskWorkflowRuntimeService {
     step: TaskWorkflowStep,
     executor: QueryExecutor,
   ) {
-    const rows: Array<{ id: string }> = await executor.query(
+    const rows: TaskStepClaim[] = await executor.query(
       `
-        SELECT id
-        FROM task_work_items
-        WHERE task_id = ?
-          AND step_type = ?
-          AND status IN ('open', 'claimed')
-          AND deleted_at IS NULL
-        ORDER BY created_at DESC
+        SELECT
+          item.id AS workItemId,
+          item.status,
+          item.claimed_by_user_id AS claimedByUserId,
+          actor.display_name AS claimedByName,
+          item.claimed_at AS claimedAt
+        FROM task_work_items item
+        LEFT JOIN users actor
+          ON actor.id = item.claimed_by_user_id
+         AND actor.deleted_at IS NULL
+        WHERE item.task_id = ?
+          AND item.step_type = ?
+          AND item.status IN ('open', 'claimed')
+          AND item.deleted_at IS NULL
+        ORDER BY item.created_at DESC
         LIMIT 1
       `,
       [taskId, step],
@@ -806,6 +921,7 @@ export class TaskWorkflowRuntimeService {
             item.result,
             item.remark,
             item.opened_at AS openedAt,
+            item.claimed_at AS claimedAt,
             item.closed_at AS closedAt
           FROM task_work_items item
           LEFT JOIN users actor
@@ -879,24 +995,18 @@ export function buildTaskWorkflowView(
     if (roleCode === 'second_reviewer') {
       return reviewerState(task, roleCode, item);
     }
-    return ownerState(task);
+    throw new Error(`Unsupported task role: ${String(roleCode)}`);
   };
   const roleCodes: TaskRoleCode[] = [
     'dispatcher',
     'executor',
     'first_reviewer',
     'second_reviewer',
-    'owner',
   ];
   const roleStates = roleCodes.map((roleCode) =>
     stateForRole(roleCode, byStep(stepForRole(roleCode))),
   );
   const userId = currentUser?.id ?? null;
-  const ownsCategory = Boolean(
-    profile?.ownedBusinessCategoryCodes.includes(
-      normalizeAccessBusinessCategory(facts.businessCategory),
-    ),
-  );
   const myStates = userId
     ? roleCodes
         .map((roleCode) => {
@@ -909,7 +1019,9 @@ export function buildTaskWorkflowView(
                   item.candidates.some(
                     (candidate) =>
                       candidate.userId === userId &&
-                      ['open', 'claimed'].includes(candidate.status),
+                      ['open', 'claimed', 'claimed_by_other'].includes(
+                        candidate.status,
+                      ),
                   ))),
           );
           return {
@@ -918,7 +1030,7 @@ export function buildTaskWorkflowView(
           };
         })
         .filter(({ state, item }) =>
-          isRoleRelatedToUser(state.roleCode, task, item, userId, ownsCategory),
+          isRoleRelatedToUser(state.roleCode, task, item, userId),
         )
         .map(({ state }) => personalizeRoleState(state, task, userId))
     : [];
@@ -1282,74 +1394,6 @@ function reviewerState(
   );
 }
 
-function ownerState(task: TaskEntity): TaskRoleState {
-  const step = deriveTaskWorkflowStep(task);
-  if (task.status === TaskStatus.Completed) {
-    return roleState(
-      'owner',
-      'completed',
-      '已验收',
-      'done',
-      false,
-      [],
-      undefined,
-      task,
-    );
-  }
-  if (task.status === TaskStatus.Cancelled) {
-    return roleState(
-      'owner',
-      'cancelled',
-      '已取消',
-      'done',
-      false,
-      [],
-      undefined,
-      task,
-    );
-  }
-  if (
-    [TaskStatus.Returned, TaskStatus.Blocked].includes(
-      task.status as TaskStatus,
-    )
-  ) {
-    return roleState(
-      'owner',
-      'attention',
-      '风险待协调',
-      'attention',
-      false,
-      ['view'],
-      undefined,
-      task,
-    );
-  }
-  if (
-    [TaskWorkflowStep.FirstReview, TaskWorkflowStep.SecondReview].includes(step)
-  ) {
-    return roleState(
-      'owner',
-      'reviewing',
-      taskWorkflowStepLabel(step),
-      'waiting',
-      false,
-      ['view'],
-      undefined,
-      task,
-    );
-  }
-  return roleState(
-    'owner',
-    step === TaskWorkflowStep.Dispatch ? 'pending_dispatch' : 'progressing',
-    step === TaskWorkflowStep.Dispatch ? '待派发' : '推进中',
-    step === TaskWorkflowStep.Dispatch ? 'attention' : 'active',
-    false,
-    ['view'],
-    undefined,
-    task,
-  );
-}
-
 function roleState(
   roleCode: TaskRoleCode,
   statusKey: string,
@@ -1389,11 +1433,7 @@ function isRoleRelatedToUser(
   task: TaskEntity,
   item: WorkItemRow | undefined,
   userId: string,
-  ownsCategory: boolean,
 ) {
-  if (roleCode === 'owner') {
-    return ownsCategory || task.reporter_user_id === userId;
-  }
   const actorId = actorIdForRole(task, roleCode);
   if (actorId === userId || item?.claimedByUserId === userId) return true;
   return Boolean(
@@ -1402,7 +1442,7 @@ function isRoleRelatedToUser(
     item.candidates.some(
       (candidate) =>
         candidate.userId === userId &&
-        ['open', 'claimed'].includes(candidate.status),
+        ['open', 'claimed', 'claimed_by_other'].includes(candidate.status),
     ),
   );
 }
@@ -1440,6 +1480,19 @@ function personalizeRoleState(
     ['first_reviewer', 'second_reviewer'].includes(state.roleCode) &&
     state.actionable
   ) {
+    if (state.actorUserId && state.actorUserId !== userId) {
+      personalized.statusKey = 'claimed_by_other';
+      personalized.statusLabel = `已由${state.actorName || '其他审核人'}领取`;
+      personalized.bucket = 'waiting';
+      personalized.actionable = false;
+      personalized.availableActions = [];
+      return personalized;
+    }
+    if (state.actorUserId === userId) {
+      personalized.statusKey = 'claimed_by_me';
+      personalized.statusLabel = `我已领取·${state.roleLabel}`;
+      return personalized;
+    }
     personalized.statusLabel = personalized.statusLabel
       .replace(/^待一审$/, '待我一审')
       .replace(/^待二审$/, '待我二审')
@@ -1463,7 +1516,6 @@ function actorIdForRole(task: TaskEntity, roleCode: TaskRoleCode) {
       executor: task.assignee_user_id,
       first_reviewer: task.product_reviewer_user_id,
       second_reviewer: task.customer_reviewer_user_id,
-      owner: task.reporter_user_id,
     } satisfies Record<TaskRoleCode, string | null>
   )[roleCode];
 }
@@ -1475,7 +1527,6 @@ function stepForRole(roleCode: TaskRoleCode) {
       executor: TaskWorkflowStep.Execute,
       first_reviewer: TaskWorkflowStep.FirstReview,
       second_reviewer: TaskWorkflowStep.SecondReview,
-      owner: TaskWorkflowStep.Execute,
     } satisfies Record<TaskRoleCode, TaskWorkflowStep>
   )[roleCode];
 }
@@ -1487,7 +1538,6 @@ function roleLabel(roleCode: TaskRoleCode) {
       executor: '执行',
       first_reviewer: '一审',
       second_reviewer: '二审',
-      owner: '负责人',
     } satisfies Record<TaskRoleCode, string>
   )[roleCode];
 }
@@ -1517,4 +1567,14 @@ function uniqueIds(values: Array<string | null | undefined>) {
   return [
     ...new Set(values.filter((value): value is string => Boolean(value))),
   ];
+}
+
+function affectedRows(result: unknown) {
+  const direct = result as { affectedRows?: number } | null;
+  if (typeof direct?.affectedRows === 'number') return direct.affectedRows;
+  if (Array.isArray(result)) {
+    const first = result[0] as { affectedRows?: number } | undefined;
+    if (typeof first?.affectedRows === 'number') return first.affectedRows;
+  }
+  return 0;
 }

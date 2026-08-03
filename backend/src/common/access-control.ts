@@ -3,10 +3,9 @@ import { UserEntity } from '../users/entities/user.entity';
 
 export type AccessRole =
   | 'admin'
-  | 'owner'
   | 'dispatcher'
   | 'product_reviewer'
-  | 'customer_owner'
+  | 'second_reviewer'
   | 'member';
 
 export type AccessProfile = {
@@ -27,18 +26,6 @@ export type AccessProfile = {
 };
 
 const adminPermissions = ['*'];
-
-const ownerPermissions = [
-  'page.requirements',
-  'page.dashboard',
-  'page.messages',
-  'requirement.view_owned',
-  'requirement.create',
-  'requirement.edit_owned',
-  'task.view_owned',
-  'ai_preview.view_owned',
-  'ai_preview.confirm_owned',
-];
 
 const dispatcherPermissions = [
   'page.requirements',
@@ -99,20 +86,19 @@ export async function buildAccessProfile(
 ): Promise<AccessProfile> {
   const [
     roleCodes,
-    ownedBusinessCategoryCodes,
     dispatchCustomerCodes,
     productReviewTypes,
     customerReviewCodes,
   ] = await Promise.all([
     getRoleCodes(dataSource, user.id),
-    getOwnedBusinessCategoryCodes(dataSource, user.id),
     getDispatchCustomerCodes(dataSource, user.id),
     getProductReviewTypes(dataSource, user.id),
     getCustomerReviewCodes(dataSource, user.id),
   ]);
   const admin = isAdminUsername(user.username) || roleCodes.includes('admin');
-  const owner =
-    roleCodes.includes('owner') || ownedBusinessCategoryCodes.length > 0;
+  // Business-category ownership is a retired concept. Keep the response
+  // field for older clients, but never turn the legacy table/role into access.
+  const ownedBusinessCategoryCodes: string[] = [];
 
   if (admin) {
     return {
@@ -137,14 +123,12 @@ export async function buildAccessProfile(
     roleCodes.includes('dispatcher') || dispatchCustomerCodes.length > 0;
   const productReviewer =
     roleCodes.includes('product_reviewer') || productReviewTypes.length > 0;
-  const customerOwner =
-    roleCodes.includes('customer_owner') || customerReviewCodes.length > 0;
+  const secondReviewer =
+    roleCodes.includes('second_reviewer') ||
+    roleCodes.includes('customer_owner') ||
+    customerReviewCodes.length > 0;
   const effectiveRoles: AccessRole[] = [];
   const permissionSet = new Set(memberPermissions);
-  if (owner) {
-    effectiveRoles.push('owner');
-    ownerPermissions.forEach((permission) => permissionSet.add(permission));
-  }
   if (dispatcher) {
     effectiveRoles.push('dispatcher');
     dispatcherPermissions.forEach((permission) =>
@@ -155,8 +139,8 @@ export async function buildAccessProfile(
     effectiveRoles.push('product_reviewer');
     reviewerPermissions.forEach((permission) => permissionSet.add(permission));
   }
-  if (customerOwner) {
-    effectiveRoles.push('customer_owner');
+  if (secondReviewer) {
+    effectiveRoles.push('second_reviewer');
     reviewerPermissions.forEach((permission) => permissionSet.add(permission));
   }
   if (!effectiveRoles.length) {
@@ -194,31 +178,6 @@ async function getRoleCodes(dataSource: DataSource, userId: string) {
     [userId],
   );
   return rows.map((row) => row.role_code);
-}
-
-async function getOwnedBusinessCategoryCodes(
-  dataSource: DataSource,
-  userId: string,
-) {
-  let rows: Array<{ business_category_code: string }> = [];
-  try {
-    rows = await dataSource.query(
-      `
-        SELECT business_category_code
-        FROM business_category_owner_configs
-        WHERE deleted_at IS NULL
-          AND status = 'active'
-          AND owner_user_id = ?
-        ORDER BY business_category_code
-      `,
-      [userId],
-    );
-  } catch {
-    rows = [];
-  }
-  return rows
-    .map((row) => normalizeAccessBusinessCategory(row.business_category_code))
-    .filter(Boolean);
 }
 
 async function getDispatchCustomerCodes(

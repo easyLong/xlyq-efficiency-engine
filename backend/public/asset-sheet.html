@@ -335,7 +335,7 @@
           <div>
             <div class="delivery-kicker">项目资产</div>
             <h2>交付内容登记</h2>
-            <p>上传图片资产，填写合作链接后提交。</p>
+            <p>可随时保存草稿，确认交付完成后再提交审核。</p>
           </div>
           <div class="header-actions">
             <button class="personal-home-button" onclick="openAssigneeWorkspace()">个人任务主页</button>
@@ -380,7 +380,7 @@
                 <span class="step-pill">2</span>
                 <div>
                   <h3>已添加图片</h3>
-                  <p>保存后同步到后台统计口径。</p>
+                  <p>保存草稿后可在其他设备继续处理。</p>
                 </div>
               </div>
               <button class="secondary" data-delivery-control onclick="clearImages()">清空</button>
@@ -408,9 +408,10 @@
           </div>
 
           <div class="save-bar">
-            <div id="saveStatus" class="status">添加图片或合作链接后提交交付，提交后进入管理者验收。</div>
+            <div id="saveStatus" class="status">可先保存草稿；只有提交交付后，任务才会进入审核。</div>
             <div class="save-actions">
-              <button id="saveButton" data-delivery-control onclick="saveDelivery()">提交交付</button>
+              <button id="draftButton" class="secondary" data-delivery-control onclick="saveServerDraft()">保存草稿</button>
+              <button id="submitButton" data-delivery-control onclick="saveDelivery()">提交交付</button>
             </div>
           </div>
         </div>
@@ -462,10 +463,12 @@
       message = "此操作需要确认。",
       okText = "确认",
       cancelText = "取消",
+      danger = true,
     } = {}) {
       document.getElementById("confirmTitle").textContent = title;
       document.getElementById("confirmMessage").textContent = message;
       document.getElementById("confirmOkButton").textContent = okText;
+      document.getElementById("confirmOkButton").className = danger ? "danger" : "";
       document.getElementById("confirmCancelButton").textContent = cancelText;
       document.getElementById("confirmBackdrop").classList.remove("hidden");
       positionConfirmDialog();
@@ -546,7 +549,7 @@
       return Boolean(value) && !value.startsWith("data:");
     }
 
-    function saveDraft() {
+    function saveLocalDraftSnapshot() {
       const draft = loadDraft();
       localStorage.setItem(storageKey, JSON.stringify(draft));
       renderAssets();
@@ -626,7 +629,7 @@
       draft.linkUrls = unique([...draft.linkUrls, linkUrl]);
       input.value = "";
       persistDraft(draft);
-      setStatus("已添加合作链接。", "ok");
+      setStatus("已添加合作链接，尚未保存到服务器。", "");
     }
 
     async function removeLink(index) {
@@ -635,7 +638,7 @@
       if (!draft.linkUrls[index]) return;
       const confirmed = await confirmDialog({
         title: "删除合作链接",
-        message: "确认删除这条合作链接吗？提交后后台记录也会同步更新。",
+        message: "确认删除这条合作链接吗？保存草稿或提交交付后会同步到服务器。",
         okText: "删除",
       });
       if (!confirmed) return;
@@ -671,7 +674,7 @@
       if (!deliveryEditable) return;
       const confirmed = await confirmDialog({
         title: "删除图片资产",
-        message: `确认删除「图片 ${index + 1}」吗？提交后后台统计也会同步更新。`,
+        message: `确认删除「图片 ${index + 1}」吗？保存草稿或提交交付后会同步到服务器。`,
         okText: "删除",
       });
       if (!confirmed) return;
@@ -692,7 +695,7 @@
       if (!confirmed) return;
       draft.imageUrls = [];
       persistDraft(draft);
-      setStatus("已清空图片列表，保存后后台会同步更新。", "ok");
+      setStatus("已清空图片列表，尚未保存到服务器。", "");
     }
 
     async function uploadSelectedFiles(files) {
@@ -730,7 +733,7 @@
       const results = await Promise.all(uploadJobs);
       const uploadedCount = results.filter(Boolean).length;
       if (uploadedCount) {
-        setStatus(`已上传 ${uploadedCount} 张图片，记得点击保存同步统计。`, "ok");
+        setStatus(`已上传 ${uploadedCount} 张图片，点击“保存草稿”可在下次继续处理。`, "ok");
       }
       document.getElementById("fileInput").value = "";
     }
@@ -806,7 +809,7 @@
         }
         renderTaskDetails();
         applyUploadConfig(result.config);
-        syncDeliveryDraft(result.delivery);
+        syncDeliveryDraft(result.delivery, result.draft);
         applyDeliveryMode();
         renderAssets();
       } catch (error) {
@@ -871,10 +874,13 @@
       });
       renderAssets();
       if (deliveryEditable) {
+        const draftSavedAt = formatDateTime(context?.draft?.savedAt);
         setStatus(
           context?.task?.blocked_reason
             ? `请根据退回意见修改后重新提交：${context.task.blocked_reason}`
-            : "添加图片或合作链接后提交交付，提交后进入成品审核。",
+            : context?.draft?.exists
+              ? `服务器草稿已保存${draftSavedAt ? `于 ${draftSavedAt}` : ""}，可继续编辑；提交交付后才进入审核。`
+              : "可先保存草稿；只有提交交付后，任务才会进入审核。",
           context?.task?.blocked_reason ? "error" : "",
         );
         return;
@@ -897,76 +903,154 @@
       `).join("");
     }
 
+    function currentDeliveryPayload() {
+      saveLocalDraftSnapshot();
+      const draft = loadDraft();
+      const pendingLink = document.getElementById("linkUrlInput")?.value.trim();
+      return {
+        imageUrls: unique(draft.imageUrls.map(url => url.trim()).filter(Boolean)),
+        linkUrls: unique([
+          ...draft.linkUrls.map(url => url.trim()).filter(Boolean),
+          ...(pendingLink ? [pendingLink] : []),
+        ]),
+      };
+    }
+
+    function deliveryValidationError({ imageUrls, linkUrls }, requireContent) {
+      if (requireContent && !imageUrls.length && !linkUrls.length) {
+        return "请至少上传一张图片或填写一个合作链接后再提交交付。";
+      }
+      if (imageUrls.length > maxImageCount) {
+        return `最多支持 ${maxImageCount} 张图片。`;
+      }
+      if (imageUrls.some(url => url.length > maxUrlLength)) {
+        return "图片地址异常，请刷新页面后重新上传这张图片。";
+      }
+      if (linkUrls.some(url => url.length > maxUrlLength)) {
+        return `合作链接不能超过 ${maxUrlLength} 个字符。`;
+      }
+      if (linkUrls.some(url => !/^https?:\/\//i.test(url))) {
+        return "合作链接必须以 http:// 或 https:// 开头。";
+      }
+      return "";
+    }
+
+    function setDeliveryActionBusy(busy) {
+      const draftButton = document.getElementById("draftButton");
+      const submitButton = document.getElementById("submitButton");
+      if (draftButton) draftButton.disabled = busy || !deliveryEditable;
+      if (submitButton) submitButton.disabled = busy || !deliveryEditable;
+    }
+
+    async function saveServerDraft() {
+      if (!deliveryEditable) {
+        setStatus("当前任务不允许修改交付草稿。", "error");
+        return;
+      }
+      if (pendingImagePreviews.length) {
+        setStatus("图片还在上传中，请等上传完成后再保存草稿。", "error");
+        return;
+      }
+      const payload = currentDeliveryPayload();
+      const validationError = deliveryValidationError(payload, false);
+      if (validationError) {
+        setStatus(validationError, "error");
+        return;
+      }
+      if (taskId === "default") {
+        persistDraft(payload);
+        setStatus("草稿已保存在当前浏览器。", "ok");
+        return;
+      }
+
+      setDeliveryActionBusy(true);
+      setStatus("正在保存草稿...", "");
+      try {
+        const response = await fetch(taskAssetApi("draft"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "草稿保存失败");
+        const savedDraft = normalizeDraft(result.draft || payload);
+        localStorage.setItem(storageKey, JSON.stringify(savedDraft));
+        const input = document.getElementById("linkUrlInput");
+        if (input) input.value = "";
+        context = {
+          ...(context || {}),
+          task: result.task || context?.task,
+          workflow: result.workflow || context?.workflow,
+          draft: result.draft || context?.draft,
+        };
+        renderAssets();
+        const savedAt = formatDateTime(result.draft?.savedAt);
+        setStatus(`草稿已保存${savedAt ? `于 ${savedAt}` : ""}，任务仍在处理中。`, "ok");
+      } catch (error) {
+        setStatus(`草稿保存失败：${error.message}`, "error");
+      } finally {
+        setDeliveryActionBusy(false);
+      }
+    }
+
     async function saveDelivery() {
       if (!deliveryEditable) {
         setStatus("当前任务不允许提交交付。", "error");
         return;
       }
-      saveDraft();
       if (pendingImagePreviews.length) {
         setStatus("图片还在上传中，请等上传完成后再提交交付。", "error");
         return;
       }
-      const draft = loadDraft();
-      const imageUrls = unique(draft.imageUrls.map(url => url.trim()).filter(Boolean));
-      const pendingLink = document.getElementById("linkUrlInput")?.value.trim();
-      const linkUrls = unique([
-        ...draft.linkUrls.map(url => url.trim()).filter(Boolean),
-        ...(pendingLink ? [pendingLink] : []),
-      ]);
-      if (!imageUrls.length && !linkUrls.length) {
-        setStatus("请至少上传一张图片或填写一个合作链接后再提交交付。", "error");
+      const payload = currentDeliveryPayload();
+      const validationError = deliveryValidationError(payload, true);
+      if (validationError) {
+        setStatus(validationError, "error");
         return;
       }
-      const tooLongImageUrl = imageUrls.find(url => url.length > maxUrlLength);
-      if (imageUrls.length > maxImageCount) {
-        setStatus(`最多支持 ${maxImageCount} 张图片。`, "error");
-        return;
-      }
-      if (tooLongImageUrl) {
-        setStatus("图片地址异常，请刷新页面后重新上传这张图片。", "error");
-        return;
-      }
-      const tooLongLinkUrl = linkUrls.find(url => url.length > maxUrlLength);
-      if (tooLongLinkUrl) {
-        setStatus(`合作链接不能超过 ${maxUrlLength} 个字符。`, "error");
-        return;
-      }
-      const invalidLinkUrl = linkUrls.find(url => !/^https?:\/\//i.test(url));
-      if (invalidLinkUrl) {
-        setStatus("合作链接必须以 http:// 或 https:// 开头。", "error");
-        return;
-      }
-      const button = document.getElementById("saveButton");
-      button.disabled = true;
+      const confirmed = await confirmDialog({
+        title: "提交交付",
+        message: "提交后任务将进入一审，当前资产会暂时锁定。确认本轮交付内容已经准备完成吗？",
+        okText: "确认提交",
+        danger: false,
+      });
+      if (!confirmed) return;
+
+      setDeliveryActionBusy(true);
       setStatus("正在提交交付...", "");
       try {
         const response = await fetch(taskAssetApi("local-assets"), {
           method: "POST",
           headers: { "Content-Type": "application/json; charset=utf-8" },
-          body: JSON.stringify({ imageUrls, linkUrls }),
+          body: JSON.stringify(payload),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || "同步失败");
-        localStorage.setItem(storageKey, JSON.stringify(normalizeDraft({ imageUrls, linkUrls })));
+        localStorage.setItem(storageKey, JSON.stringify(normalizeDraft(payload)));
         const input = document.getElementById("linkUrlInput");
         if (input) input.value = "";
         renderAssets();
-        context = { ...(context || {}), task: result.task || context?.task, workflow: result.workflow || context?.workflow };
+        context = {
+          ...(context || {}),
+          task: result.task || context?.task,
+          workflow: result.workflow || context?.workflow,
+          draft: result.draft || { exists: false, imageUrls: [], linkUrls: [], savedAt: null },
+        };
         renderTaskDetails();
         applyDeliveryMode();
-        setStatus(`已提交 ${imageUrls.length} 张图片${linkUrls.length ? `和 ${linkUrls.length} 个链接` : ""}，任务已进入待成品审核。`, "ok");
+        setStatus(`已提交 ${payload.imageUrls.length} 张图片${payload.linkUrls.length ? `和 ${payload.linkUrls.length} 个链接` : ""}，任务已进入待一审。`, "ok");
       } catch (error) {
         setStatus(`提交失败：${error.message}`, "error");
       } finally {
-        button.disabled = false;
+        setDeliveryActionBusy(false);
       }
     }
 
-    function syncDeliveryDraft(delivery) {
-      const serverDraft = normalizeDraft(delivery);
+    function syncDeliveryDraft(delivery, savedDraft) {
+      const source = savedDraft?.exists ? savedDraft : delivery;
+      const serverDraft = normalizeDraft(source);
       const cachedRaw = localStorage.getItem(storageKey);
-      if (!cachedRaw || serverDraft.imageUrls.length || serverDraft.linkUrls.length) {
+      if (savedDraft?.exists || !cachedRaw || serverDraft.imageUrls.length || serverDraft.linkUrls.length) {
         localStorage.setItem(storageKey, JSON.stringify(serverDraft));
       }
     }
@@ -1046,7 +1130,7 @@
         todo: "等待指派执行人",
         pending: "等待处理",
         assigned: "填写项目资产",
-        in_progress: "提交交付",
+        in_progress: "继续编辑或提交交付",
         blocked: "处理阻塞后提交交付",
         pending_review: "等待一审或二审",
         completed: "已验收",
@@ -1062,6 +1146,12 @@
       const date = value ? new Date(value) : null;
       if (!date || Number.isNaN(date.getTime())) return "-";
       return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
+    }
+
+    function formatDateTime(value) {
+      const date = value ? new Date(value) : null;
+      if (!date || Number.isNaN(date.getTime())) return "";
+      return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
     }
 
     function escapeHtml(value) {

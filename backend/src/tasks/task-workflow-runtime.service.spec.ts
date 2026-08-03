@@ -2,7 +2,10 @@ import { AccessProfile } from '../common/access-control';
 import { UserEntity } from '../users/entities/user.entity';
 import { TaskEntity } from './entities/task.entity';
 import { TaskStatus } from './task-status';
-import { buildTaskWorkflowView } from './task-workflow-runtime.service';
+import {
+  buildTaskWorkflowView,
+  TaskWorkflowRuntimeService,
+} from './task-workflow-runtime.service';
 
 describe('task role workflow view', () => {
   const baseTask = {
@@ -17,6 +20,7 @@ describe('task role workflow view', () => {
     reporter_user_id: null,
     product_reviewer_user_id: null,
     customer_reviewer_user_id: null,
+    created_by_user_id: null,
     planned_end_at: null,
   } as unknown as TaskEntity;
 
@@ -134,24 +138,19 @@ describe('task role workflow view', () => {
       'executor',
       'first_reviewer',
       'second_reviewer',
-      'owner',
     ]);
   });
 
   it('prioritizes an actionable review when one user has multiple roles', () => {
     const multiRoleProfile = {
       ...memberProfile,
-      effectiveRoles: ['owner', 'product_reviewer'],
-      ownedBusinessCategoryCodes: ['design'],
+      effectiveRoles: ['product_reviewer'],
     } as AccessProfile;
     const multiRoleUser = {
       ...reviewer,
       id: 'multi-role-user',
     } as UserEntity;
-    const multiRoleTask = {
-      ...baseTask,
-      reporter_user_id: multiRoleUser.id,
-    } as TaskEntity;
+    const multiRoleTask = { ...baseTask } as TaskEntity;
     const view = buildTaskWorkflowView(
       multiRoleTask,
       [
@@ -183,12 +182,52 @@ describe('task role workflow view', () => {
 
     expect(view.myStates.map((state) => state.roleCode)).toEqual([
       'first_reviewer',
-      'owner',
     ]);
     expect(view.primaryMyState).toEqual(
       expect.objectContaining({
         roleCode: 'first_reviewer',
         statusLabel: '待我一审',
+      }),
+    );
+  });
+
+  it('shows that another reviewer already claimed the shared work item', () => {
+    const view = buildTaskWorkflowView(
+      baseTask,
+      [
+        {
+          id: 'work-claimed',
+          taskId: baseTask.id,
+          stepType: 'first_review',
+          deliveryVersion: 1,
+          status: 'claimed',
+          claimedByUserId: 'reviewer-2',
+          actorName: '另一位审核人',
+          result: null,
+          remark: null,
+          openedAt: new Date(),
+          claimedAt: new Date(),
+          closedAt: null,
+          candidates: [
+            {
+              userId: reviewer.id,
+              userName: '一审人员',
+              status: 'claimed_by_other',
+            },
+          ],
+        },
+      ] as never,
+      reviewer,
+      memberProfile,
+      { businessCategory: '设计', customerCode: 'Wanjia' },
+    );
+
+    expect(view.primaryMyState).toEqual(
+      expect.objectContaining({
+        roleCode: 'first_reviewer',
+        statusKey: 'claimed_by_other',
+        statusLabel: '已由另一位审核人领取',
+        actionable: false,
       }),
     );
   });
@@ -229,5 +268,67 @@ describe('task role workflow view', () => {
         bucket: 'done',
       }),
     );
+  });
+});
+
+describe('task work item claiming', () => {
+  it('claims an open item and marks the other candidates as unavailable', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          workItemId: 'work-1',
+          status: 'open',
+          claimedByUserId: null,
+          claimedByName: null,
+          claimedAt: null,
+        },
+      ])
+      .mockResolvedValueOnce({ affectedRows: 1 })
+      .mockResolvedValueOnce({ affectedRows: 1 })
+      .mockResolvedValueOnce({ affectedRows: 2 })
+      .mockResolvedValueOnce([
+        {
+          workItemId: 'work-1',
+          status: 'claimed',
+          claimedByUserId: 'reviewer-1',
+          claimedByName: '审核人一',
+          claimedAt: new Date(),
+        },
+      ]);
+    const runtime = new TaskWorkflowRuntimeService({ query } as never);
+
+    const claim = await runtime.claimStep(
+      'task-1',
+      'first_review' as never,
+      'reviewer-1',
+    );
+
+    expect(claim).toEqual(
+      expect.objectContaining({
+        workItemId: 'work-1',
+        claimedByUserId: 'reviewer-1',
+      }),
+    );
+    expect(query.mock.calls[1][0]).toContain("AND status = 'open'");
+    expect(query.mock.calls[3][0]).toContain("THEN 'claimed_by_other'");
+  });
+
+  it('rejects a second claimant with the current claimant name', async () => {
+    const query = jest.fn().mockResolvedValue([
+      {
+        workItemId: 'work-1',
+        status: 'claimed',
+        claimedByUserId: 'reviewer-2',
+        claimedByName: '审核人二',
+        claimedAt: new Date(),
+      },
+    ]);
+    const runtime = new TaskWorkflowRuntimeService({ query } as never);
+
+    await expect(
+      runtime.claimStep('task-1', 'first_review' as never, 'reviewer-1'),
+    ).rejects.toThrow('该工作项已由审核人二领取');
+    expect(query).toHaveBeenCalledTimes(1);
   });
 });

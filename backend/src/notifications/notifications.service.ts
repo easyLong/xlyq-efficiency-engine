@@ -430,42 +430,6 @@ export class NotificationsService implements OnModuleInit {
     });
   }
 
-  async notifyTaskAssetsSubmittedForReview(
-    task: TaskEntity,
-    assetCount: number,
-  ) {
-    const reviewerUserId = await this.getTaskReviewerUserId(task);
-    if (!reviewerUserId) {
-      return null;
-    }
-    const [project, assignee] = await Promise.all([
-      this.projectsRepository.findOne({ where: { id: task.project_id } }),
-      task.assignee_user_id
-        ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
-        : Promise.resolve(null),
-    ]);
-    const fundPlatformLabel = await this.taskFundPlatformLabel(task, project);
-    const taskDetail = await this.taskDetailForNotification(task);
-
-    return this.sendToUsers([reviewerUserId], {
-      title: `任务待审核：${task.task_name}`,
-      content: [
-        `任务：${task.task_name}`,
-        ...(taskDetail ? [`任务详情：${taskDetail}`] : []),
-        `基金平台：${fundPlatformLabel}`,
-        `执行人：${assignee?.display_name ?? '-'}`,
-        `交付资产：${assetCount} 项`,
-        `当前状态：${this.taskStatusLabel(task.status)}`,
-        '请查看交付内容并完成当前审核。',
-      ].join('\n'),
-      objectType: 'task_asset_review',
-      objectId: task.id,
-      channels: ['in_app', 'feishu_app'],
-      actionUrl: this.buildTaskAssetReviewUrl(task, reviewerUserId),
-      actionText: '查看交付资产',
-    });
-  }
-
   async notifyTaskProgressReminder(
     task: TaskEntity,
     senderName: string,
@@ -1126,27 +1090,15 @@ export class NotificationsService implements OnModuleInit {
   }
 
   private async getTaskStakeholders(task: TaskEntity) {
-    const recipients: string[] = [];
-    if (task.assignee_user_id) {
-      recipients.push(task.assignee_user_id);
-    }
-    if (task.reporter_user_id) {
-      recipients.push(task.reporter_user_id);
-    } else {
-      const ownerUserId = await this.getProjectOwnerUserId(task.project_id);
-      if (ownerUserId) {
-        recipients.push(ownerUserId);
-      }
-    }
-
-    return [...new Set(recipients)];
-  }
-
-  private async getTaskReviewerUserId(task: TaskEntity) {
-    if (task.reporter_user_id) {
-      return task.reporter_user_id;
-    }
-    return this.getProjectOwnerUserId(task.project_id);
+    return [
+      ...new Set(
+        [
+          task.assignee_user_id,
+          task.dispatcher_user_id,
+          task.created_by_user_id,
+        ].filter((userId): userId is string => Boolean(userId)),
+      ),
+    ];
   }
 
   private async getProjectOwnerUserId(projectId: string) {

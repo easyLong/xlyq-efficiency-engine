@@ -32,7 +32,7 @@ https://your-public-domain.example.com/asset-sheet.html?taskId=<taskId>&taskNo=<
 https://your-public-domain.example.com/task-progress.html?taskId=<taskId>&taskNo=<taskNo>&token=<taskToken>
 ```
 
-后端按任务 token 校验访问权限，校验通过后只允许访问该任务对应的资产登记或进度反馈能力。管理后台仍使用员工姓名下拉选择 + 密码登录，密码读取 `users.passwd` 明文字段；登录下拉默认只展示管理员和负责人，其它员工需设置 `users.login_enabled = 1` 后才显示；开发/应急选择用户登录只在环境变量开启时可用。
+后端按任务 token 校验访问权限，校验通过后只允许访问该任务对应的资产登记、审核或进度反馈能力。管理后台使用员工姓名下拉选择 + 密码登录；账号是否可登录由 `users.login_enabled`、账号状态和有效角色共同决定。开发/应急选择用户登录只在环境变量开启时可用。
 
 如需使用机器人群通知，再配置：
 
@@ -198,10 +198,10 @@ Invoke-RestMethod `
 2. 系统优先尝试创建飞书在线资产表；失败时降级为本地 `asset-sheet.html`。
 3. 飞书消息中展示“填写项目资产”按钮。
 4. 员工打开资产页后，任务自动进入 `in_progress`。
-5. 员工上传多张图片并填写一个合作链接，提交后任务进入 `pending_review`。
-6. 管理者在后台验收，通过后进入 `completed`，退回则回到 `in_progress`。
+5. 员工可先保存服务器草稿；点击“提交交付”后任务进入 `pending_review/product_review`。
+6. 一审按业务大类领取并审核，通过后进入二审；二审按基金领取并审核，通过后任务进入 `completed`，任一阶段退回则进入 `returned`。
 
-后台历史需求任务中，已指派任务默认收起负责人；点击“改派”后再展开员工下拉框并确认，减少误操作和页面占用。
+后台历史需求任务中，已指派任务默认收起执行人选择框；点击“改派”后再展开员工下拉框并确认，减少误操作和页面占用。
 
 进度提醒扫描：
 

@@ -96,14 +96,23 @@ export class TasksController {
 
   @Post()
   @Permission('requirement.create')
-  create(@Body() dto: CreateTaskDto) {
-    return this.tasksService.create(dto);
+  create(
+    @Body() dto: CreateTaskDto,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.create(dto, request?.user?.id ?? null);
   }
 
   @Post('from-requirement-item/:itemId')
   @Permission('requirement.create')
-  createFromRequirementItem(@Param('itemId') itemId: string) {
-    return this.tasksService.createFromRequirementItem(itemId);
+  createFromRequirementItem(
+    @Param('itemId') itemId: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.createFromRequirementItem(
+      itemId,
+      request?.user?.id ?? null,
+    );
   }
 
   @Patch(':id')
@@ -189,6 +198,21 @@ export class TasksController {
   }
 
   @Public()
+  @Post(':id/asset-review/claim')
+  claimAssetReview(
+    @Param('id') id: string,
+    @Query('token') token: string | undefined,
+    @Body() body: { token?: string },
+    @Req() request: Request,
+  ) {
+    return this.tasksService.claimAssetReview(
+      id,
+      token ?? body?.token,
+      request.headers.authorization,
+    );
+  }
+
+  @Public()
   @Post(':id/asset-review/approve')
   approveAssetReview(
     @Param('id') id: string,
@@ -223,6 +247,16 @@ export class TasksController {
   @Permission('task.accept_owned')
   syncAssetSheet(@Param('id') id: string) {
     return this.tasksService.syncAssetSheet(id);
+  }
+
+  @Public()
+  @Post(':id/asset-sheet/draft')
+  saveLocalAssetSheetDraft(
+    @Param('id') id: string,
+    @Query('token') token: string | undefined,
+    @Body() dto: SaveLocalAssetSheetDto,
+  ) {
+    return this.tasksService.saveLocalAssetSheetDraft(id, dto, token);
   }
 
   @Public()

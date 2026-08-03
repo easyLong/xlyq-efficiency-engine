@@ -164,7 +164,7 @@ npm run migrate:project-tables -- --help
 
 管理端接口默认需要 `Authorization: Bearer <accessToken>`；`/api/v1/health`、`/api/v1/auth/login-config`、`/api/v1/auth/password-login`、开发/应急登录接口、飞书事件回调和带任务 token 的交付登记接口是公开入口。
 
-管理后台使用账号下拉选择 + 密码登录；下拉账号使用员工 `display_name`，密码直接读取 `users.passwd` 明文字段。登录下拉默认只展示管理员和负责人，其它员工需设置 `users.login_enabled = 1` 后才可显示和登录。飞书通知链接不进入后台登录页，而是通过任务 token 校验后直达资产登记或进度反馈页面。
+管理后台使用账号下拉选择 + 密码登录；下拉账号使用员工 `display_name`，密码读取 `users.passwd` 字段。账号是否出现在登录列表并允许登录，由 `users.login_enabled`、账号状态和有效角色共同决定。飞书通知链接通过任务 token 与身份交接参数直达对应任务页面。
 
 账号密码初始化：
 
@@ -232,7 +232,7 @@ npm run migrate:project-tables -- --execute
 
 ## 2026-07-30 最新补充
 
-- 任务需求列表新增“催进度”按钮：仅当前执行人在 `pending_review` 阶段可见，可手动提醒当前审核阶段负责人。
+- 任务需求列表新增“催进度”按钮：仅当前执行人在 `pending_review` 阶段可见，可手动提醒当前审核阶段候选团队。
 - 新增接口 `POST /api/v1/tasks/:id/remind-progress`，并新增 `task_progress_reminders` 记录表用于频控和审计。
 - 该功能不改任务状态，只发消息，不影响现有交付/验收流程。
 

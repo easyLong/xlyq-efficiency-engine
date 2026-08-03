@@ -8,14 +8,17 @@
 - 支撑飞书集成、AI 建议、审计日志等辅助能力
 - 为后续接口设计、ORM 建模、SQL 建表脚本提供依据
 
-## 当前实现备注（2026-06-17）
+## 当前实现备注（2026-08-03）
 
 - 当前运行库名为 `ops_platform`。
 - 当前系统仍保留 `projects` 作为后台挂靠对象，但业务筛选不再使用“项目”作为前台维度。
 - 前台核心筛选维度为：基金、业务平台、业务大类、二级分类、员工；对接人保留为需求来源和录入辅助，不再作为全局统计筛选。
 - 群内对接人映射表为 `group_contact_mappings`，用于维护“群 + 对接人 -> 基金客户 + 业务平台”；旧的 `contact_context_configs`、`source_contact_contexts`、`wechat_group_configs` 仅作为迁移来源。
 - 业务大类与二级分类关系表为 `business_category_secondary_categories`，用于大类选择后二级分类下拉联动。
-- 业务大类负责人配置表为 `business_category_owner_configs`，用于将需求录入后的任务负责人写入 `tasks.reporter_user_id`；任务被指派员工写入 `tasks.assignee_user_id`。
+- 基金级派发者、二审人员统一存放在 `customer_workflow_members`；一审人员按业务大类存放在 `business_category_review_members`。
+- `tasks.created_by_user_id` 只记录创建人，`tasks.dispatcher_user_id` 记录实际派发人，`tasks.assignee_user_id` 记录执行人；`tasks.reporter_user_id` 仅保留历史兼容，新流程不再读取或写入。
+- 多人审核通过 `task_work_items` 和 `task_work_item_candidates` 建模。候选人先原子领取当前工作项，再执行通过或退回，避免多人同时处理。
+- 资产页“保存草稿”写入 `task_directories.draft_payload_json`，不会进入审核和统计；只有“提交交付”才写入 `task_result_files` 并推进一审。
 - 合同报价导入只选择基金客户和文件/文本；报价合同可覆盖多个业务大类。CSV 合同优先按表格结构解析，识别最细粒度子项、单位和单价。
 - 报价子项维度规则表为 `quotation_item_dimension_rules`，用于给报价子项配置适用平台和分类，提高后续映射准确性。
 - 需求任务与报价子项通过 `requirement_quotation_mappings` 关联；后端会校验基金客户和报价子项归属，避免跨基金挂错报价。
@@ -84,6 +87,8 @@ requirements 1---n requirement_items
 requirement_items 1---n tasks
 tasks 1---1 task_directories
 tasks 1---n task_result_files
+tasks 1---n task_work_items
+task_work_items 1---n task_work_item_candidates
 tasks 1---n worklogs
 projects 1---n quotations
 quotations 1---n quotation_items
@@ -102,7 +107,9 @@ tasks 1---n task_progress_reminders
 dimension_dictionaries self parent_code/dimension_code hierarchy
 group_contact_mappings maps group + contact to customer + platform
 business_category_secondary_categories stores category-secondary relation
-business_category_owner_configs maps business category to requirement owner
+customer_workflow_members maps customer to dispatcher/second reviewer
+business_category_review_members maps business category to first reviewer
+business_category_owner_configs is legacy compatibility only
 ```
 
 ## 6.1 新增流程表
@@ -164,27 +171,29 @@ business_category_owner_configs maps business category to requirement owner
 
 ### `group_contact_mappings`
 
-??????????????????????????
+群与对接人上下文映射表。业务来源群唯一，但同一个群可以配置多个对接人；每个对接人明确对应一个基金客户和业务平台。
 
-| ?? | ?? | ?? |
+| 字段 | 类型 | 说明 |
 |---|---|---|
-| id | char(36) | ?? |
-| group_key | varchar(255) | ????????? ID???? ID ????? hash |
-| group_name | varchar(255) | ??? |
-| contact_name | varchar(64) | ??????? |
+| id | char(36) | 主键 |
+| group_key | varchar(255) | 群唯一键，可使用群 ID、外部会话 ID 或稳定哈希 |
+| group_name | varchar(255) | 群名称 |
+| contact_name | varchar(64) | 群内对接人姓名 |
 | customer_code | varchar(32) | 基金简称，关联 `customers.customer_code` |
-| business_platform | varchar(64) | ???? |
-| collect_enabled | tinyint(1) | ?????? |
+| business_platform | varchar(64) | 该对接人对应的业务平台 |
+| collect_enabled | tinyint(1) | 是否允许采集该映射的数据 |
 | status | varchar(32) | active/inactive |
-| remark | varchar(255) | ?? |
-| created_at / updated_at / deleted_at | datetime | ???? |
+| remark | varchar(255) | 备注 |
+| created_at / updated_at / deleted_at | datetime | 时间字段 |
 
-?????
+唯一约束：
+
 - `(group_key, contact_name)`
 
-???
-- ??????????????????
-- ??????? `group_contact_mappings`?`contact_context_configs`?`source_contact_contexts`?`wechat_group_configs` ???????????
+口径：
+
+- 需求录入选择对接人后，只联动基金和业务平台，不联动业务大类或分类。
+- 当前业务只使用 `group_contact_mappings`；`contact_context_configs`、`source_contact_contexts`、`wechat_group_configs` 仅作为旧迁移来源。
 
 ### `business_category_secondary_categories`
 
@@ -209,7 +218,7 @@ business_category_owner_configs maps business category to requirement owner
 
 ### `business_category_owner_configs`
 
-业务大类负责人配置表，用于把“需求录入负责人”和“任务执行人”拆开。
+旧版业务大类负责人配置表，仅保留历史数据和兼容接口。当前权限、数据范围、通知和审核流程均不读取该表。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -222,11 +231,96 @@ business_category_owner_configs maps business category to requirement owner
 | created_at / updated_at / deleted_at | datetime | 时间字段 |
 
 唯一约束：
-- `(business_category_code)`
+- `(business_category_code, owner_user_id)`
 
 口径：
-- `tasks.reporter_user_id`：需求负责人，按业务大类配置自动写入。
-- `tasks.assignee_user_id`：执行人，由管理端指派或改派。
+
+- 新需求不会再根据该表写入 `tasks.reporter_user_id`。
+- 新人员配置应写入下述 `customer_workflow_members` 或 `business_category_review_members`。
+
+### `customer_workflow_members`
+
+基金级流程人员配置表，同时支持一个基金对应多人、一个人对应多个基金。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | char(36) | 主键 |
+| customer_code | varchar(64) | 基金简称，关联 `customers.customer_code` |
+| role_code | varchar(32) | `dispatcher` 派发者；`customer_reviewer` 二审人员 |
+| user_id | char(36) | 用户 ID，关联 `users.id` |
+| status | varchar(32) | active/inactive |
+| created_at / updated_at / deleted_at | datetime | 时间字段 |
+
+唯一约束：
+
+- `(customer_code, role_code, user_id)`
+
+### `business_category_review_members`
+
+一审团队配置表，一审只按业务大类匹配。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | char(36) | 主键 |
+| business_category_code | varchar(64) | `design/copywriting/operation/community` |
+| user_id | char(36) | 一审人员用户 ID，关联 `users.id` |
+| status | varchar(32) | active/inactive |
+| created_at / updated_at / deleted_at | datetime | 时间字段 |
+
+唯一约束：
+
+- `(business_category_code, user_id)`
+
+### `task_work_items`
+
+任务每个流程步骤的可领取工作项。派发、执行、一审、二审均可建立独立工作项。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | char(36) | 主键 |
+| task_id | char(36) | 任务 ID |
+| step_type | varchar(32) | `dispatch/execute/first_review/second_review` |
+| delivery_version | int | 对应交付版本 |
+| status | varchar(32) | `open/claimed/completed/cancelled` |
+| claimed_by_user_id | char(36) | 实际领取并处理该步骤的人 |
+| result | varchar(32) | submitted/approved/returned 等处理结果 |
+| remark | varchar(1000) | 处理说明或退回原因 |
+| opened_at / claimed_at / closed_at | datetime | 工作项生命周期时间 |
+| created_at / updated_at / deleted_at | datetime | 时间字段 |
+
+### `task_work_item_candidates`
+
+工作项候选人表，用于表达多人可见、单人领取。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | char(36) | 主键 |
+| work_item_id | char(36) | 工作项 ID |
+| user_id | char(36) | 候选人用户 ID |
+| status | varchar(32) | open/claimed/closed 等候选状态 |
+| candidate_source | varchar(32) | 候选来源，当前为 `workflow_config` |
+| notified_at / seen_at | datetime | 通知与查看时间 |
+| created_at / updated_at / deleted_at | datetime | 时间字段 |
+
+唯一约束：
+
+- `(work_item_id, user_id)`
+
+### `task_review_records`
+
+每次提交、审核通过和退回的审计记录，不参与当前处理人竞争。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | char(36) | 主键 |
+| task_id | char(36) | 任务 ID |
+| review_stage | varchar(32) | 本次记录对应的一审或二审阶段 |
+| review_result | varchar(32) | submitted/approved/returned |
+| reviewer_user_id | char(36) | 实际审核人，提交记录可为空 |
+| from_status / to_status | varchar(32) | 前后业务状态 |
+| from_review_stage / to_review_stage | varchar(32) | 前后审核阶段 |
+| review_comment | varchar(1000) | 审核说明或退回原因 |
+| created_at / updated_at / deleted_at | datetime | 时间字段 |
 
 ## 7. 用户与权限域
 
@@ -467,33 +561,45 @@ business_category_owner_configs maps business category to requirement owner
 
 ## 10.1 `tasks`
 
-任务表。
+任务主表，同时保存业务状态和当前流程步骤。业务状态用于展示任务整体进度，流程步骤用于判断当前应由哪个角色处理。
 
 | 字段 | 类型 | 约束 | 说明 |
 |---|---|---|---|
-| id | uuid | pk | 任务ID |
-| project_id | uuid | fk, not null | 项目ID |
-| requirement_item_id | uuid | fk, null | 关联需求项 |
-| parent_task_id | uuid | fk, null | 父任务 |
+| id | char(36) | pk | 任务 ID |
+| project_id | char(36) | fk, not null | 后台挂靠项目 ID |
+| requirement_item_id | char(36) | fk, null | 关联需求项 |
+| parent_task_id | char(36) | fk, null | 父任务 |
 | task_no | varchar(32) | not null | 任务编号 |
 | task_name | varchar(256) | not null | 任务名称 |
 | description | text | null | 描述 |
-| status | varchar(32) | not null | `todo/in_progress/blocked/pending_review/completed/closed` |
-| priority | varchar(32) | null | 优先级 |
-| assignee_user_id | uuid | fk, null | 执行人 |
-| reporter_user_id | uuid | fk, null | 需求负责人，按业务大类负责人配置写入 |
-| planned_start_at | timestamptz | null | 计划开始 |
-| planned_end_at | timestamptz | null | 计划结束 |
-| actual_start_at | timestamptz | null | 实际开始 |
-| actual_end_at | timestamptz | null | 实际结束 |
+| status | varchar(32) | not null | `todo/pending/assigned/in_progress/blocked/pending_review/completed/returned/cancelled` |
+| review_stage | varchar(32) | not null | `none/product_review/customer_review/done` |
+| current_step | varchar(32) | not null | `dispatch/execute/first_review/second_review/done` |
+| delivery_version | int | not null | 正式提交版本号；保存草稿不递增 |
+| returned_from_step | varchar(32) | null | 最近由哪个审核步骤退回 |
+| workflow_version | int | not null | 流程乐观版本号 |
+| last_transition_at | datetime | null | 最近一次流程转换时间 |
+| priority | varchar(32) | null | `p0/p1/p2/p3/p4` |
+| urgency_level | varchar(32) | null | 重要且紧急等四象限紧急程度 |
+| assignee_user_id | char(36) | fk, null | 当前执行人 |
+| dispatcher_user_id | char(36) | fk, null | 实际完成派发的人 |
+| created_by_user_id | char(36) | fk, null | 任务创建人，仅用于审计和必要通知 |
+| reporter_user_id | char(36) | fk, null | 旧负责人字段，仅作历史兼容 |
+| product_review_type | varchar(32) | null | 一审业务大类 |
+| product_reviewer_user_id | char(36) | fk, null | 实际一审人员 |
+| customer_reviewer_user_id | char(36) | fk, null | 实际二审人员 |
+| planned_start_at | datetime | null | 计划开始 |
+| planned_end_at | datetime | null | 计划结束 |
+| actual_start_at | datetime | null | 实际开始 |
+| actual_end_at | datetime | null | 实际完成 |
 | estimated_hours | numeric(8,2) | null | 预计工时 |
 | actual_hours | numeric(8,2) | not null default 0 | 实际工时汇总 |
 | progress_percent | int | not null default 0 | 进度百分比 |
 | blocked_reason | varchar(255) | null | 阻塞原因 |
 | sort_order | int | null | 排序 |
-| created_at | timestamptz | not null | 创建时间 |
-| updated_at | timestamptz | not null | 更新时间 |
-| deleted_at | timestamptz | null | 删除时间 |
+| created_at | datetime | not null | 创建时间 |
+| updated_at | datetime | not null | 更新时间 |
+| deleted_at | datetime | null | 删除时间 |
 
 唯一约束：
 
@@ -504,12 +610,16 @@ business_category_owner_configs maps business category to requirement owner
 - `idx_tasks_project_id`
 - `idx_tasks_requirement_item_id`
 - `idx_tasks_assignee_user_id`
+- `idx_tasks_dispatcher_user_id`
+- `idx_tasks_created_by_user_id`
 - `idx_tasks_status`
+- `idx_tasks_review_stage`
+- `idx_tasks_current_step`
 - `idx_tasks_planned_end_at`
 
 ## 10.2 `task_directories`
 
-任务成果目录和权限状态表，服务于“任务分配给人后，给人进入对应目录的权限”。
+任务成果目录、访问权限和服务器草稿表。任务派发时即创建目录；执行人即使尚未正式提交，也可从自己的工作台继续进入。
 
 | 字段 | 类型 | 约束 | 说明 |
 |---|---|---|---|
@@ -521,6 +631,8 @@ business_category_owner_configs maps business category to requirement owner
 | directory_url | varchar(500) | null | 目录访问链接 |
 | permission_status | varchar(32) | not null | `pending_sync/mock_granted/granted/failed` |
 | last_synced_at | datetime | null | 最近同步时间 |
+| draft_payload_json | json | null | 未正式提交的图片与链接草稿 |
+| draft_saved_at | datetime | null | 最近一次服务器草稿保存时间 |
 | created_at | datetime | not null | 创建时间 |
 | updated_at | datetime | not null | 更新时间 |
 | deleted_at | datetime | null | 删除时间 |
@@ -534,7 +646,7 @@ business_category_owner_configs maps business category to requirement owner
 
 ## 10.3 `task_result_files`
 
-任务结果文件表，记录员工放入任务目录的成果文件。
+正式交付结果表。只有“提交交付”后才写入，保存草稿不会写入本表，也不会计入需求面板或结算统计。
 
 | 字段 | 类型 | 约束 | 说明 |
 |---|---|---|---|
@@ -545,7 +657,7 @@ business_category_owner_configs maps business category to requirement owner
 | file_url | varchar(500) | not null | 文件链接 |
 | feishu_file_token | varchar(128) | null | 飞书文件 Token |
 | uploaded_by_user_id | char(36) | fk, null | 上传人 |
-| source | varchar(32) | not null | `manual/feishu` |
+| source | varchar(32) | not null | `local_asset_sheet_image/local_asset_sheet_link/feishu_asset_sheet_image/feishu_asset_sheet_link/manual/feishu` |
 | remark | varchar(500) | null | 备注 |
 | created_at | datetime | not null | 创建时间 |
 | updated_at | datetime | not null | 更新时间 |

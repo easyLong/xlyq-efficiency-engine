@@ -124,6 +124,21 @@
     .btn.danger { background: #fff3ef; border-color: #edc5ba; color: var(--danger); }
     .btn:disabled { opacity: .58; cursor: not-allowed; }
     .actions { display: flex; gap: 9px; flex-wrap: wrap; }
+    .claim-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 12px;
+      border: 1px solid #d8e1d3;
+      border-radius: 10px;
+      background: #f7faf4;
+    }
+    .claim-banner.mine { border-color: #a9c7b5; background: #eef7f1; }
+    .claim-banner.other { border-color: #e1ddd3; background: #f7f6f2; }
+    .claim-copy { display: grid; gap: 2px; min-width: 0; }
+    .claim-copy strong { font-size: 14px; }
+    .claim-copy span { color: var(--muted); font-size: 12px; line-height: 1.45; }
     textarea {
       width: 100%;
       min-height: 86px;
@@ -285,6 +300,9 @@
       const requirement = data.requirement || {};
       const assets = data.assets || { images: [], links: [], others: [] };
       const canReview = Boolean(data.canReview);
+      const canClaim = Boolean(data.canClaim);
+      const hasReviewPermission = Boolean(data.hasReviewPermission);
+      const reviewClaim = data.reviewClaim || null;
       const reviewStage = data.reviewStage || task.review_stage || "none";
       const approveText = reviewStage === "product_review" ? "一审通过" : reviewStage === "customer_review" ? "二审通过" : "通过验收";
       const reviewHint = reviewStage === "product_review"
@@ -308,9 +326,8 @@
               <div class="field"><span>任务编号</span><strong>${escapeHtml(task.task_no || "-")}</strong></div>
               <div class="field"><span>当前阶段</span><strong>${escapeHtml(data.reviewStageLabel || task.review_stage_label || "-")}</strong></div>
               <div class="field"><span>派发人</span><strong>${escapeHtml(data.dispatcher?.display_name || "-")}</strong></div>
-              <div class="field"><span>负责人</span><strong>${escapeHtml(data.reporter?.display_name || "-")}</strong></div>
               <div class="field"><span>执行人</span><strong>${escapeHtml(data.assignee?.display_name || "-")}</strong></div>
-              <div class="field"><span>成品负责人</span><strong>${escapeHtml(data.productReviewer?.display_name || (reviewStage === "product_review" ? "待成品负责人处理" : "-"))}</strong></div>
+              <div class="field"><span>一审人员</span><strong>${escapeHtml(data.productReviewer?.display_name || (reviewStage === "product_review" ? "待一审人员处理" : "-"))}</strong></div>
               <div class="field"><span>截止时间</span><strong>${escapeHtml(formatDate(task.planned_end_at))}</strong></div>
               <div class="field"><span>需求标题</span><strong>${escapeHtml(requirement.title || "-")}</strong></div>
               <div class="field"><span>需求内容</span><p>${escapeHtml(requirement.content || "-")}</p></div>
@@ -331,14 +348,39 @@
         <section class="panel" style="margin-top:14px;">
           <div class="panel-head"><h2>验收操作</h2></div>
           <div class="panel-body">
-            ${canReview ? `
+            ${hasReviewPermission ? `
               <div class="field"><span>审核提示</span><p>${escapeHtml(reviewHint)}</p></div>
-              <textarea id="returnReason" placeholder="退回修改时填写原因，例如：请补充源文件或替换第 2 张图片。"></textarea>
-              <div class="actions">
-                <button class="btn primary" ${busy ? "disabled" : ""} onclick="approveReview()">${busy ? "处理中..." : approveText}</button>
-                <button class="btn danger" ${busy ? "disabled" : ""} onclick="returnReview()">${busy ? "处理中..." : "退回修改"}</button>
-                <a class="btn" href="/?taskSession=1">返回管理后台</a>
-              </div>
+              ${canClaim ? `
+                <div class="claim-banner">
+                  <div class="claim-copy">
+                    <strong>该审核任务尚未领取</strong>
+                    <span>领取后由你负责本轮审核，其他候选人员将自动转为只读。</span>
+                  </div>
+                  <button class="btn primary" ${busy ? "disabled" : ""} onclick="claimReview()">${busy ? "领取中..." : "领取审核"}</button>
+                </div>
+              ` : ""}
+              ${reviewClaim?.status === "claimed_by_other" ? `
+                <div class="claim-banner other">
+                  <div class="claim-copy">
+                    <strong>已由${escapeHtml(reviewClaim.claimedByName || "其他审核人")}领取</strong>
+                    <span>你仍可查看交付资产，本轮审核操作已锁定。</span>
+                  </div>
+                </div>
+              ` : ""}
+              ${canReview ? `
+                <div class="claim-banner mine">
+                  <div class="claim-copy">
+                    <strong>本轮审核已由你领取</strong>
+                    <span>确认交付内容后，通过或退回修改。</span>
+                  </div>
+                </div>
+                <textarea id="returnReason" placeholder="退回修改时填写原因，例如：请补充源文件或替换第 2 张图片。"></textarea>
+                <div class="actions">
+                  <button class="btn primary" ${busy ? "disabled" : ""} onclick="approveReview()">${busy ? "处理中..." : approveText}</button>
+                  <button class="btn danger" ${busy ? "disabled" : ""} onclick="returnReview()">${busy ? "处理中..." : "退回修改"}</button>
+                </div>
+              ` : ""}
+              <div class="actions"><a class="btn" href="/?taskSession=1">返回管理后台</a></div>
             ` : `
               <div class="empty">${escapeHtml(reviewHint)}</div>
               <div class="actions"><a class="btn" href="/?taskSession=1">返回管理后台</a></div>
@@ -360,6 +402,24 @@
         render();
       } catch (error) {
         renderError(error.message);
+      }
+    }
+    async function claimReview() {
+      if (busy) return;
+      busy = true;
+      render();
+      try {
+        await request(`/tasks/${encodeURIComponent(taskId)}/asset-review/claim${tokenQuery()}`, {
+          method: "POST",
+          body: token ? { token } : {},
+        });
+        context = await request(`/tasks/${encodeURIComponent(taskId)}/asset-review/context${tokenQuery()}`);
+        busy = false;
+        render();
+      } catch (error) {
+        busy = false;
+        await load();
+        alert(error.message);
       }
     }
     async function approveReview() {

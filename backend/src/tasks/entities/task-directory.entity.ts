@@ -23,4 +23,14 @@ export class TaskDirectoryEntity extends BaseSoftDeleteEntity {
 
   @Column({ type: 'datetime', nullable: true })
   last_synced_at!: Date | null;
+
+  @Column({ type: 'json', nullable: true })
+  draft_payload_json!: {
+    assetUrls: string[];
+    imageUrls: string[];
+    linkUrls: string[];
+  } | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  draft_saved_at!: Date | null;
 }

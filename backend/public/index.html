@@ -85,6 +85,9 @@
       gap: 14px;
       align-items: start;
     }
+    .requirements-workspace.history-only {
+      grid-template-columns: minmax(0, 1fr);
+    }
     .requirements-history { display: grid; gap: 14px; min-width: 0; }
     #view-requirements .panel {
       border-radius: 16px;
@@ -1616,7 +1619,7 @@
       </div>
 
       <section id="view-requirements" class="requirements-workspace">
-        <div class="panel requirements-compose">
+        <div id="requirementCreatePanel" class="panel requirements-compose">
           <div class="section-title">
             <div>
               <div class="kicker">New Requirement</div>
@@ -2309,14 +2312,25 @@
       return !permission || can(permission);
     }
     function applyRoleVisibility() {
+      const canCreateRequirement = can("requirement.create");
       document.querySelectorAll("[data-view]").forEach(element => {
         element.classList.toggle("hidden", !canView(element.dataset.view));
       });
-      qs("manualIntakePanel")?.classList.toggle("hidden", !can("requirement.create"));
+      qs("requirementCreatePanel")?.classList.toggle("hidden", !canCreateRequirement);
+      qs("view-requirements")?.classList.toggle("history-only", !canCreateRequirement);
+      qs("manualIntakePanel")?.classList.toggle("hidden", !canCreateRequirement);
       qs("aiPreviewPanel")?.classList.toggle("hidden", !(can("ai_preview.view_all") || can("ai_preview.view_owned")));
+      if (isViewActive("requirements")) {
+        qs("pageSub").textContent = requirementPageSubtitle();
+      }
       if (["quotations", "mappings", "settlement", "dashboard", "groups", "workflow", "messages"].some(view => isViewActive(view) && !canView(view))) {
         switchView("requirements");
       }
+    }
+    function requirementPageSubtitle() {
+      return can("requirement.create")
+        ? "录入客户需求后自动生成任务，并在同一页完成员工指派。"
+        : "查看并处理与当前账号职责相关的任务。";
     }
     function isViewActive(view) {
       return !qs(`view-${view}`)?.classList.contains("hidden");
@@ -3439,7 +3453,7 @@
       document.querySelectorAll(".nav button").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
       ["requirements", "quotations", "mappings", "settlement", "dashboard", "groups", "workflow", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
       const titles = {
-        requirements: ["需求与指派", "录入客户需求后自动生成任务，并在同一页完成员工指派。"],
+        requirements: ["需求与指派", requirementPageSubtitle()],
         quotations: ["合同报价录入", "上传合同报价并拆成最细粒度子项，为后续需求任务挂靠做准备。"],
         mappings: ["报价子项选择", "在历史需求任务中为需求选择对应基金的报价子项。"],
         settlement: ["结算统计", "按基金、平台和业务分类统计结算金额与资产数量。"],
@@ -3616,10 +3630,6 @@
         return userDisplayName(assignee);
       }
       return taskAssigneeUserId(task) ? assigneeName(taskAssigneeUserId(task)) : "未指派";
-    }
-    function taskReporterName(task) {
-      if (!task?.reporter_user_id) return "未配置负责人";
-      return assigneeName(task.reporter_user_id);
     }
     function taskDispatcherName(task) {
       return task?.dispatcher_user_id ? assigneeName(task.dispatcher_user_id) : "待派发";
@@ -3944,7 +3954,7 @@
       const source = state.copiedRequirementSource;
       note.classList.toggle("active", Boolean(source));
       note.textContent = source
-        ? `已从历史需求「${source.title || source.requirementCode || "未命名需求"}」复制，可修改后提交为一条新需求。负责人、执行人、任务状态和交付资产不会复制。`
+        ? `已从历史需求「${source.title || source.requirementCode || "未命名需求"}」复制，可修改后提交为一条新需求。原任务的人员分工、任务状态和交付资产不会复制。`
         : "";
     }
     function clearRequirementForm() {
@@ -4233,7 +4243,9 @@
       return taskDisplayStatusLabel(task);
     }
     function taskPersonalWorkflowStates(task) {
-      return Array.isArray(task?.workflow_view?.myStates) ? task.workflow_view.myStates : [];
+      return Array.isArray(task?.workflow_view?.myStates)
+        ? task.workflow_view.myStates
+        : [];
     }
     function renderPersonalWorkflowStates(task) {
       if (!task) return "";
@@ -5278,6 +5290,35 @@
       }
       return false;
     }
+    function reviewWorkflowStateForRow(row) {
+      const roleCode = row.task?.review_stage === "product_review"
+        ? "first_reviewer"
+        : "second_reviewer";
+      const states = [
+        ...(row.task?.workflow_view?.myStates || []),
+        ...(row.task?.workflow_view?.roleStates || []),
+      ];
+      return states.find(item => item.roleCode === roleCode) || null;
+    }
+    function reviewClaimForRow(row) {
+      const workflowState = reviewWorkflowStateForRow(row);
+      const claimedByUserId = workflowState?.actorUserId || "";
+      if (!claimedByUserId) {
+        return { status: "available", name: "", workflowState };
+      }
+      if (claimedByUserId === state.user?.id) {
+        return {
+          status: "mine",
+          name: workflowState?.actorName || state.user?.display_name || "我",
+          workflowState,
+        };
+      }
+      return {
+        status: "other",
+        name: workflowState?.actorName || "其他审核人",
+        workflowState,
+      };
+    }
     function renderAssignAction(row) {
       if (!row.task) return `<span class="muted">任务生成中</span>`;
       if (row.task.status === "pending_review") return renderReviewAction(row);
@@ -5332,13 +5373,19 @@
     }
     function renderReviewAction(row) {
       const isBusy = state.busyActionId === row.task.id;
-      const canAct = canCurrentUserReviewRow(row);
+      const hasReviewPermission = canCurrentUserReviewRow(row);
+      const claim = reviewClaimForRow(row);
+      const canClaim = hasReviewPermission && claim.status === "available";
+      const canAct = hasReviewPermission && claim.status === "mine";
       const canRemind = row.task?.assignee_user_id === state.user?.id && row.task?.status === "pending_review";
       const approveText = row.task.review_stage === "product_review" ? "一审通过" : row.task.review_stage === "customer_review" ? "二审通过" : "通过验收";
       return `
         <div class="review-action" onclick="event.stopPropagation()">
           <button class="btn" ${isBusy ? "disabled" : ""} onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
           ${canRemind ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="remindTaskProgress('${row.task.id}')">${isBusy ? "处理中..." : "催进度"}</button>` : ""}
+          ${canClaim ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="claimTaskReview('${row.task.id}')">${isBusy ? "领取中" : "领取审核"}</button>` : ""}
+          ${hasReviewPermission && claim.status === "mine" ? `<span class="quote-status-pill">我已领取</span>` : ""}
+          ${hasReviewPermission && claim.status === "other" ? `<span class="done-text">已由${safeText(claim.name)}领取</span>` : ""}
           ${canAct && can("task.accept_owned") ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : approveText}</button>` : ""}
           ${canAct && can("task.return_owned") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>` : ""}
           ${renderTaskAssetDirectoryButton(row.task)}
@@ -6865,6 +6912,7 @@
       return "";
     }
     async function createRequirement() {
+      if (!can("requirement.create")) return toast("当前账号没有新建需求权限。");
       const selectedCandidateId = state.selectedAiPreviewCandidateId;
       const project = await syncProjectSelection(true);
       if (!project) return toast("请先选择客户和业务大类");
@@ -7065,6 +7113,25 @@
           state.busyActionId = null;
         }
         if (!refreshed) renderRequirementBoard();
+      }
+    }
+    async function claimTaskReview(taskId) {
+      if (!taskId || state.busyActionId) return;
+      state.busyActionId = taskId;
+      renderRequirementBoard();
+      try {
+        await request(`/tasks/${taskId}/asset-review/claim`, {
+          method: "POST",
+          body: {},
+        });
+        toast("审核任务已领取");
+        await refreshRequirementBoard({ force: true, preserveScroll: true });
+      } catch (error) {
+        toast(error.message || "领取审核任务失败");
+        await refreshRequirementBoard({ force: true, preserveScroll: true });
+      } finally {
+        state.busyActionId = null;
+        renderRequirementBoard();
       }
     }
     async function approveTaskReview(requirementId, taskId) {

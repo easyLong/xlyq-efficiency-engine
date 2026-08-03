@@ -142,13 +142,6 @@ export class WorkflowConfigsService implements OnModuleInit {
       }
     });
 
-    if (normalizedRole === 'customer_reviewer') {
-      await this.syncOpenTaskCustomerOwner(
-        normalizedCustomerCode,
-        normalizedUserIds[0] ?? null,
-      );
-    }
-
     return this.findAll();
   }
 
@@ -217,7 +210,8 @@ export class WorkflowConfigsService implements OnModuleInit {
   async findBusinessCategoryReviewerIds(
     categoryCode: string | null | undefined,
   ): Promise<string[]> {
-    const normalizedCategoryCode = this.tryNormalizeBusinessCategory(categoryCode);
+    const normalizedCategoryCode =
+      this.tryNormalizeBusinessCategory(categoryCode);
     if (!normalizedCategoryCode) return [];
     const rows: Array<{ userId: string }> = await this.dataSource.query(
       `
@@ -246,7 +240,9 @@ export class WorkflowConfigsService implements OnModuleInit {
   }
 
   private tryNormalizeBusinessCategory(value: string | null | undefined) {
-    const normalized = String(value ?? '').trim().toLowerCase();
+    const normalized = String(value ?? '')
+      .trim()
+      .toLowerCase();
     if (!normalized) return null;
     const match = businessCategories.find(
       (item) => item.code === normalized || item.name === String(value).trim(),
@@ -318,54 +314,6 @@ export class WorkflowConfigsService implements OnModuleInit {
           AND user_id <> ''
       `);
     }
-    if (await this.tableExists('business_category_owner_configs')) {
-      await this.dataSource.query(`
-        INSERT IGNORE INTO business_category_review_members (
-          id, business_category_code, user_id, status, created_at, updated_at, deleted_at
-        )
-        SELECT
-          UUID(), business_category_code, owner_user_id, status, created_at, updated_at, deleted_at
-        FROM business_category_owner_configs
-        WHERE owner_user_id IS NOT NULL
-          AND owner_user_id <> ''
-      `);
-    }
-    if (await this.tableExists('customer_owner_configs')) {
-      await this.dataSource.query(`
-        INSERT IGNORE INTO customer_workflow_members (
-          id, customer_code, role_code, user_id, status, created_at, updated_at, deleted_at
-        )
-        SELECT
-          UUID(), customer_code, 'customer_reviewer', owner_user_id,
-          status, created_at, updated_at, deleted_at
-        FROM customer_owner_configs
-        WHERE owner_user_id IS NOT NULL
-          AND owner_user_id <> ''
-      `);
-    }
-  }
-
-  private async syncOpenTaskCustomerOwner(
-    customerCode: string,
-    ownerUserId: string | null,
-  ) {
-    await this.dataSource.query(
-      `
-        UPDATE tasks task
-        JOIN requirement_items item
-          ON item.id = task.requirement_item_id
-         AND item.deleted_at IS NULL
-        JOIN requirements requirement
-          ON requirement.id = item.requirement_id
-         AND requirement.deleted_at IS NULL
-        SET task.reporter_user_id = ?,
-            task.updated_at = CURRENT_TIMESTAMP
-        WHERE requirement.customer_code = ?
-          AND task.deleted_at IS NULL
-          AND task.status <> 'completed'
-      `,
-      [ownerUserId, customerCode],
-    );
   }
 
   private async tableExists(tableName: string, manager?: EntityManager) {

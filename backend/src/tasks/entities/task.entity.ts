@@ -48,11 +48,16 @@ export class TaskEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'char', length: 36, nullable: true })
   assignee_user_id!: string | null;
 
+  /** Legacy compatibility only. New workflow decisions must not use it. */
   @Column({ type: 'char', length: 36, nullable: true })
   reporter_user_id!: string | null;
 
   @Column({ type: 'char', length: 36, nullable: true })
   dispatcher_user_id!: string | null;
+
+  /** Audit-only creator identity. It is not a workflow owner or reviewer. */
+  @Column({ type: 'char', length: 36, nullable: true })
+  created_by_user_id!: string | null;
 
   @Column({ type: 'varchar', length: 32, nullable: true })
   product_review_type!: string | null;

@@ -60,17 +60,31 @@ describe('WorkflowConfigsService', () => {
     ]);
   });
 
-  it('syncs the primary fund reviewer to unfinished tasks', async () => {
-    const { service, dataSource } = createFixture();
+  it('keeps every fund reviewer without writing a legacy task owner', async () => {
+    const { service, dataSource, manager } = createFixture();
 
     await service.replaceCustomerMembers('Bosera', 'customer_reviewer', [
       'reviewer-1',
       'reviewer-2',
     ]);
 
-    const syncCall = dataSource.query.mock.calls.find(([sql]) =>
-      sql.includes('UPDATE tasks task'),
-    );
-    expect(syncCall?.[1]).toEqual(['reviewer-1', 'Bosera']);
+    expect(manager.query).toHaveBeenCalledTimes(3);
+    expect(manager.query.mock.calls[1][1]).toEqual([
+      expect.any(String),
+      'Bosera',
+      'customer_reviewer',
+      'reviewer-1',
+    ]);
+    expect(manager.query.mock.calls[2][1]).toEqual([
+      expect.any(String),
+      'Bosera',
+      'customer_reviewer',
+      'reviewer-2',
+    ]);
+    expect(
+      dataSource.query.mock.calls.some(([sql]) =>
+        sql.includes('UPDATE tasks task'),
+      ),
+    ).toBe(false);
   });
 });

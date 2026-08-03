@@ -1,6 +1,6 @@
 # 数据链路说明
 
-更新时间：2026-06-26
+更新时间：2026-08-03
 
 本文档说明当前系统中“需求、任务、资产、报价、结算”的真实数据链路和一致性规则。
 
@@ -8,10 +8,11 @@
 
 ```text
 group_contact_mappings
-  -> business_category_owner_configs
   -> requirements
   -> requirement_items
   -> tasks
+  -> customer_workflow_members / business_category_review_members
+  -> task_work_items / task_work_item_candidates
   -> task_directories / task_result_files
   -> quotations
   -> quotation_items
@@ -49,9 +50,12 @@ group_contact_mappings
 
 角色口径：
 
-- `business_category_owner_configs.owner_user_id`：只按业务大类配置需求负责人；配置值会规范化为真实 `users.id` 后写入 `tasks.reporter_user_id`。
-- `tasks.reporter_user_id`：需求负责人，创建任务时按业务大类自动写入；如果该大类未配置负责人，则保持为空并在页面显示“未配置负责人”。
+- `tasks.created_by_user_id`：任务创建人，只用于审计和必要通知，不参与流程权限判断。
+- `tasks.dispatcher_user_id`：实际完成派发的人；基金可配置多个派发候选人，首个成功派发者写入该字段。
 - `tasks.assignee_user_id`：执行人，由历史需求任务状态页的“指派/改派”动作写入。
+- `business_category_review_members`：按业务大类配置一审候选团队。
+- `customer_workflow_members(role_code = customer_reviewer)`：按基金配置二审候选团队；权限画像中的有效角色统一返回 `second_reviewer`。
+- `tasks.reporter_user_id`：仅保留历史字段和旧飞书查看链接兼容；新任务固定为空，不再决定权限、数据范围、通知或审核人员。
 
 AI 预览需求确认链路：
 
@@ -119,16 +123,18 @@ AI预览需求卡片
 任务指派后：
 
 - `tasks.assignee_user_id` 记录执行人。
-- `tasks.reporter_user_id` 保留需求负责人，不随指派/改派变化。
+- `tasks.dispatcher_user_id` 记录实际派发人，`tasks.created_by_user_id` 记录创建人。
 - 系统尝试创建飞书在线资产表。
 - 飞书权限不足或本地兜底时，生成 `public/asset-sheet.html` 入口。
 - 本地交付入口会携带任务访问 token：`asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`。
 - 员工可上传、拖拽、粘贴图片，也可粘贴图片 URL；同时支持添加多条合作链接，合作链接可以不填。
 - 资产登记页顶部提供 `个人任务主页`，仅写入执行人临时会话并跳转个人任务视图，不触发资产保存或提交。
-- 后台统一写入 `task_result_files`。
-- 员工提交资产或服务端同步飞书资产表后，任务进入 `pending_review`，系统按 `tasks.reporter_user_id` 通知负责人查看交付资产；如果任务负责人为空，才兜底使用项目负责人。
-- 执行人可在待审核任务上点击“催进度”，系统按当前审核阶段向对应负责人再发提醒，并记录到 `task_progress_reminders`，同一任务同一阶段 6 小时内只允许提醒一次。
-- 负责人通过飞书卡片或管理后台进入 `asset-review.html` 查看资产。该页面只展示交付资产、需求信息和验收动作，不复用执行人的资产提交页。
+- 执行人点击“保存草稿”时，图片和链接暂存在 `task_directories.draft_payload_json`，任务保持执行阶段，不生成审核记录、不发送审核消息，也不进入资产统计。
+- 执行人再次进入资产页时优先恢复服务器草稿；没有草稿时读取最近一次已提交资产，便于审核退回后继续修改。
+- 只有点击“提交交付”并再次确认后，后台才将正式交付写入 `task_result_files`、清空服务器草稿并推进审核状态。
+- 员工提交资产后先进入一审；一审按业务大类通知全部候选人，一审通过后再按基金通知全部二审候选人。
+- 执行人可在待审核任务上点击“催进度”，系统按当前审核阶段向对应审核团队提醒，并记录到 `task_progress_reminders`，同一任务同一阶段 6 小时内只允许提醒一次。
+- 审核人通过飞书卡片或管理后台进入 `asset-review.html` 查看资产。多人候选团队先领取工作项，再执行通过或退回；领取后其他候选人只读。
 
 资产统计口径：
 
@@ -148,8 +154,8 @@ WHERE source IN (
 
 - `local_asset_sheet_image` / `feishu_asset_sheet_image`：图片资产，计入结算资产个数。
 - `local_asset_sheet_link` / `feishu_asset_sheet_link`：合作链接，可多条，只用于交付追踪，不计入结算资产个数。
-- 本地交付登记保存使用事务，保存成功后任务进入 `pending_review`。
-- 资产查看页支持两种访问方式：飞书通知携带负责人专用 token 免登录进入；管理后台已登录负责人/管理员点击“查看资产”进入。
+- 草稿保存和正式提交是两个独立动作；正式提交使用事务，成功后任务才进入 `pending_review`。
+- 资产查看页支持两种访问方式：飞书通知携带审核人专用 token 免登录进入；管理后台已登录且具备任务范围的人员点击“查看资产”进入。旧负责人 token 仅保留查看兼容，不能执行审核。
 
 资产 PPT 导出口径：
 
@@ -317,20 +323,23 @@ WHERE source IN (
 任务状态由 `backend/src/tasks/task-status.ts` 统一定义和校验：
 
 ```text
-todo -> assigned -> in_progress -> pending_review -> completed
-                     ^              |
-                     |              v
-                   returned <- return_revision
+todo -> assigned -> in_progress -> pending_review(first_review)
+                     ^                    |
+                     |                    v
+                   returned <- pending_review(second_review) -> completed
 ```
 
 关键触发点：
 
 - 后台指派任务：`todo/pending/returned -> assigned`。
 - 员工打开项目资产页：`todo/pending/assigned/returned -> in_progress`，带 `reopen=1` 时允许 `completed -> in_progress`。
+- 员工保存服务器草稿：状态保持不变，继续处于执行阶段。
 - 员工提交本地资产或服务端同步飞书资产表：`assigned/in_progress/returned -> pending_review`。
-- 系统发送“任务待验收”通知给任务负责人，飞书卡片按钮为“查看交付资产”。
-- 管理者验收：`pending_review -> completed`。
-- 管理者退回：`pending_review -> in_progress`，并记录退回说明。
+- 系统按业务大类发送一审通知，一审通过后按基金发送二审通知。
+- 一审、二审工作项分别写入 `task_work_items`，候选人写入 `task_work_item_candidates`；领取通过条件更新保证同一工作项只有一名处理人。
+- 一审通过：任务保持 `pending_review`，`current_step` 从 `first_review` 转为 `second_review`。
+- 二审通过：`pending_review -> completed`。
+- 任一审核阶段退回：`pending_review -> returned`，记录来源阶段和退回说明，执行人修改后重新提交新版本。
 
 每次状态变化都会写入 `task_status_histories`，字段包括 `task_id`、`from_status`、`to_status`、`trigger_source`、`remark`、`created_at`。
 
@@ -439,7 +448,7 @@ ITEM-002
 
 - 执行人提交资产后，任务进入 `pending_review`，任务需求列表里会出现“催进度”按钮。
 - 执行人点击“催进度”只影响当前任务当前审核阶段，不会改动任务状态，只会新增提醒记录并发送通知。
-- 通知接收方按当前阶段分流：`product_review` 发给一审负责人，`customer_review` 发给二审负责人。
+- 通知接收方按当前阶段分流：`product_review` 发给一审候选团队，`customer_review` 发给二审候选团队。
 - 同一任务、同一执行人、同一阶段 6 小时内只允许提醒一次，避免重复打扰。
 
 - 到期判断由自然日改为工作日：默认周一到周五，`business_calendar` 可覆盖节假日/调休。

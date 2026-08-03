@@ -1,16 +1,16 @@
--- 效能引擎 MySQL 8.0 建表 SQL
--- 版本: V1
+-- 向量引擎管理工作台 MySQL 8.0 基线建表 SQL
+-- 版本: 2026-08-03
 -- 说明:
 -- 1. 采用 CHAR(36) 存储 UUID
 -- 2. 字符集统一为 utf8mb4
 -- 3. 关键业务表使用软删除字段 deleted_at
 -- 4. 状态字段使用 VARCHAR，由应用层控制枚举取值
 
-CREATE DATABASE IF NOT EXISTS `efficiency_engine`
+CREATE DATABASE IF NOT EXISTS `ops_platform`
   DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
 
-USE `efficiency_engine`;
+USE `ops_platform`;
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -29,6 +29,10 @@ DROP TABLE IF EXISTS `weekly_reports`;
 DROP TABLE IF EXISTS `ai_execution_logs`;
 DROP TABLE IF EXISTS `risk_alerts`;
 DROP TABLE IF EXISTS `notification_messages`;
+DROP TABLE IF EXISTS `task_work_item_candidates`;
+DROP TABLE IF EXISTS `task_work_items`;
+DROP TABLE IF EXISTS `task_progress_reminders`;
+DROP TABLE IF EXISTS `task_review_records`;
 DROP TABLE IF EXISTS `task_result_files`;
 DROP TABLE IF EXISTS `task_status_histories`;
 DROP TABLE IF EXISTS `task_directories`;
@@ -39,6 +43,10 @@ DROP TABLE IF EXISTS `requirement_versions`;
 DROP TABLE IF EXISTS `requirements`;
 DROP TABLE IF EXISTS `project_members`;
 DROP TABLE IF EXISTS `projects`;
+DROP TABLE IF EXISTS `business_category_review_members`;
+DROP TABLE IF EXISTS `customer_workflow_members`;
+DROP TABLE IF EXISTS `business_category_secondary_categories`;
+DROP TABLE IF EXISTS `business_category_owner_configs`;
 DROP TABLE IF EXISTS `group_contact_mappings`;
 DROP TABLE IF EXISTS `wechat_group_configs`;
 DROP TABLE IF EXISTS `source_contact_contexts`;
@@ -136,7 +144,7 @@ CREATE TABLE `group_contact_mappings` (
   KEY `idx_group_contact_name` (`contact_name`),
   KEY `idx_group_contact_customer_platform` (`customer_code`, `business_platform`),
   KEY `idx_group_contact_status` (`status`, `collect_enabled`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='????????';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='群与对接人上下文映射表';
 
 CREATE TABLE `dimension_dictionaries` (
   `id` CHAR(36) NOT NULL,
@@ -155,6 +163,53 @@ CREATE TABLE `dimension_dictionaries` (
   KEY `idx_dimension_type_parent` (`dimension_type`, `parent_code`),
   KEY `idx_dimension_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务维度字典表';
+
+CREATE TABLE `business_category_secondary_categories` (
+  `id` CHAR(36) NOT NULL,
+  `business_category_code` VARCHAR(64) NOT NULL,
+  `business_category_name` VARCHAR(64) NOT NULL,
+  `secondary_category_code` VARCHAR(64) NOT NULL,
+  `secondary_category_name` VARCHAR(64) NOT NULL,
+  `category_sort_order` INT NOT NULL DEFAULT 100,
+  `secondary_sort_order` INT NOT NULL DEFAULT 100,
+  `status` VARCHAR(32) NOT NULL,
+  `remark` VARCHAR(255) NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_business_category_secondary` (`business_category_code`, `secondary_category_code`),
+  KEY `idx_business_category_secondary_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务大类与二级分类关系表';
+
+CREATE TABLE `customer_workflow_members` (
+  `id` CHAR(36) NOT NULL,
+  `customer_code` VARCHAR(64) NOT NULL,
+  `role_code` VARCHAR(32) NOT NULL,
+  `user_id` CHAR(36) NOT NULL,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'active',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_customer_workflow_member` (`customer_code`, `role_code`, `user_id`),
+  KEY `idx_customer_workflow_user_role` (`user_id`, `role_code`),
+  KEY `idx_customer_workflow_role_customer` (`role_code`, `customer_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='基金流程人员配置表';
+
+CREATE TABLE `business_category_review_members` (
+  `id` CHAR(36) NOT NULL,
+  `business_category_code` VARCHAR(64) NOT NULL,
+  `user_id` CHAR(36) NOT NULL,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'active',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_business_category_review_member` (`business_category_code`, `user_id`),
+  KEY `idx_business_category_review_user` (`user_id`),
+  KEY `idx_business_category_review_category` (`business_category_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务大类一审人员配置表';
 
 CREATE TABLE `projects` (
   `id` CHAR(36) NOT NULL,
@@ -288,9 +343,21 @@ CREATE TABLE `tasks` (
   `task_name` VARCHAR(256) NOT NULL,
   `description` TEXT NULL,
   `status` VARCHAR(32) NOT NULL,
+  `review_stage` VARCHAR(32) NOT NULL DEFAULT 'none',
+  `product_review_type` VARCHAR(32) NULL,
+  `current_step` VARCHAR(32) NOT NULL DEFAULT 'dispatch',
+  `delivery_version` INT NOT NULL DEFAULT 0,
+  `returned_from_step` VARCHAR(32) NULL,
+  `workflow_version` INT NOT NULL DEFAULT 0,
+  `last_transition_at` DATETIME NULL,
   `priority` VARCHAR(32) NULL,
+  `urgency_level` VARCHAR(32) NULL,
   `assignee_user_id` CHAR(36) NULL,
   `reporter_user_id` CHAR(36) NULL,
+  `dispatcher_user_id` CHAR(36) NULL,
+  `created_by_user_id` CHAR(36) NULL,
+  `product_reviewer_user_id` CHAR(36) NULL,
+  `customer_reviewer_user_id` CHAR(36) NULL,
   `planned_start_at` DATETIME NULL,
   `planned_end_at` DATETIME NULL,
   `actual_start_at` DATETIME NULL,
@@ -308,7 +375,13 @@ CREATE TABLE `tasks` (
   KEY `idx_tasks_requirement_item_id` (`requirement_item_id`),
   KEY `idx_tasks_assignee_user_id` (`assignee_user_id`),
   KEY `idx_tasks_reporter_user_id` (`reporter_user_id`),
+  KEY `idx_tasks_dispatcher_user_id` (`dispatcher_user_id`),
+  KEY `idx_tasks_created_by_user_id` (`created_by_user_id`),
   KEY `idx_tasks_status` (`status`),
+  KEY `idx_tasks_review_stage` (`review_stage`),
+  KEY `idx_tasks_current_step` (`current_step`, `last_transition_at`),
+  KEY `idx_tasks_product_reviewer` (`product_reviewer_user_id`),
+  KEY `idx_tasks_customer_reviewer` (`customer_reviewer_user_id`),
   KEY `idx_tasks_planned_end_at` (`planned_end_at`),
   KEY `idx_tasks_parent_task_id` (`parent_task_id`),
   CONSTRAINT `fk_tasks_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`),
@@ -327,6 +400,8 @@ CREATE TABLE `task_directories` (
   `directory_url` VARCHAR(500) NULL,
   `permission_status` VARCHAR(32) NOT NULL,
   `last_synced_at` DATETIME NULL,
+  `draft_payload_json` JSON NULL,
+  `draft_saved_at` DATETIME NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted_at` DATETIME NULL,
@@ -376,9 +451,85 @@ CREATE TABLE `task_status_histories` (
   CONSTRAINT `fk_task_status_histories_task` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务状态历史表';
 
+CREATE TABLE `task_review_records` (
+  `id` CHAR(36) NOT NULL,
+  `task_id` CHAR(36) NOT NULL,
+  `review_stage` VARCHAR(32) NOT NULL,
+  `review_result` VARCHAR(32) NOT NULL,
+  `reviewer_user_id` CHAR(36) NULL,
+  `from_status` VARCHAR(32) NULL,
+  `to_status` VARCHAR(32) NULL,
+  `from_review_stage` VARCHAR(32) NULL,
+  `to_review_stage` VARCHAR(32) NULL,
+  `review_comment` VARCHAR(1000) NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_task_review_records_task_created` (`task_id`, `created_at`),
+  KEY `idx_task_review_records_reviewer` (`reviewer_user_id`),
+  KEY `idx_task_review_records_stage` (`review_stage`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务审核记录表';
+
+CREATE TABLE `task_progress_reminders` (
+  `id` CHAR(36) NOT NULL,
+  `task_id` CHAR(36) NOT NULL,
+  `sender_user_id` CHAR(36) NOT NULL,
+  `recipient_user_ids_json` JSON NOT NULL,
+  `task_status` VARCHAR(32) NOT NULL,
+  `review_stage` VARCHAR(32) NULL,
+  `message` VARCHAR(1000) NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_task_progress_reminders_task_created` (`task_id`, `created_at`),
+  KEY `idx_task_progress_reminders_sender` (`sender_user_id`, `created_at`),
+  KEY `idx_task_progress_reminders_stage` (`review_stage`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务催进度记录表';
+
+CREATE TABLE `task_work_items` (
+  `id` CHAR(36) NOT NULL,
+  `task_id` CHAR(36) NOT NULL,
+  `step_type` VARCHAR(32) NOT NULL,
+  `delivery_version` INT NOT NULL DEFAULT 0,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'open',
+  `claimed_by_user_id` CHAR(36) NULL,
+  `result` VARCHAR(32) NULL,
+  `remark` VARCHAR(1000) NULL,
+  `opened_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `claimed_at` DATETIME NULL,
+  `closed_at` DATETIME NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_task_work_items_task_status` (`task_id`, `status`, `created_at`),
+  KEY `idx_task_work_items_step_status` (`step_type`, `status`, `opened_at`),
+  KEY `idx_task_work_items_actor` (`claimed_by_user_id`, `closed_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务角色工作项';
+
+CREATE TABLE `task_work_item_candidates` (
+  `id` CHAR(36) NOT NULL,
+  `work_item_id` CHAR(36) NOT NULL,
+  `user_id` CHAR(36) NOT NULL,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'open',
+  `candidate_source` VARCHAR(32) NOT NULL DEFAULT 'workflow_config',
+  `notified_at` DATETIME NULL,
+  `seen_at` DATETIME NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_task_work_item_candidate` (`work_item_id`, `user_id`),
+  KEY `idx_task_work_item_candidates_user` (`user_id`, `status`, `created_at`),
+  KEY `idx_task_work_item_candidates_item` (`work_item_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务工作项候选人';
+
 CREATE TABLE `notification_messages` (
   `id` CHAR(36) NOT NULL,
   `recipient_user_id` CHAR(36) NULL,
+  `idempotency_key` VARCHAR(191) NULL,
   `title` VARCHAR(128) NOT NULL,
   `content` TEXT NOT NULL,
   `object_type` VARCHAR(32) NULL,
@@ -393,6 +544,7 @@ CREATE TABLE `notification_messages` (
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted_at` DATETIME NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_notification_messages_idempotency_key` (`idempotency_key`),
   KEY `idx_notification_messages_recipient` (`recipient_user_id`, `status`),
   KEY `idx_notification_messages_object` (`object_type`, `object_id`),
   KEY `idx_notification_messages_created_at` (`created_at`),

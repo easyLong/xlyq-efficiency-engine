@@ -1,241 +1,159 @@
-# 向量引擎管理工作台 ER 图与模块关系图
+# 向量引擎管理工作台架构图
 
-## 1. 说明
+更新时间：2026-08-03
 
-本文档使用 Mermaid 描述向量引擎管理工作台的核心实体关系和模块协作关系，可直接用于评审、Wiki 或后续补充架构设计。
+本文档只描述当前有效实现。更细的字段和接口分别见 [DB_SCHEMA.md](DB_SCHEMA.md)、[DATA_FLOW.md](DATA_FLOW.md) 和 [API_SPEC.md](API_SPEC.md)。
 
-## 2. 核心 ER 图
+## 系统边界
+
+```mermaid
+flowchart LR
+    CRAWLER[群消息采集服务]
+    FEISHU[飞书应用消息]
+    BROWSER[管理后台 / 资产页 / 审核页]
+    API[NestJS API]
+    DB[(ops_platform)]
+    MODEL[大模型服务]
+
+    CRAWLER -->|写入候选需求| DB
+    BROWSER -->|Bearer Token / 任务 Token| API
+    FEISHU -->|任务链接 / 卡片回调| API
+    API --> DB
+    API -->|AI 解析| MODEL
+    API -->|发送卡片| FEISHU
+```
+
+边界约定：
+
+- `ops_platform` 保存管理工作台的配置、候选需求、正式需求、任务、资产、审核、报价和结算数据。
+- 采集服务负责群消息采集和候选需求生产，不直接创建正式需求或任务。
+- 候选需求必须经派发者或管理员人工确认后，才进入正式业务链路。
+- 飞书只是通知和快捷入口，任务状态与权限以 `ops_platform` 为准。
+
+## 核心实体
 
 ```mermaid
 erDiagram
-    USERS ||--o{ USER_ROLES : has
-    ROLES ||--o{ USER_ROLES : assigned
-    CUSTOMERS ||--o{ PROJECTS : owns
-    CUSTOMERS ||--o{ CONTACT_CONTEXT_CONFIGS : configures
-    USERS ||--o{ PROJECTS : manages
-    PROJECTS ||--o{ PROJECT_MEMBERS : includes
-    USERS ||--o{ PROJECT_MEMBERS : joins
+    CUSTOMERS ||--o{ GROUP_CONTACT_MAPPINGS : identifies
+    CUSTOMERS ||--o{ CUSTOMER_WORKFLOW_MEMBERS : configures
+    USERS ||--o{ CUSTOMER_WORKFLOW_MEMBERS : joins
+    USERS ||--o{ BUSINESS_CATEGORY_REVIEW_MEMBERS : joins
 
-    PROJECTS ||--o{ REQUIREMENTS : contains
-    CUSTOMERS ||--o{ REQUIREMENTS : submits
-    REQUIREMENTS ||--o{ REQUIREMENT_VERSIONS : versions
-    REQUIREMENTS ||--o{ REQUIREMENT_ITEMS : splits
-    USERS ||--o{ REQUIREMENT_ITEMS : owns
+    CUSTOMERS ||--o{ REQUIREMENTS : owns
+    REQUIREMENTS ||--o{ REQUIREMENT_ITEMS : contains
+    REQUIREMENT_ITEMS ||--o{ TASKS : creates
 
-    REQUIREMENT_ITEMS ||--o{ TASKS : generates
-    USERS ||--o{ TASKS : assigned
-    TASKS ||--o{ WORKLOGS : logs
-    USERS ||--o{ WORKLOGS : records
+    TASKS ||--|| TASK_DIRECTORIES : has
+    TASKS ||--o{ TASK_RESULT_FILES : delivers
+    TASKS ||--o{ TASK_STATUS_HISTORIES : tracks
+    TASKS ||--o{ TASK_REVIEW_RECORDS : audits
+    TASKS ||--o{ TASK_WORK_ITEMS : advances
+    TASK_WORK_ITEMS ||--o{ TASK_WORK_ITEM_CANDIDATES : offers
+    USERS ||--o{ TASK_WORK_ITEM_CANDIDATES : receives
 
-    PROJECTS ||--o{ RISK_ALERTS : triggers
-    PROJECTS ||--o{ WEEKLY_REPORTS : outputs
-
-    PROJECTS ||--o{ QUOTATIONS : has
+    CUSTOMERS ||--o{ QUOTATIONS : contracts
     QUOTATIONS ||--o{ QUOTATION_ITEMS : contains
-    QUOTATION_ITEMS ||--o{ QUOTATION_ITEM_DIMENSION_RULES : filters
     REQUIREMENT_ITEMS ||--o{ REQUIREMENT_QUOTATION_MAPPINGS : maps
     QUOTATION_ITEMS ||--o{ REQUIREMENT_QUOTATION_MAPPINGS : maps
 
-    PROJECTS ||--o{ CHANGE_REQUESTS : owns
-    CHANGE_REQUESTS ||--o{ CHANGE_REQUEST_ITEMS : details
-    REQUIREMENT_ITEMS ||--o{ CHANGE_REQUEST_ITEMS : affects
-    TASKS ||--o{ CHANGE_REQUEST_ITEMS : affects
-    QUOTATION_ITEMS ||--o{ CHANGE_REQUEST_ITEMS : affects
-
-    PROJECTS ||--o{ FEISHU_OBJECT_LINKS : syncs
-    PROJECTS ||--o{ AI_EXECUTION_LOGS : drives
-    AI_EXECUTION_LOGS ||--o{ AI_SUGGESTION_ACTIONS : records
-    USERS ||--o{ AUDIT_LOGS : operates
+    USERS ||--o{ NOTIFICATION_MESSAGES : receives
 ```
 
-## 3. 核心业务链路图
+## 需求链路
 
 ```mermaid
 flowchart LR
-    A0[对接人配置<br/>基金/平台]
-    A[客户需求<br/>飞书文档/消息/手工录入]
-    B[需求管理<br/>Requirement]
-    C[需求项拆解<br/>RequirementItem]
-    D[任务生成与分配<br/>Task]
-    E[执行与工时记录<br/>Worklog]
-    F[进度跟进与风险预警<br/>RiskAlert/WeeklyReport]
-    G[需求报价子项选择<br/>RequirementQuotationMapping]
-    H[合同报价与子项<br/>Quotation/QuotationItem]
-    H0[报价子项维度规则<br/>DimensionRule]
-    I[映射确认]
-    J[结算统计与需求面板]
+    A[群消息采集]
+    B[AI 候选需求]
+    C{人工判断}
+    D[标记伪需求]
+    E[填充并确认]
+    F[Requirement]
+    G[RequirementItem]
+    H[Task: 待派发]
 
-    A0 --> B
-    A --> B
-    B --> C
-    C --> D
-    D --> E
-    E --> F
-    C --> G
-    H0 --> G
-    G --> H
-    H --> I
-    I --> J
+    A --> B --> C
+    C -->|拒绝| D
+    C -->|确认| E --> F --> G --> H
 ```
 
-## 4. 模块关系图
+上下文和分类分开维护：
+
+- `group_contact_mappings`：群 + 对接人确定基金和业务平台。
+- `business_category_secondary_categories`：业务大类确定可选二级分类。
+- `customer_workflow_members`：基金确定派发者和二审候选人。
+- `business_category_review_members`：业务大类确定一审候选人。
+
+## 任务审核链路
+
+```mermaid
+flowchart LR
+    D[待派发<br/>dispatch]
+    E[执行中<br/>execute]
+    S[服务器草稿<br/>不推进流程]
+    F[待一审<br/>first_review]
+    G[待二审<br/>second_review]
+    H[已验收<br/>done]
+    R[退回修改<br/>execute]
+
+    D -->|派发/改派| E
+    E -->|保存草稿| S
+    S -->|继续编辑| E
+    E -->|提交交付 Vn| F
+    F -->|领取并通过| G
+    G -->|领取并通过| H
+    F -->|退回| R
+    G -->|退回| R
+    R -->|重新提交 Vn+1| F
+```
+
+一致性规则：
+
+- 派发、执行、一审和二审分别用工作项表达，候选人与实际处理人分开。
+- 一审和二审领取使用数据库原子条件更新；同一工作项只能有一个处理人。
+- 保存草稿只写 `task_directories`，不写正式资产、不通知审核人、不进入统计。
+- 提交交付写入 `task_result_files`，递增 `delivery_version`，并新建一审工作项。
+- 一审通过只切换审核阶段，二审通过才将任务置为 `completed`。
+
+## 任务身份
 
 ```mermaid
 flowchart TB
-    subgraph Input["输入层"]
-      FEI[飞书文档/消息/任务]
-      MANUAL[手工录入]
-      IMPORT[模板导入]
-      CONTACT[对接人配置]
-    end
+    CREATOR[创建人<br/>created_by_user_id]
+    DISPATCHER[实际派发人<br/>dispatcher_user_id]
+    ASSIGNEE[执行人<br/>assignee_user_id]
+    FIRST[实际一审<br/>product_reviewer_user_id]
+    SECOND[实际二审<br/>customer_reviewer_user_id]
+    LEGACY[旧负责人<br/>reporter_user_id]
 
-    subgraph Core["核心业务层"]
-      PM[项目管理]
-      RM[需求管理]
-      TM[任务管理]
-      FM[项目跟进]
-      QM[需求报价子项映射]
-      BM[报价与结算]
-    end
-
-    subgraph AI["AI 能力层"]
-      AI1[需求解析]
-      AI2[任务分配建议]
-      AI3[风险识别]
-      AI4[周报生成]
-      AI5[报价映射建议]
-      AI6[报价草稿建议]
-    end
-
-    subgraph Integration["集成层"]
-      FSYNC[飞书同步]
-      FBOT[飞书机器人]
-      FHOOK[飞书事件回调]
-    end
-
-    subgraph Data["数据与审计层"]
-      DB[(MySQL)]
-      AUDIT[审计日志]
-      AILOG[AI执行日志]
-      FSLOG[飞书同步日志]
-    end
-
-    FEI --> RM
-    MANUAL --> RM
-    IMPORT --> RM
-    CONTACT --> RM
-    CONTACT --> QM
-
-    PM --> RM
-    RM --> TM
-    TM --> FM
-    RM --> QM
-    TM --> QM
-    QM --> BM
-
-    AI1 --> RM
-    AI2 --> TM
-    AI3 --> FM
-    AI4 --> FM
-    AI5 --> QM
-    AI6 --> BM
-
-    FSYNC <--> RM
-    FSYNC <--> TM
-    FBOT --> FM
-    FBOT --> BM
-    FHOOK --> FSYNC
-
-    PM --> DB
-    RM --> DB
-    TM --> DB
-    FM --> DB
-    QM --> DB
-    BM --> DB
-
-    RM --> AUDIT
-    TM --> AUDIT
-    QM --> AUDIT
-    BM --> AUDIT
-    AI1 --> AILOG
-    AI3 --> AILOG
-    AI5 --> AILOG
-    Integration --> FSLOG
+    CREATOR -->|审计| TASK[Task]
+    DISPATCHER -->|派发| TASK
+    ASSIGNEE -->|交付| TASK
+    FIRST -->|一审| TASK
+    SECOND -->|二审| TASK
+    LEGACY -.仅历史查看兼容.-> TASK
 ```
 
-## 5. 需求报价子项选择专题图
-
-这是本项目最关键的断层修复模块。
+## 报价与统计
 
 ```mermaid
 flowchart LR
-    R0[需求维度<br/>基金/对接人/平台/分类/员工]
-    R1[需求项]
-    R2[任务资产数]
-    M[报价子项选择<br/>人工 + 规则建议]
-    Q0[报价子项维度规则]
-    Q1[报价子项]
-    Q2[映射确认]
-    Q3[结算预览]
+    CONTRACT[基金合同报价]
+    ITEMS[报价子项<br/>最细层级 + 单位 + 单价]
+    TASK[需求任务]
+    MAP[报价映射]
+    ASSETS[正式交付资产]
+    SETTLEMENT[结算统计]
+    DASHBOARD[需求面板]
 
-    R0 --> M
-    R1 --> M
-    R2 --> M
-    Q0 --> M
-    Q1 --> M
-    M --> Q2
-    Q2 --> Q3
+    CONTRACT --> ITEMS --> MAP
+    TASK --> MAP
+    TASK --> ASSETS
+    MAP --> SETTLEMENT
+    ASSETS --> SETTLEMENT
+    TASK --> DASHBOARD
 ```
 
-## 6. 后端服务建议关系图
-
-如果后端后续拆分模块，可以按下面的服务边界组织。
-
-```mermaid
-flowchart LR
-    GW[API Gateway / BFF]
-    AUTH[Auth Service]
-    PROJ[Project Service]
-    REQ[Requirement Service]
-    TASK[Task Service]
-    QUOTE[Quote Service]
-    CHANGE[Change Service]
-    FEISHU[Feishu Integration Service]
-    AIAPP[AI Orchestration Service]
-    REPORT[Report Service]
-    DB[(MySQL)]
-
-    GW --> AUTH
-    GW --> PROJ
-    GW --> REQ
-    GW --> TASK
-    GW --> QUOTE
-    GW --> CHANGE
-    GW --> FEISHU
-    GW --> AIAPP
-    GW --> REPORT
-
-    PROJ --> DB
-    REQ --> DB
-    TASK --> DB
-    QUOTE --> DB
-    CHANGE --> DB
-    REPORT --> DB
-    FEISHU --> DB
-    AIAPP --> DB
-
-    REQ --> AIAPP
-    TASK --> AIAPP
-    QUOTE --> AIAPP
-    FEISHU --> REQ
-    FEISHU --> TASK
-    FEISHU --> REPORT
-    CHANGE --> QUOTE
-```
-
-## 7. 建议阅读顺序
-
-1. 先看“核心业务链路图”
-2. 再看“需求报价子项选择专题图”
-3. 然后看“核心 ER 图”
-4. 最后结合 [DB_SCHEMA.md](DB_SCHEMA.md) 和 [API_SPEC.md](API_SPEC.md) 进入开发
+- 需求面板只统计需求数量、进度、时效和执行情况，不展示金额。
+- 结算统计按基金、时间及其他业务维度统计正式资产数量和结算金额。
+- 服务器草稿不进入任何统计口径。

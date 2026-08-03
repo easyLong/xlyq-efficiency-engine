@@ -163,8 +163,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     await this.ensureRequirementsSchema();
     await this.taskWorkflowRuntime.ensureSchema();
     await ensureWorkflowConfigTables(this.dataSource);
-    await this.ensureBusinessCategoryOwnerConfigTable();
-    await this.normalizeBusinessCategoryOwnerConfigUsers();
     await this.ensureDemandIntakeTables();
     this.startAiPreviewNotificationScanner();
   }
@@ -300,7 +298,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     );
 
     const visibleRequirementIds = new Set<string>();
-    const ownedCategories = new Set(profile.ownedBusinessCategoryCodes);
     const dispatchCustomers = new Set(profile.dispatchCustomerCodes);
     const reviewCustomers = new Set(profile.customerReviewCodes);
     const productReviewTypes = new Set(profile.productReviewTypes);
@@ -316,13 +313,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           [
             task.assignee_user_id,
             task.dispatcher_user_id,
-            task.reporter_user_id,
             task.product_reviewer_user_id,
             task.customer_reviewer_user_id,
           ].includes(currentUser?.id ?? null)),
       );
       const hasConfiguredScope = Boolean(
-        ownedCategories.has(requirementCategory) ||
         dispatchCustomers.has(requirement.customer_code) ||
         (task &&
           ['todo', 'pending'].includes(task.status) &&
@@ -415,9 +410,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         `,
         [normalizedCategoryCode],
       );
-      await this.backfillTaskReportersForBusinessCategory(
-        normalizedCategoryCode,
-      );
       return this.listBusinessCategoryOwners();
     }
 
@@ -446,7 +438,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       ],
     );
 
-    await this.backfillTaskReportersForBusinessCategory(normalizedCategoryCode);
     return this.listBusinessCategoryOwners();
   }
 
@@ -1305,6 +1296,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           tertiaryCategory: dto.tertiaryCategory ?? null,
           sourceType: dto.sourceCandidateId ? 'ai_preview_confirmed' : 'manual',
           dispatcherUserId: currentUser?.id ?? null,
+          createdByUserId: currentUser?.id ?? null,
         },
         manager,
       );
@@ -1446,6 +1438,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
             ? 'ai_model_split'
             : 'ai_file_split',
         dispatcherUserId: currentUser?.id ?? null,
+        createdByUserId: currentUser?.id ?? null,
         match,
       });
       created.push({
@@ -1876,6 +1869,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       tertiaryCategory?: string | null;
       sourceType: string;
       dispatcherUserId?: string | null;
+      createdByUserId?: string | null;
       match?: {
         customerId: string | null;
         customerName: string | null;
@@ -1969,6 +1963,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           : null,
         reporter_user_id: null,
         dispatcher_user_id: input.dispatcherUserId ?? null,
+        created_by_user_id: input.createdByUserId ?? null,
         product_review_type: null,
         product_reviewer_user_id: null,
         customer_reviewer_user_id: null,
@@ -3299,89 +3294,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         );
       }
     }
-  }
-
-  private async backfillTaskReportersFromBusinessCategoryOwners() {
-    await this.dataSource.query(`
-      UPDATE tasks task
-      JOIN requirement_items item ON item.id = task.requirement_item_id
-      JOIN requirements requirement ON requirement.id = item.requirement_id
-      JOIN business_category_owner_configs owner_config
-        ON owner_config.business_category_code = requirement.business_category
-       AND owner_config.status = 'active'
-       AND owner_config.owner_user_id IS NOT NULL
-      JOIN users owner_user
-        ON owner_user.id = owner_config.owner_user_id
-       AND owner_user.status = 'active'
-      SET task.reporter_user_id = owner_config.owner_user_id
-      WHERE task.deleted_at IS NULL
-        AND item.deleted_at IS NULL
-        AND requirement.deleted_at IS NULL
-        AND task.reporter_user_id IS NULL
-        AND NOT EXISTS (
-          SELECT 1
-          FROM customer_owner_configs customer_owner
-          WHERE customer_owner.customer_code = requirement.customer_code
-            AND customer_owner.status = 'active'
-            AND customer_owner.deleted_at IS NULL
-        )
-    `);
-  }
-
-  private async backfillTaskReportersFromCustomerOwners() {
-    await this.dataSource.query(`
-      UPDATE tasks task
-      JOIN requirement_items item
-        ON item.id = task.requirement_item_id
-       AND item.deleted_at IS NULL
-      JOIN requirements requirement
-        ON requirement.id = item.requirement_id
-       AND requirement.deleted_at IS NULL
-      JOIN customer_owner_configs owner_config
-        ON owner_config.customer_code = requirement.customer_code
-       AND owner_config.status = 'active'
-       AND owner_config.deleted_at IS NULL
-      JOIN users owner_user
-        ON owner_user.id = owner_config.owner_user_id
-       AND owner_user.status = 'active'
-       AND owner_user.deleted_at IS NULL
-      SET task.reporter_user_id = owner_config.owner_user_id
-      WHERE task.deleted_at IS NULL
-        AND task.status <> 'completed'
-    `);
-  }
-
-  private async backfillTaskReportersForBusinessCategory(
-    businessCategoryCode: string,
-  ) {
-    await this.dataSource.query(
-      `
-        UPDATE tasks task
-        JOIN requirement_items item ON item.id = task.requirement_item_id
-        JOIN requirements requirement ON requirement.id = item.requirement_id
-        JOIN business_category_owner_configs owner_config
-          ON owner_config.business_category_code = requirement.business_category
-         AND owner_config.status = 'active'
-         AND owner_config.owner_user_id IS NOT NULL
-        JOIN users owner_user
-          ON owner_user.id = owner_config.owner_user_id
-         AND owner_user.status = 'active'
-        SET task.reporter_user_id = owner_config.owner_user_id
-        WHERE requirement.business_category = ?
-          AND task.deleted_at IS NULL
-          AND item.deleted_at IS NULL
-          AND requirement.deleted_at IS NULL
-          AND task.reporter_user_id IS NULL
-          AND NOT EXISTS (
-            SELECT 1
-            FROM customer_owner_configs customer_owner
-            WHERE customer_owner.customer_code = requirement.customer_code
-              AND customer_owner.status = 'active'
-              AND customer_owner.deleted_at IS NULL
-          )
-      `,
-      [businessCategoryCode],
-    );
   }
 
   private async ensureDemandIntakeTables() {

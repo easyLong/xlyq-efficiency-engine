@@ -1,13 +1,14 @@
 # 向量引擎管理工作台后端接口设计 API 清单
 
-更新时间：2026-07-02
+更新时间：2026-08-03
 
 ## 当前重点接口
 
 ### 静态页面
 
 - `GET /`：登录、需求录入、任务指派、合同报价录入、报价子项选择、结算统计、需求面板页面。
-- `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`：本地交付登记页，员工上传/粘贴图片资产并添加可选的多条合作链接；页面内 `个人任务主页` 只切换到执行人临时视图，不触发提交。
+- `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`：执行人交付登记页，支持保存服务器草稿和正式提交；页面内 `个人任务主页` 只切换个人视图。
+- `GET /asset-review.html?taskId=<taskId>&token=<token>`：一审、二审资产审核页；多人候选先领取工作项，再执行通过或退回。
 
 ### 认证
 
@@ -19,8 +20,10 @@
 ### 需求与任务
 
 - `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务。
-- `GET /api/v1/requirements/business-category-owners`：查询业务大类负责人配置，返回大类编码、名称、负责人用户和状态。
-- `PATCH /api/v1/requirements/business-category-owners/{categoryCode}`：更新某个业务大类的负责人；更新后会回填该业务大类历史任务的 `reporter_user_id`。
+- `GET /api/v1/workflow-config`：查询基金派发者、业务大类一审人员和基金二审人员配置。
+- `PUT /api/v1/workflow-config/customer-dispatchers/{customerCode}`：覆盖某基金的派发候选人。
+- `PUT /api/v1/workflow-config/product-reviewers/{reviewType}`：覆盖某业务大类的一审候选人。
+- `PUT /api/v1/workflow-config/customer-reviewers/{customerCode}`：覆盖某基金的二审候选人。
 - `GET /api/v1/requirements/ai-preview-candidates?limit=12&scope=mine|all|processed&reviewOwnerId=<userId>`：读取 AI 已识别候选需求并返回证据链；管理员可按负责人过滤全部待确认候选。
 - `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/confirm`：将候选需求标记为已确认，避免正式录入后重复展示。
 - `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/reject`：将候选需求标记为伪需求，状态置为 `rejected`，AI 预览区不再展示；支持提交 `rejectReasons`、`rejectNote`、`useForPromptOptimization`，后端写入复核日志。
@@ -31,11 +34,13 @@
 - `POST /api/v1/tasks/{id}/assign`：指派任务；`provisionWorkspace=true` 时创建资产入口并发送一条带按钮的飞书消息。
 - `GET /api/v1/tasks/{id}/asset-sheet/context?token=<token>`：员工交付登记页加载任务上下文。
 - `POST /api/v1/tasks/{id}/asset-sheet/upload-image?token=<token>`：上传本地图片，返回可保存的图片 URL。
-- `POST /api/v1/tasks/{id}/asset-sheet/local-assets?token=<token>`：保存图片资产 URL 和多条可选合作链接，图片资产去重统计，并将任务推进到待验收；兼容旧字段 `linkUrl`。
+- `POST /api/v1/tasks/{id}/asset-sheet/draft?token=<token>`：保存服务器草稿；不推进状态、不发审核通知、不计入正式资产统计。
+- `POST /api/v1/tasks/{id}/asset-sheet/local-assets?token=<token>`：正式提交图片资产和合作链接，清空草稿并推进到待一审；兼容旧字段 `linkUrl`。
 - `POST /api/v1/tasks/{id}/asset-sheet/sync`：读取飞书在线表资产 URL 并同步统计。
-- `GET /api/v1/tasks/{id}/asset-review/context?token=<token>`：负责人查看交付资产上下文；飞书 token 入口免登录，管理后台入口使用当前登录态。
-- `POST /api/v1/tasks/{id}/asset-review/approve?token=<token>`：负责人通过资产查看页验收任务。
-- `POST /api/v1/tasks/{id}/asset-review/return?token=<token>`：负责人通过资产查看页退回修改，必须填写退回原因。
+- `GET /api/v1/tasks/{id}/asset-review/context?token=<token>`：返回资产、当前审核阶段及领取状态。
+- `POST /api/v1/tasks/{id}/asset-review/claim?token=<token>`：原子领取当前一审或二审工作项。
+- `POST /api/v1/tasks/{id}/asset-review/approve?token=<token>`：当前领取人通过审核；一审通过进入二审，二审通过完成任务。
+- `POST /api/v1/tasks/{id}/asset-review/return?token=<token>`：当前领取人退回执行人修改，必须填写原因。
 - `GET /api/v1/tasks/board?liveAssetCount=true&customerCode=<customerCode>`：任务看板，支持实时资产数和基金客户筛选；`customerId` 仅保留兼容。
 - `GET /api/v1/tasks/{id}/workflow`：返回任务、资产数、工作目录、最近状态历史和统一 workflow 快照。
 - `GET /api/v1/tasks/{id}/status-history`：返回任务状态流转审计记录。
@@ -163,14 +168,14 @@
 
 ### `GET /asset-sheet.html?taskId=<taskId>&taskNo=<taskNo>&token=<token>`
 - 说明：执行人通过飞书通知进入的资产登记页。
-- 能力：上传/拖拽/粘贴图片，添加多条可选合作链接，点击 `提交交付` 后调用本任务的资产保存接口。
+- 能力：上传/拖拽/粘贴图片，添加合作链接；`保存草稿` 写入服务器但不推进流程，`提交交付` 二次确认后进入待一审。
 - 个人任务主页：页面顶部 `个人任务主页` 按钮会使用资产上下文返回的 `assigneeSession` 写入临时会话并跳转 `/?taskSession=1`，只用于查看个人历史任务，不保存、不提交、不改变任务状态。
 
 ### `GET /asset-review.html?taskId=<taskId>&token=<token>`
-- 说明：负责人查看交付资产和完成验收的只读资产页。
-- 入口：执行人提交资产后，飞书卡片按钮 `查看交付资产` 会携带负责人专用 token 进入；管理后台历史需求任务状态中的 `查看资产` 会使用登录态进入。
-- 能力：展示任务信息、需求内容、负责人、执行人、图片资产、合作链接，并支持 `通过验收` / `退回修改`。
-- 权限：管理员可查看全部；负责人只能查看自己负责的任务；飞书 token 只绑定对应任务和负责人。
+- 说明：一审、二审人员查看交付资产并处理当前审核工作项的页面。
+- 入口：审核通知携带收件人专用 token 进入；管理后台具备任务范围的人员也可使用登录态进入。
+- 能力：展示任务、需求、执行人、图片资产和合作链接；未领取时显示 `领取审核`，领取人可 `通过` / `退回修改`，其他候选人只读。
+- 权限：管理员可处理全部；一审按业务大类、二审按基金校验。历史 `reporter_user_id` token 只允许查看，不能执行审核。
 
 ## 4. 工作台
 
@@ -271,14 +276,14 @@
 - 说明：快速创建需求、确认一个需求项，并自动生成一个待指派任务；当前录入页采用“一个需求对应一个任务”的链路
 - 关键字段：`projectId`、`customerId`、`title`、`rawContent`、`priority`、`estimatedHours`
 - 返回：`requirement`、`item`、`task`
-- 角色口径：按 `businessCategory` 查询 `business_category_owner_configs`，写入 `task.reporter_user_id` 作为需求负责人；任务执行人仍由后续指派动作写入 `task.assignee_user_id`。
+- 角色口径：当前登录人写入 `task.created_by_user_id` 作为审计人；任务派发时写入 `dispatcher_user_id`，执行人写入 `assignee_user_id`。新任务不再写入 `reporter_user_id`。
 
 ### `GET /requirements/business-category-owners`
-- 说明：查询业务大类负责人配置。
+- 说明：旧客户端兼容接口，查询历史业务大类负责人配置；不再参与当前权限和审核流程。
 - 返回：`businessCategoryCode`、`businessCategoryName`、`ownerUserId`、`ownerName`、`ownerUsername`、`status`、`remark`。
 
 ### `PATCH /requirements/business-category-owners/{categoryCode}`
-- 说明：更新业务大类负责人配置，并立即回填该大类历史任务的 `reporter_user_id`。
+- 说明：旧客户端兼容接口，只维护历史配置，不再回填任务或改变当前流程权限。
 - 入参：`ownerUserId`
 - 约束：`ownerUserId` 为空表示未配置负责人；非空时必须是 active 用户。
 
@@ -286,9 +291,9 @@
 - 说明：读取 AI 候选需求和证据链。
 - 查询参数：
   - `limit`：返回数量，默认 12，范围 1-100。
-  - `scope`：`mine` 当前负责人待确认；`all` 全部待确认；`processed` 历史真实需求。
-  - `reviewOwnerId`：管理员在 `scope=all` 时可传，用于只查看某个负责人名下待确认候选。
-- 权限口径：管理员或具备 `ai_preview.view_all` / `*` 权限可查看全量并按负责人筛选；业务负责人只返回自己的待确认候选。
+  - `scope`：`mine` 当前派发者负责基金的待确认候选；`all` 全部待确认；`processed` 历史处理记录。
+  - `reviewOwnerId`：兼容保留的查询参数名；管理员在 `scope=all` 时可传派发者用户 ID，按其可派发基金过滤。
+- 权限口径：管理员或具备 `ai_preview.view_all` / `*` 权限可查看全量并按派发者筛选；派发者只返回自己负责基金的待确认候选。
 
 ### `POST /requirements/ai-split-with-tasks`
 - 说明：加载需求文件内容后，自动拆分为多条需求，并为每条需求生成一个待指派任务
@@ -381,46 +386,60 @@
 - 说明：获取任务资产记录列表，兼容旧版结果文件表
 
 ### `GET /tasks/{taskId}/asset-sheet/context`
-- 说明：员工交付登记页加载任务上下文
+- 说明：员工交付登记页加载任务上下文。
 - 查询：`token`
+- 返回补充：`delivery` 为最近一次正式提交内容，`draft` 为服务器草稿及 `savedAt`；存在草稿时页面优先恢复草稿。
 
 ### `POST /tasks/{taskId}/asset-sheet/upload-image`
 - 说明：员工交付登记页上传图片，返回 `/uploads/task-assets/...` 图片 URL
 - 查询：`token`
 - 入参：`dataUrl`、`fileName`
 
-### `POST /tasks/{taskId}/asset-sheet/local-assets`
-- 说明：本地交付登记页保存时，把员工填写的图片资产和最终交付链接同步到后台统计
+### `POST /tasks/{taskId}/asset-sheet/draft`
+- 说明：保存或清空执行中的服务器草稿。
 - 查询：`token`
-- 入参：`assets[]`、`imageUrls[]`、`linkUrl`
-- 约束：图片最多 80 张，资产 URL 最多 200 条，单个 URL 最长 500 字符；最终交付链接不计入结算资产个数
+- 入参：`assets[]`、`imageUrls[]`、`linkUrl` 或 `linkUrls[]`，允许全部为空。
+- 行为：写入 `task_directories.draft_payload_json` 和 `draft_saved_at`；任务状态、审核记录、工作项、通知和正式资产统计均不变化。
+
+### `POST /tasks/{taskId}/asset-sheet/local-assets`
+- 说明：执行人确认完成后正式提交交付。
+- 查询：`token`
+- 入参：`assets[]`、`imageUrls[]`、`linkUrl` 或 `linkUrls[]`
+- 约束：至少一项交付内容；图片最多 80 张，资产 URL 最多 200 条，单个 URL 最长 500 字符；合作链接不计入结算资产个数。
+- 行为：事务内替换正式资产、清空草稿、完成执行工作项，并把任务推进到 `pending_review/product_review`。
+
+### `POST /tasks/{taskId}/asset-review/claim`
+- 说明：领取当前审核阶段工作项。
+- 权限：管理员或当前一审/二审候选人；飞书 token 与登录态均可。
+- 并发：数据库条件更新保证同一工作项只有一个领取人；冲突时返回当前领取人信息。
+
+### `POST /tasks/{taskId}/asset-review/approve`
+- 说明：通过当前审核。调用方若尚未领取会先尝试原子领取，旧页面仍可兼容。
+- 流转：一审通过后仍为 `pending_review` 并进入 `customer_review`；二审通过后进入 `completed`。
+
+### `POST /tasks/{taskId}/asset-review/return`
+- 说明：当前审核人退回修改，`reason` 必填。
+- 流转：任务进入 `returned`，记录退回阶段并通知执行人和实际派发人。
 
 ### `GET /tasks/{taskId}/progress-feedback/context`
 - 说明：员工任务进度反馈页加载任务上下文
 - 查询：`token`
 
-### `POST /tasks/{taskId}/progress-feedback/status`
-- 说明：员工从消息进入反馈页后选择任务进度
-- 查询：`token`
-- 入参：`status`，可选 `in_progress`、`completed`
-
 ### `POST /tasks/{taskId}/result-files`
 - 说明：兼容旧版手动登记结果文件流程，当前主链路不再使用
 - 入参：`fileName`、`fileUrl`、`feishuFileToken`、`uploadedByUserId`、`remark`
 
-### `POST /tasks/{taskId}/status`
-- 说明：修改任务状态
-- 入参：`status`、`blockedReason`
+### `GET /tasks/{taskId}/workflow`
+- 说明：返回任务当前工作流快照、当前步骤和可用动作。
 
-### `POST /tasks/{taskId}/return-revision`
-- 说明：验收退回修改，任务回到进行中，并通知任务负责人
-- 入参：`reason`、`progressPercent`
+### `GET /tasks/{taskId}/status-history`
+- 说明：返回任务状态转换审计记录。
 
 ### `POST /tasks/{taskId}/ai-assignment-suggestion`
 - 说明：生成 AI 智能分配建议
 
 ### `POST /tasks/{taskId}/remind-progress`
-- 说明：执行人在任务进入待审核后手动催进度，通知当前审核阶段负责人处理。
+- 说明：执行人在任务进入待审核后手动催进度，通知当前审核阶段候选团队处理。
 - 权限：必须为当前任务执行人；任务状态必须为 `pending_review`。
 - 频控：同一任务、同一执行人、同一审核阶段 6 小时内只能触发一次。
 - 返回：`ok`、`taskId`、`reviewStage`、`recipientCount`。
@@ -429,9 +448,6 @@
 - 说明：看板视图
 - 查询：`projectId`、`liveAssetCount`
 - 说明：`liveAssetCount=true` 时，会直接读取已开通飞书在线资产表中的图片资产 URL 个数，并同步为后台资产记录；读取失败时回退到后台缓存数量
-
-### `GET /tasks/my`
-- 说明：我的任务
 
 ## 10. 工时管理
 

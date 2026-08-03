@@ -100,6 +100,12 @@ type AssetReviewAccess = {
   userId: string | null;
 };
 
+type LocalAssetSheetPayload = {
+  assetUrls: string[];
+  imageUrls: string[];
+  linkUrls: string[];
+};
+
 type TaskReviewFacts = {
   businessCategory: string | null;
   reviewType: string | null;
@@ -347,7 +353,6 @@ export class TasksService implements OnModuleInit {
           [
             task.assignee_user_id,
             task.dispatcher_user_id,
-            task.reporter_user_id,
             task.product_reviewer_user_id,
             task.customer_reviewer_user_id,
           ].includes(currentUser.id),
@@ -364,7 +369,6 @@ export class TasksService implements OnModuleInit {
           [
             task.assignee_user_id,
             task.dispatcher_user_id,
-            task.reporter_user_id,
             task.product_reviewer_user_id,
             task.customer_reviewer_user_id,
           ].includes(currentUser.id),
@@ -385,7 +389,6 @@ export class TasksService implements OnModuleInit {
     const requirementById = new Map(
       requirements.map((requirement) => [requirement.id, requirement]),
     );
-    const ownedCategories = new Set(profile.ownedBusinessCategoryCodes);
     const dispatchCustomers = new Set(profile.dispatchCustomerCodes);
     const productReviewTypes = new Set(profile.productReviewTypes);
     const customerReviewCodes = new Set(profile.customerReviewCodes);
@@ -395,7 +398,6 @@ export class TasksService implements OnModuleInit {
         [
           task.assignee_user_id,
           task.dispatcher_user_id,
-          task.reporter_user_id,
           task.product_reviewer_user_id,
           task.customer_reviewer_user_id,
         ].includes(currentUser.id)
@@ -427,7 +429,6 @@ export class TasksService implements OnModuleInit {
           !task.review_stage ||
           task.review_stage === TaskReviewStage.None);
       return (
-        ownedCategories.has(businessCategory) ||
         (isOpenDispatch &&
           !task.dispatcher_user_id &&
           dispatchCustomers.has(customerCode)) ||
@@ -519,7 +520,7 @@ export class TasksService implements OnModuleInit {
     return new Map(rows.map((row) => [row.taskId, Number(row.assetCount)]));
   }
 
-  async create(dto: CreateTaskDto) {
+  async create(dto: CreateTaskDto, createdByUserId: string | null = null) {
     const task = this.tasksRepository.create({
       id: randomUUID(),
       project_id: dto.projectId,
@@ -544,6 +545,7 @@ export class TasksService implements OnModuleInit {
       planned_end_at: dto.plannedEndAt ? new Date(dto.plannedEndAt) : null,
       reporter_user_id: null,
       dispatcher_user_id: null,
+      created_by_user_id: createdByUserId,
       product_review_type: null,
       product_reviewer_user_id: null,
       customer_reviewer_user_id: null,
@@ -570,7 +572,10 @@ export class TasksService implements OnModuleInit {
     return `TASK-${String(maxNo + 1).padStart(4, '0')}`;
   }
 
-  async createFromRequirementItem(itemId: string) {
+  async createFromRequirementItem(
+    itemId: string,
+    createdByUserId: string | null = null,
+  ) {
     const item = await this.requirementItemsRepository.findOne({
       where: { id: itemId },
     });
@@ -589,15 +594,18 @@ export class TasksService implements OnModuleInit {
       throw new NotFoundException('Project for requirement item not found');
     }
 
-    return this.create({
-      projectId: projectRow.projectId,
-      requirementItemId: item.id,
-      taskName: item.item_title,
-      description: item.item_description ?? undefined,
-      priority: item.priority ?? undefined,
-      urgencyLevel: item.urgency_level ?? undefined,
-      estimatedHours: item.estimated_hours ?? undefined,
-    });
+    return this.create(
+      {
+        projectId: projectRow.projectId,
+        requirementItemId: item.id,
+        taskName: item.item_title,
+        description: item.item_description ?? undefined,
+        priority: item.priority ?? undefined,
+        urgencyLevel: item.urgency_level ?? undefined,
+        estimatedHours: item.estimated_hours ?? undefined,
+      },
+      createdByUserId,
+    );
   }
 
   async update(id: string, dto: UpdateTaskDto, actingUserId?: string | null) {
@@ -830,6 +838,7 @@ export class TasksService implements OnModuleInit {
         linkUrl: localLinks[0]?.file_url ?? '',
         linkUrls: localLinks.map((file) => file.file_url),
       },
+      draft: this.localAssetSheetDraft(workspace),
     };
   }
 
@@ -1202,6 +1211,60 @@ export class TasksService implements OnModuleInit {
     };
   }
 
+  async saveLocalAssetSheetDraft(
+    id: string,
+    dto: SaveLocalAssetSheetDto,
+    token?: string,
+  ) {
+    const task = await this.findOne(id);
+    this.assertAssetSheetAccess(task, token);
+    const payload = this.localAssetSheetPayload(dto);
+
+    const { savedTask, savedWorkspace } = await this.dataSource.transaction(
+      async (manager) => {
+        const taskRepository = manager.getRepository(TaskEntity);
+        const directoryRepository = manager.getRepository(TaskDirectoryEntity);
+        const lockedTask = await taskRepository.findOne({
+          where: { id: task.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!lockedTask) {
+          throw new NotFoundException(`Task ${task.id} not found`);
+        }
+        this.assertTaskCanSubmitDelivery(lockedTask);
+
+        let workspace = await directoryRepository.findOne({
+          where: { task_id: lockedTask.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!workspace) {
+          workspace = directoryRepository.create({
+            id: randomUUID(),
+            task_id: lockedTask.id,
+            project_id: lockedTask.project_id,
+            assignee_user_id: lockedTask.assignee_user_id,
+            feishu_folder_token: null,
+            directory_url: this.buildLocalAssetSheetUrl(lockedTask),
+            permission_status: 'local_sheet_ready',
+            last_synced_at: null,
+            draft_payload_json: null,
+            draft_saved_at: null,
+          });
+        }
+        workspace.draft_payload_json = payload;
+        workspace.draft_saved_at = new Date();
+        const savedWorkspace = await directoryRepository.save(workspace);
+        return { savedTask: lockedTask, savedWorkspace };
+      },
+    );
+
+    return {
+      task: savedTask,
+      workflow: buildTaskWorkflowSnapshot(savedTask),
+      draft: this.localAssetSheetDraft(savedWorkspace),
+    };
+  }
+
   async saveLocalAssetSheet(
     id: string,
     dto: SaveLocalAssetSheetDto,
@@ -1210,19 +1273,7 @@ export class TasksService implements OnModuleInit {
     const task = await this.findOne(id);
     this.assertAssetSheetAccess(task, token);
     this.assertTaskCanSubmitDelivery(task);
-    const assetUrls = this.uniqueTextValues(
-      new Set(
-        (dto.assets ?? [])
-          .map((asset) => asset.assetUrl.trim())
-          .filter((assetUrl) => assetUrl.length > 0),
-      ),
-    );
-    const imageUrls = this.uniqueTextValues(dto.imageUrls ?? []);
-    const linkUrls = this.uniqueTextValues([
-      ...(dto.linkUrls ?? []),
-      dto.linkUrl ?? '',
-    ]);
-    this.assertDeliveryUrls(assetUrls, imageUrls, linkUrls);
+    const { assetUrls, imageUrls, linkUrls } = this.localAssetSheetPayload(dto);
     if (!assetUrls.length && !imageUrls.length && !linkUrls.length) {
       throw new BadRequestException(
         '请至少上传一张图片或填写一个交付链接后再提交交付',
@@ -1234,6 +1285,7 @@ export class TasksService implements OnModuleInit {
       await this.dataSource.transaction(async (manager) => {
         const fileRepository = manager.getRepository(TaskResultFileEntity);
         const taskRepository = manager.getRepository(TaskEntity);
+        const directoryRepository = manager.getRepository(TaskDirectoryEntity);
         const lockedTask = await taskRepository.findOne({
           where: { id: task.id },
           lock: { mode: 'pessimistic_write' },
@@ -1242,6 +1294,10 @@ export class TasksService implements OnModuleInit {
           throw new NotFoundException(`Task ${task.id} not found`);
         }
         this.assertTaskCanSubmitDelivery(lockedTask);
+        const workspace = await directoryRepository.findOne({
+          where: { task_id: lockedTask.id },
+          lock: { mode: 'pessimistic_write' },
+        });
         const fromStatus = lockedTask.status;
         const fromReviewStage = lockedTask.review_stage ?? TaskReviewStage.None;
         await fileRepository.softDelete({
@@ -1298,6 +1354,13 @@ export class TasksService implements OnModuleInit {
             source: 'local_asset_sheet_link',
             remark: `来自本地任务通知页合作链接区第 ${index + 1} 条`,
           });
+        }
+
+        if (workspace) {
+          workspace.draft_payload_json = null;
+          workspace.draft_saved_at = null;
+          workspace.last_synced_at = new Date();
+          await directoryRepository.save(workspace);
         }
 
         lockedTask.status = assertTaskStatusTransition(
@@ -1371,6 +1434,12 @@ export class TasksService implements OnModuleInit {
       syncedCount: created.length,
       created,
       reviewNotification,
+      draft: {
+        exists: false,
+        imageUrls: [],
+        linkUrls: [],
+        savedAt: null,
+      },
     };
   }
 
@@ -1518,6 +1587,45 @@ export class TasksService implements OnModuleInit {
       .map((value) => String(value ?? '').trim())
       .filter(Boolean)
       .filter((value, index, array) => array.indexOf(value) === index);
+  }
+
+  private localAssetSheetPayload(
+    dto: SaveLocalAssetSheetDto,
+  ): LocalAssetSheetPayload {
+    const assetUrls = this.uniqueTextValues(
+      new Set(
+        (dto.assets ?? [])
+          .map((asset) => asset.assetUrl.trim())
+          .filter((assetUrl) => assetUrl.length > 0),
+      ),
+    );
+    const imageUrls = this.uniqueTextValues(dto.imageUrls ?? []);
+    const linkUrls = this.uniqueTextValues([
+      ...(dto.linkUrls ?? []),
+      dto.linkUrl ?? '',
+    ]);
+    this.assertDeliveryUrls(assetUrls, imageUrls, linkUrls);
+    return { assetUrls, imageUrls, linkUrls };
+  }
+
+  private localAssetSheetDraft(workspace: TaskDirectoryEntity | null) {
+    let payload = workspace?.draft_payload_json ?? null;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload) as LocalAssetSheetPayload;
+      } catch {
+        payload = null;
+      }
+    }
+    const assetUrls = this.uniqueTextValues(payload?.assetUrls ?? []);
+    const imageUrls = this.uniqueTextValues(payload?.imageUrls ?? []);
+    const linkUrls = this.uniqueTextValues(payload?.linkUrls ?? []);
+    return {
+      exists: Boolean(payload),
+      imageUrls: imageUrls.length ? imageUrls : assetUrls,
+      linkUrls,
+      savedAt: workspace?.draft_saved_at ?? null,
+    };
   }
 
   private assertDeliveryUrls(
@@ -1961,8 +2069,13 @@ export class TasksService implements OnModuleInit {
     );
     await this.addColumnIfMissing(
       'tasks',
+      'created_by_user_id',
+      'created_by_user_id CHAR(36) NULL AFTER dispatcher_user_id',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
       'product_reviewer_user_id',
-      'product_reviewer_user_id CHAR(36) NULL AFTER dispatcher_user_id',
+      'product_reviewer_user_id CHAR(36) NULL AFTER created_by_user_id',
     );
     await this.addColumnIfMissing(
       'tasks',
@@ -2006,12 +2119,23 @@ export class TasksService implements OnModuleInit {
     await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_dispatcher', [
       'dispatcher_user_id',
     ]);
+    await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_created_by', [
+      'created_by_user_id',
+    ]);
     await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_product_reviewer', [
       'product_reviewer_user_id',
     ]);
     await ensureIndex(this.dataSource, 'tasks', 'idx_tasks_customer_reviewer', [
       'customer_reviewer_user_id',
     ]);
+    await this.dataSource.query(`
+      UPDATE tasks
+      SET created_by_user_id = dispatcher_user_id,
+          updated_at = updated_at
+      WHERE deleted_at IS NULL
+        AND created_by_user_id IS NULL
+        AND dispatcher_user_id IS NOT NULL
+    `);
     await ensureIndex(
       this.dataSource,
       'task_result_files',
@@ -2023,6 +2147,16 @@ export class TasksService implements OnModuleInit {
       'task_directories',
       'idx_task_directories_task',
       ['task_id'],
+    );
+    await this.addColumnIfMissing(
+      'task_directories',
+      'draft_payload_json',
+      'draft_payload_json JSON NULL AFTER last_synced_at',
+    );
+    await this.addColumnIfMissing(
+      'task_directories',
+      'draft_saved_at',
+      'draft_saved_at DATETIME NULL AFTER draft_payload_json',
     );
   }
 
@@ -2922,7 +3056,6 @@ export class TasksService implements OnModuleInit {
       project,
       requirementItem,
       assignee,
-      reporter,
       dispatcher,
       productReviewer,
       customerReviewer,
@@ -2937,9 +3070,6 @@ export class TasksService implements OnModuleInit {
         : Promise.resolve(null),
       task.assignee_user_id
         ? this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
-        : Promise.resolve(null),
-      task.reporter_user_id
-        ? this.usersRepository.findOne({ where: { id: task.reporter_user_id } })
         : Promise.resolve(null),
       task.dispatcher_user_id
         ? this.usersRepository.findOne({
@@ -3005,6 +3135,18 @@ export class TasksService implements OnModuleInit {
     const reviewStageLabel = isLegacyPendingReview
       ? taskReviewStageLabel(TaskReviewStage.CustomerReview)
       : taskReviewStageLabel(task.review_stage);
+    const reviewStep = this.assetReviewWorkflowStep(task);
+    const reviewClaim = reviewStep
+      ? await this.taskWorkflowRuntime.getStepClaim(task.id, reviewStep)
+      : null;
+    const hasReviewPermission = canProductReview || canCustomerReview;
+    const claimedByMe = Boolean(
+      reviewClaim?.claimedByUserId &&
+      reviewClaim.claimedByUserId === access.userId,
+    );
+    const canClaim = Boolean(
+      hasReviewPermission && !reviewClaim?.claimedByUserId,
+    );
 
     return {
       task: {
@@ -3034,7 +3176,6 @@ export class TasksService implements OnModuleInit {
       },
       requirementItem,
       assignee: assignee ? this.publicUserSummary(assignee) : null,
-      reporter: reporter ? this.publicUserSummary(reporter) : null,
       dispatcher: dispatcher ? this.publicUserSummary(dispatcher) : null,
       productReviewer: productReviewer
         ? this.publicUserSummary(productReviewer)
@@ -3052,12 +3193,51 @@ export class TasksService implements OnModuleInit {
       },
       canProductReview,
       canCustomerReview,
-      canReview: canProductReview || canCustomerReview,
+      hasReviewPermission,
+      canClaim,
+      canReview: hasReviewPermission && claimedByMe,
+      reviewClaim: reviewStep
+        ? {
+            step: reviewStep,
+            status: !reviewClaim?.claimedByUserId
+              ? 'available'
+              : claimedByMe
+                ? 'claimed_by_me'
+                : 'claimed_by_other',
+            claimedByUserId: reviewClaim?.claimedByUserId ?? null,
+            claimedByName: reviewClaim?.claimedByName ?? null,
+            claimedAt: reviewClaim?.claimedAt ?? null,
+            claimedByMe,
+          }
+        : null,
       viewerSession:
         access.mode === 'token' && access.userId
           ? await this.publicUserSession(access.userId)
           : null,
     };
+  }
+
+  async claimAssetReview(
+    id: string,
+    token?: string,
+    authorizationHeader?: string,
+  ) {
+    const task = await this.findOne(id);
+    const access = await this.assertAssetReviewAccess(
+      task,
+      token,
+      authorizationHeader,
+      true,
+    );
+    if (!access.userId) {
+      throw new UnauthorizedException('No review user found');
+    }
+    const step = this.assetReviewWorkflowStep(task);
+    if (!step) {
+      throw new BadRequestException('当前任务不在可领取的审核阶段');
+    }
+    const claim = await this.claimCurrentReviewStep(task, step, access.userId);
+    return { claim };
   }
 
   async approveAssetReview(
@@ -3127,6 +3307,11 @@ export class TasksService implements OnModuleInit {
         'No permission to approve product review',
       );
     }
+    await this.claimCurrentReviewStep(
+      task,
+      TaskWorkflowStep.FirstReview,
+      reviewerUserId,
+    );
     const fromStatus = task.status;
     const fromReviewStage = task.review_stage ?? TaskReviewStage.None;
     const reviewer = await this.usersRepository.findOne({
@@ -3181,7 +3366,7 @@ export class TasksService implements OnModuleInit {
     const notification =
       await this.notificationsService.notifyTaskProductReviewApproved(
         saved,
-        reviewer?.display_name ?? reviewer?.username ?? '成品负责人',
+        reviewer?.display_name ?? reviewer?.username ?? '一审人员',
         customerReviewerIds,
       );
     return {
@@ -3200,6 +3385,11 @@ export class TasksService implements OnModuleInit {
         'No permission to approve customer review',
       );
     }
+    await this.claimCurrentReviewStep(
+      task,
+      TaskWorkflowStep.SecondReview,
+      reviewerUserId,
+    );
     const fromStatus = task.status;
     const fromReviewStage = task.review_stage ?? TaskReviewStage.None;
     const completedStatus = assertTaskStatusTransition(
@@ -3325,6 +3515,7 @@ export class TasksService implements OnModuleInit {
     if (!returnedFromStep) {
       throw new BadRequestException('无法识别当前审核阶段');
     }
+    await this.claimCurrentReviewStep(task, returnedFromStep, reviewerUserId);
     const reviewerColumn =
       returnedFromStep === TaskWorkflowStep.FirstReview
         ? 'product_reviewer_user_id'
@@ -3538,17 +3729,10 @@ export class TasksService implements OnModuleInit {
       [
         task.assignee_user_id,
         task.dispatcher_user_id,
-        task.reporter_user_id,
         task.product_reviewer_user_id,
         task.customer_reviewer_user_id,
       ].includes(actingUserId)
     ) {
-      return;
-    }
-    const fallbackOwnerId = task.reporter_user_id
-      ? null
-      : await this.projectOwnerUserId(task.project_id);
-    if (fallbackOwnerId === actingUserId) {
       return;
     }
     const facts = await this.taskReviewFacts(task);
@@ -3557,7 +3741,6 @@ export class TasksService implements OnModuleInit {
     );
     const customerCode = String(facts.customerCode ?? '').trim();
     if (
-      profile.ownedBusinessCategoryCodes.includes(businessCategory) ||
       profile.productReviewTypes.includes(businessCategory) ||
       profile.dispatchCustomerCodes.includes(customerCode) ||
       profile.customerReviewCodes.includes(customerCode)
@@ -3658,7 +3841,7 @@ export class TasksService implements OnModuleInit {
         [
           task.assignee_user_id,
           task.dispatcher_user_id,
-          task.reporter_user_id,
+          task.created_by_user_id,
         ].filter((id): id is string => Boolean(id)),
       ),
     ];
@@ -3672,6 +3855,38 @@ export class TasksService implements OnModuleInit {
         ),
       ),
     ];
+  }
+
+  private assetReviewWorkflowStep(task: TaskEntity) {
+    if (task.status !== TaskStatus.PendingReview) return null;
+    if (task.review_stage === TaskReviewStage.ProductReview) {
+      return TaskWorkflowStep.FirstReview;
+    }
+    if (
+      task.review_stage === TaskReviewStage.CustomerReview ||
+      !task.review_stage ||
+      task.review_stage === TaskReviewStage.None
+    ) {
+      return TaskWorkflowStep.SecondReview;
+    }
+    return null;
+  }
+
+  private async claimCurrentReviewStep(
+    task: TaskEntity,
+    step: TaskWorkflowStep,
+    reviewerUserId: string,
+  ) {
+    await this.taskWorkflowRuntime.syncTaskCurrentStep(task);
+    const claim = await this.taskWorkflowRuntime.claimStep(
+      task.id,
+      step,
+      reviewerUserId,
+    );
+    if (!claim) {
+      throw new ConflictException('审核工作项尚未生成，请刷新后重试');
+    }
+    return claim;
   }
 
   private async canProductReviewTask(task: TaskEntity, userId: string | null) {
@@ -3692,6 +3907,17 @@ export class TasksService implements OnModuleInit {
     if (!user) return false;
     const profile = await buildAccessProfile(this.dataSource, user);
     return profile.isAdmin;
+  }
+
+  private async canReviewCurrentStage(task: TaskEntity, userId: string | null) {
+    const step = this.assetReviewWorkflowStep(task);
+    if (step === TaskWorkflowStep.FirstReview) {
+      return this.canProductReviewTask(task, userId);
+    }
+    if (step === TaskWorkflowStep.SecondReview) {
+      return this.canCustomerReviewTask(task, userId);
+    }
+    return false;
   }
 
   private async resolveTaskProductReviewType(task: TaskEntity) {
@@ -3746,6 +3972,12 @@ export class TasksService implements OnModuleInit {
       this.safeTokenEqual(token, this.assetReviewToken(task, reviewerId)),
     );
     if (matchedReviewerId) {
+      if (
+        requireReviewPermission &&
+        !(await this.canReviewCurrentStage(task, matchedReviewerId))
+      ) {
+        throw new UnauthorizedException('No permission for current review');
+      }
       return { mode: 'token', userId: matchedReviewerId };
     }
 
@@ -3755,13 +3987,8 @@ export class TasksService implements OnModuleInit {
       throw new UnauthorizedException('Invalid asset review access token');
     }
     const profile = await buildAccessProfile(this.dataSource, currentUser);
-    const isOwner = task.reporter_user_id === currentUser.id;
     const isDispatcher = task.dispatcher_user_id === currentUser.id;
     const isAssignee = task.assignee_user_id === currentUser.id;
-    const fallbackOwnerId = task.reporter_user_id
-      ? null
-      : await this.projectOwnerUserId(task.project_id);
-    const isFallbackOwner = fallbackOwnerId === currentUser.id;
     const canProductReview = await this.canProductReviewTask(
       task,
       currentUser.id,
@@ -3770,17 +3997,18 @@ export class TasksService implements OnModuleInit {
       task,
       currentUser.id,
     );
+    const canCurrentReview = requireReviewPermission
+      ? await this.canReviewCurrentStage(task, currentUser.id)
+      : false;
 
     if (
       profile.isAdmin ||
       (!requireReviewPermission &&
-        (isOwner ||
-          isFallbackOwner ||
-          isDispatcher ||
+        (isDispatcher ||
           isAssignee ||
           canProductReview ||
           canCustomerReview)) ||
-      (requireReviewPermission && (canProductReview || canCustomerReview))
+      (requireReviewPermission && canCurrentReview)
     ) {
       return { mode: 'session', userId: currentUser.id };
     }
@@ -3792,22 +4020,12 @@ export class TasksService implements OnModuleInit {
     const ids = [
       ...(await this.productReviewerIds(task)),
       ...(await this.customerReviewerIds(task)),
+      // Historical reporter tokens remain view-only for old Feishu messages.
       task.reporter_user_id,
       task.dispatcher_user_id,
       task.assignee_user_id,
     ].filter((id): id is string => Boolean(id));
-    if (!ids.length) {
-      const ownerId = await this.projectOwnerUserId(task.project_id);
-      if (ownerId) ids.push(ownerId);
-    }
     return [...new Set(ids.filter((id): id is string => Boolean(id)))];
-  }
-
-  private async projectOwnerUserId(projectId: string) {
-    const project = await this.projectsRepository.findOne({
-      where: { id: projectId },
-    });
-    return project?.owner_user_id ?? null;
   }
 
   private async userFromAuthorizationHeader(authorizationHeader?: string) {

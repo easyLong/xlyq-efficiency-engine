@@ -21,6 +21,7 @@ describe('TasksService delivery flow', () => {
     assignee_user_id: 'user-1',
     reporter_user_id: null,
     dispatcher_user_id: null,
+    created_by_user_id: null,
     product_review_type: null,
     product_reviewer_user_id: null,
     customer_reviewer_user_id: null,
@@ -49,6 +50,22 @@ describe('TasksService delivery flow', () => {
         savedFiles.push(value);
         return value;
       }),
+    };
+    const directoryRepositoryInTx = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'directory-1',
+        task_id: task.id,
+        project_id: task.project_id,
+        assignee_user_id: task.assignee_user_id,
+        feishu_folder_token: null,
+        directory_url: '/asset-sheet.html',
+        permission_status: 'local_sheet_ready',
+        last_synced_at: null,
+        draft_payload_json: null,
+        draft_saved_at: null,
+      }),
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => value),
     };
     const taskStatusHistoriesRepository = {
       create: jest.fn((value) => value),
@@ -96,15 +113,15 @@ describe('TasksService delivery flow', () => {
             if (entity.name === 'TaskEntity') {
               return taskRepositoryInTx;
             }
+            if (entity.name === 'TaskDirectoryEntity') {
+              return directoryRepositoryInTx;
+            }
             throw new Error(`Unexpected repository ${entity.name}`);
           },
         }),
       ),
     };
     const notificationsService = {
-      notifyTaskAssetsSubmittedForReview: jest.fn().mockResolvedValue({
-        id: 'notification-1',
-      }),
       notifyTaskAssetsSubmittedForProductReview: jest
         .fn()
         .mockResolvedValue([{ id: 'notification-1' }]),
@@ -149,6 +166,7 @@ describe('TasksService delivery flow', () => {
       taskRepositoryInTx,
       taskStatusHistoriesRepository,
       fileRepositoryInTx,
+      directoryRepositoryInTx,
       usersRepository,
       notificationsService,
       taskWorkflowRuntime,
@@ -170,12 +188,80 @@ describe('TasksService delivery flow', () => {
     delete process.env.TASK_ACCESS_TOKEN_SECRET;
   });
 
+  it('saves an editable server draft without submitting the task', async () => {
+    const {
+      service,
+      taskRepositoryInTx,
+      directoryRepositoryInTx,
+      taskStatusHistoriesRepository,
+      notificationsService,
+      taskWorkflowRuntime,
+    } = buildService();
+
+    const result = await service.saveLocalAssetSheetDraft(
+      task.id,
+      {
+        imageUrls: ['http://example.com/draft.png'],
+        linkUrls: ['http://example.com/work-in-progress'],
+      },
+      tokenForTask(),
+    );
+
+    expect(taskRepositoryInTx.save).not.toHaveBeenCalled();
+    expect(directoryRepositoryInTx.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft_payload_json: {
+          assetUrls: [],
+          imageUrls: ['http://example.com/draft.png'],
+          linkUrls: ['http://example.com/work-in-progress'],
+        },
+        draft_saved_at: expect.any(Date),
+      }),
+    );
+    expect(result.task.status).toBe(TaskStatus.Assigned);
+    expect(result.draft).toEqual(
+      expect.objectContaining({
+        exists: true,
+        imageUrls: ['http://example.com/draft.png'],
+        linkUrls: ['http://example.com/work-in-progress'],
+      }),
+    );
+    expect(taskStatusHistoriesRepository.save).not.toHaveBeenCalled();
+    expect(
+      notificationsService.notifyTaskAssetsSubmittedForProductReview,
+    ).not.toHaveBeenCalled();
+    expect(taskWorkflowRuntime.completeStep).not.toHaveBeenCalled();
+  });
+
+  it('allows an empty server draft to clear work in progress', async () => {
+    const { service, directoryRepositoryInTx } = buildService();
+
+    const result = await service.saveLocalAssetSheetDraft(
+      task.id,
+      {},
+      tokenForTask(),
+    );
+
+    expect(directoryRepositoryInTx.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft_payload_json: {
+          assetUrls: [],
+          imageUrls: [],
+          linkUrls: [],
+        },
+      }),
+    );
+    expect(result.draft.exists).toBe(true);
+    expect(result.task.status).toBe(TaskStatus.Assigned);
+  });
+
   it('moves a submitted local asset sheet into pending review', async () => {
     const {
       service,
       taskRepositoryInTx,
       taskStatusHistoriesRepository,
       fileRepositoryInTx,
+      directoryRepositoryInTx,
       notificationsService,
       savedFiles,
     } = buildService();
@@ -193,6 +279,13 @@ describe('TasksService delivery flow', () => {
     );
 
     expect(fileRepositoryInTx.softDelete).toHaveBeenCalled();
+    expect(directoryRepositoryInTx.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft_payload_json: null,
+        draft_saved_at: null,
+        last_synced_at: expect.any(Date),
+      }),
+    );
     expect(savedFiles).toHaveLength(3);
     expect(taskRepositoryInTx.save).toHaveBeenCalledWith(
       expect.objectContaining({
