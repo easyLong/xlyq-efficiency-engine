@@ -489,7 +489,7 @@
     }
     .quote-selected { min-width: 0; }
     .quote-selected .row-sub { word-break: break-word; }
-    .assign-action { display: grid; grid-template-columns: minmax(112px, 148px) auto; gap: 5px; align-items: center; justify-content: start; min-width: 0; }
+    .assign-action { display: grid; grid-template-columns: minmax(112px, 148px) repeat(2, auto); gap: 5px; align-items: center; justify-content: start; min-width: 0; }
     .assign-action.compact { display: flex; flex-wrap: wrap; }
     .review-action {
       display: flex;
@@ -864,6 +864,63 @@
     .dashboard-focus-card,
     .dashboard-card { min-width: 0; }
     .dashboard-focus-card { min-height: 150px; }
+    .employee-load-panel { padding: 16px; }
+    .employee-load-toolbar {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .employee-load-toolbar .toolbar-fields {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+    .employee-load-toolbar label {
+      min-width: 150px;
+      color: #687366;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .employee-load-toolbar select { margin-top: 4px; min-height: 34px; padding: 7px 9px; font-size: 12px; }
+    .employee-load-table { min-width: 980px; }
+    .employee-load-table tbody tr { cursor: pointer; }
+    .employee-load-table tbody tr:hover td { background: #f8f6ec; }
+    .employee-cell { display: flex; gap: 9px; align-items: center; min-width: 150px; }
+    .employee-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: #e6eee2; display: grid; place-items: center; color: #356d45; font-weight: 800; flex: 0 0 auto; }
+    .table-person { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+    .table-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: #e6eee2; display: inline-grid; place-items: center; color: #356d45; font-size: 12px; font-weight: 800; flex: 0 0 auto; }
+    .employee-cell strong { display: block; color: #18231d; }
+    .employee-cell small { display: block; margin-top: 2px; color: #687366; }
+    .load-badge { display: inline-flex; border-radius: 999px; padding: 3px 8px; font-size: 12px; white-space: nowrap; }
+    .load-badge.free { color: #286144; background: #e6f0e5; }
+    .load-badge.available { color: #315b84; background: #e7eff8; }
+    .load-badge.busy { color: #8a5c21; background: #fff1d8; }
+    .load-badge.full { color: #9b3a2d; background: #fff0eb; }
+    .employee-detail-backdrop { position: fixed; inset: 0; z-index: 90; background: rgba(18, 29, 23, .28); backdrop-filter: blur(2px); }
+    .employee-detail-drawer { position: absolute; top: 0; right: 0; height: 100%; width: min(680px, 100%); overflow: auto; background: #fffdf9; box-shadow: -18px 0 55px rgba(22, 34, 27, .18); padding: 20px; }
+    .employee-detail-head { display: flex; justify-content: space-between; align-items: start; gap: 14px; margin-bottom: 16px; }
+    .employee-detail-head h3 { margin: 0 0 5px; }
+    .employee-detail-head p { margin: 0; color: #687366; font-size: 13px; }
+    .employee-detail-close { border: 0; background: transparent; color: #687366; font-size: 22px; cursor: pointer; }
+    .employee-detail-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+    .employee-detail-metric { border: 1px solid #d8dfcf; border-radius: 12px; padding: 10px; background: #fbf8ed; }
+    .employee-detail-metric span { display: block; color: #687366; font-size: 11px; }
+    .employee-detail-metric strong { display: block; margin-top: 5px; font-size: 20px; }
+    .employee-detail-section { margin-top: 16px; }
+    .employee-detail-section h4 { margin: 0 0 8px; }
+    .candidate-list { display: grid; gap: 8px; }
+    .candidate-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid #d8dfcf; border-radius: 12px; padding: 10px; }
+    .candidate-row:hover { border-color: #9fb8cf; background: #f8fbff; }
+    .candidate-row strong { display: block; }
+    .candidate-row small { display: block; margin-top: 3px; color: #687366; line-height: 1.45; }
+    @media (max-width: 760px) {
+      .employee-detail-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .employee-detail-drawer { padding: 16px; }
+    }
     .dimension-matrix {
       max-height: 470px;
       overflow: auto;
@@ -1932,6 +1989,24 @@
           <div id="dashboardDrillPath" class="dimension-drill-path"></div>
         </div>
         <div id="metrics" class="dashboard-metrics-grid"></div>
+        <section id="employeeLoadPanel" class="panel employee-load-panel hidden">
+          <div class="section-title">
+            <div>
+              <div class="kicker">全局调度</div>
+              <h3>员工负载与可用度</h3>
+              <p>只统计当前未完成任务，帮助派发人选择合适的执行员工。</p>
+            </div>
+            <span id="employeeLoadScopeTag" class="tag">全局实时负载</span>
+          </div>
+          <div class="employee-load-toolbar">
+            <div class="toolbar-fields">
+              <label>业务类型<select id="employeeLoadCategory" onchange="renderEmployeeLoad()"><option value="all">全部类型</option></select></label>
+              <label>排序<select id="employeeLoadSort" onchange="renderEmployeeLoad()"><option value="recommended">推荐优先</option><option value="load">负载最低</option><option value="risk">风险最低</option></select></label>
+            </div>
+            <span class="muted">点击员工可查看当前任务和近期开工情况</span>
+          </div>
+          <div id="employeeLoadBox" class="table-wrap"></div>
+        </section>
         <div class="dashboard-board-grid">
           <div id="taskStatusOverview" class="panel dashboard-focus-card"></div>
           <div id="taskPriorityOverview" class="panel dashboard-focus-card"></div>
@@ -1981,16 +2056,16 @@
         <div class="dashboard-section-heading">
           <div>
             <div class="kicker">独立统计</div>
-            <h3>人员任务排行</h3>
-            <p>不跟随饼图下钻，只按上方起止时间统计派发人和执行员工的任务量。</p>
+            <h3>历史工作量统计</h3>
+            <p>不跟随饼图下钻，只按上方起止时间回顾派发人和执行员工的任务量。</p>
           </div>
         </div>
         <div class="dashboard-board-grid">
           <div class="panel dashboard-card">
             <div class="section-title">
               <div>
-                <div class="kicker">员工维度</div>
-                <h3>员工任务排行榜</h3>
+                <div class="kicker">历史表现</div>
+                <h3>员工历史任务统计</h3>
               </div>
               <span class="tag">仅受起止时间影响</span>
             </div>
@@ -2164,6 +2239,18 @@
       <button class="btn primary" type="button" onclick="resolveManualContactPopover(true)">确认</button>
     </div>
   </div>
+  <div id="employeeDetailBackdrop" class="employee-detail-backdrop hidden" onclick="handleEmployeeDetailBackdropClick(event)">
+    <aside class="employee-detail-drawer" onclick="event.stopPropagation()">
+      <div class="employee-detail-head">
+        <div>
+          <h3 id="employeeDetailTitle">员工详情</h3>
+          <p id="employeeDetailSubtitle">查看当前负载和任务明细</p>
+        </div>
+        <button class="employee-detail-close" type="button" aria-label="关闭" onclick="closeEmployeeDetail()">×</button>
+      </div>
+      <div id="employeeDetailBody"></div>
+    </aside>
+  </div>
 
   <script src="/js/app-shell.js"></script>
   <script src="/js/api-client.js"></script>
@@ -2260,6 +2347,13 @@
         endDate: "",
       },
       analyticsRequestSeq: 0,
+      employeeLoad: null,
+      employeeLoadCategory: "all",
+      employeeLoadSort: "recommended",
+      employeeDetail: null,
+      employeeDetailBusy: false,
+      assignmentCandidateTaskId: null,
+      assignmentCandidates: null,
       editingRequirementId: null,
       editingQuotationItemId: null,
       addingQuotationItem: false,
@@ -5276,6 +5370,11 @@
       const customerCode = String(row.requirement?.customer_code || "").trim();
       return Boolean(customerCode) && new Set(state.user?.dispatch_customer_codes || []).has(customerCode);
     }
+    function canCurrentUserRemindDelivery(task) {
+      if (!task?.assignee_user_id || !can("task.remind_execution_owned")) return false;
+      if (!isAdminUser() && task.dispatcher_user_id !== state.user?.id) return false;
+      return ["assigned", "in_progress", "blocked", "returned"].includes(task.status);
+    }
     function canCurrentUserReviewRow(row) {
       if (!(can("task.accept_owned") || can("task.return_owned"))) return false;
       if (isAdminUser()) return true;
@@ -5347,6 +5446,7 @@
           <div class="assign-action compact" onclick="event.stopPropagation()">
             <span class="quote-status-pill">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
             <button class="btn" ${isBusy ? "disabled" : ""} onclick="startReassignTask('${row.task.id}')">${isBusy ? "处理中" : "改派"}</button>
+            ${canCurrentUserRemindDelivery(row.task) ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="remindTaskDelivery('${row.task.id}')">催交付</button>` : ""}
             ${renderTaskAssetDirectoryButton(row.task)}
           </div>
         `;
@@ -5354,6 +5454,7 @@
       return `
         <div class="assign-action" onclick="event.stopPropagation()">
           <select id="assignee-${row.task.id}" ${isBusy ? "disabled" : ""}>${feishuUserOptions(row.task.assignee_user_id)}</select>
+          <button class="btn" ${isBusy ? "disabled" : ""} onclick="openAssignmentCandidates('${row.task.id}')">推荐</button>
           <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="assignTaskFromBoard('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : (hasAssignee ? "确认" : "指派")}</button>
         </div>
       `;
@@ -7193,13 +7294,22 @@
       renderDashboardDrillPath();
       const query = new URLSearchParams({ liveAssetCount: "true" });
       if (customerId !== "all") query.set("customerCode", customerId);
+      const canViewGlobalDashboard = can("dashboard.view_global");
+      if (canViewGlobalDashboard) query.set("scope", "global");
       qs("metrics").innerHTML = `<div class="panel metric"><span>正在刷新</span><strong>...</strong><span>同步需求进度和资产交付</span></div>`;
       try {
         const analyticsCustomers = selectedAnalyticsCustomers(customerId);
         const board = await request(`/tasks/board?${query.toString()}`);
         const employeeBoard = customerId === "all"
           ? board
-          : await request(`/tasks/board?${new URLSearchParams({ liveAssetCount: "true" }).toString()}`);
+          : await request(`/tasks/board?${new URLSearchParams({ liveAssetCount: "true", ...(canViewGlobalDashboard ? { scope: "global" } : {}) }).toString()}`);
+        if (can("dashboard.employee_detail")) {
+          state.employeeLoad = await request("/tasks/dashboard/employees");
+          renderEmployeeLoad();
+        } else {
+          state.employeeLoad = null;
+          qs("employeeLoadPanel")?.classList.add("hidden");
+        }
         if (requestSeq !== state.analyticsRequestSeq) return;
         const customerCodes = new Set(analyticsCustomers.map(customer => customer.customer_code));
         const employeeTopTasks = Object.entries(employeeBoard)
@@ -7814,6 +7924,259 @@
       if (isTaskDueSoon(task)) score += 8;
       return score;
     }
+    function employeeLoadMetrics(employee) {
+      const tasks = Array.isArray(employee?.tasks) ? employee.tasks : [];
+      const overdue = tasks.filter(task => {
+        const remaining = businessWorkdaysUntil(task.plannedEndAt);
+        return remaining !== null && remaining < 0;
+      }).length;
+      const dueSoon = tasks.filter(task => {
+        const remaining = businessWorkdaysUntil(task.plannedEndAt);
+        return remaining !== null && remaining >= 0 && remaining <= 3;
+      }).length;
+      const activeTasks = tasks.filter(task => task.status !== "pending_review");
+      const pendingReview = tasks.filter(task => task.status === "pending_review").length;
+      const remainingHours = tasks.reduce((total, task) => {
+        const hours = Number(task.estimatedHours || 6);
+        const factor = task.status === "pending_review"
+          ? 0.2
+          : task.status === "in_progress"
+            ? Math.max(0.4, 1 - Number(task.progressPercent || 30) / 100)
+            : task.status === "blocked"
+              ? 0.75
+              : task.status === "returned"
+                ? 0.8
+                : 1;
+        return total + (Number.isFinite(hours) ? hours * factor : 6 * factor);
+      }, 0);
+      const loadBand = activeTasks.length === 0 && pendingReview === 0
+        ? "free"
+        : remainingHours <= 12 && activeTasks.length <= 2
+          ? "available"
+          : remainingHours <= 24
+            ? "busy"
+            : "full";
+      return {
+        ...employee,
+        tasks,
+        activeTaskCount: activeTasks.length,
+        pendingReviewCount: pendingReview,
+        remainingHours: Math.round(remainingHours * 10) / 10,
+        overdueCount: overdue,
+        dueSoonCount: dueSoon,
+        loadBand,
+      };
+    }
+    function employeeLoadBandLabel(band) {
+      return { free: "空闲", available: "可接任务", busy: "较忙", full: "满负荷" }[band] || "待评估";
+    }
+    function employeeLoadBandClass(band) {
+      return ["free", "available", "busy", "full"].includes(band) ? band : "busy";
+    }
+    function employeeLoadCategoryOptions() {
+      const select = qs("employeeLoadCategory");
+      if (!select) return;
+      const current = select.value || state.employeeLoadCategory || "all";
+      const definitions = businessCategoryDefinitions();
+      select.innerHTML = [
+        `<option value="all">全部类型</option>`,
+        ...definitions.map(item => `<option value="${escapeAttr(item.value)}">${escapeHtml(item.label)}</option>`),
+      ].join("");
+      select.value = definitions.some(item => item.value === current) ? current : "all";
+      state.employeeLoadCategory = select.value;
+    }
+    function employeeLoadRows() {
+      const employees = (state.employeeLoad?.employees || []).map(employeeLoadMetrics);
+      const category = qs("employeeLoadCategory")?.value || "all";
+      const sort = qs("employeeLoadSort")?.value || "recommended";
+      const filtered = employees.filter(employee => {
+        if (category === "all") return true;
+        return Boolean(employee.categoryCounts?.[category]);
+      });
+      return filtered.sort((left, right) => {
+        const leftMatch = category === "all" ? 0 : Number(left.categoryCounts?.[category] || 0);
+        const rightMatch = category === "all" ? 0 : Number(right.categoryCounts?.[category] || 0);
+        if (sort === "risk") {
+          return left.overdueCount - right.overdueCount || left.dueSoonCount - right.dueSoonCount || left.remainingHours - right.remainingHours;
+        }
+        if (sort === "load") {
+          return left.remainingHours - right.remainingHours || left.activeTaskCount - right.activeTaskCount;
+        }
+        return rightMatch - leftMatch || left.overdueCount - right.overdueCount || left.remainingHours - right.remainingHours || left.activeTaskCount - right.activeTaskCount;
+      });
+    }
+    function employeeAvatar(employee) {
+      if (employee.avatarUrl) return `<img class="employee-avatar" src="${escapeAttr(employee.avatarUrl)}" alt="" />`;
+      return `<span class="employee-avatar">${escapeHtml(String(employee.displayName || "员").slice(0, 1))}</span>`;
+    }
+    function personCellHtml(userId, name) {
+      const user = userId ? getLookupMaps().userById.get(userId) : null;
+      const avatarUrl = user?.avatar_url || user?.avatarUrl || "";
+      const label = name || (user ? userDisplayName(user) : "待派发");
+      const initial = String(label || "员").trim().slice(0, 1) || "员";
+      const avatar = avatarUrl
+        ? `<img class="table-avatar" src="${escapeAttr(avatarUrl)}" alt="" />`
+        : `<span class="table-avatar">${escapeHtml(initial)}</span>`;
+      return `<div class="table-person">${avatar}<span>${safeText(label)}</span></div>`;
+    }
+    function renderEmployeeLoad() {
+      const panel = qs("employeeLoadPanel");
+      const box = qs("employeeLoadBox");
+      if (!panel || !box) return;
+      if (!can("dashboard.employee_detail") || !state.employeeLoad) {
+        panel.classList.add("hidden");
+        return;
+      }
+      panel.classList.remove("hidden");
+      employeeLoadCategoryOptions();
+      const rows = employeeLoadRows();
+      const category = qs("employeeLoadCategory")?.value || "all";
+      qs("employeeLoadScopeTag").textContent = can("dashboard.view_global") ? "全局实时负载" : "当前范围负载";
+      if (!rows.length) {
+        box.innerHTML = `<div class="empty-list">暂无可调度员工数据</div>`;
+        return;
+      }
+      box.innerHTML = `
+        <table class="employee-load-table">
+          <thead><tr><th>员工</th><th>业务匹配</th><th>执行中</th><th>预计剩余工时</th><th>3个工作日内到期</th><th>延期</th><th>待审核</th><th>负载</th><th>操作</th></tr></thead>
+          <tbody>
+            ${rows.map((employee, index) => `
+              <tr onclick="openEmployeeDetail('${escapeAttr(employee.userId)}')">
+                <td><div class="employee-cell">${employeeAvatar(employee)}<div><strong>${safeText(employee.displayName)}</strong><small>${employee.canReceiveFeishu ? "可接收飞书通知" : "未关联飞书账号"}</small></div></div></td>
+                <td>${category === "all" ? (Object.keys(employee.categoryCounts || {}).slice(0, 2).map(projectTypeLabel).join("、") || "待积累") : `${Number(employee.categoryCounts?.[category] || 0)} 项`}</td>
+                <td>${employee.activeTaskCount}</td>
+                <td>${employee.remainingHours} 小时</td>
+                <td>${employee.dueSoonCount}</td>
+                <td>${employee.overdueCount}</td>
+                <td>${employee.pendingReviewCount}</td>
+                <td><span class="load-badge ${employeeLoadBandClass(employee.loadBand)}">${employeeLoadBandLabel(employee.loadBand)}</span></td>
+                <td><button class="btn" onclick="event.stopPropagation(); openEmployeeDetail('${escapeAttr(employee.userId)}')">详情</button></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+    async function openEmployeeDetail(userId) {
+      if (!userId) return;
+      state.assignmentCandidates = null;
+      state.assignmentCandidateTaskId = null;
+      state.employeeDetailBusy = true;
+      qs("employeeDetailBackdrop")?.classList.remove("hidden");
+      qs("employeeDetailTitle").textContent = "员工详情";
+      qs("employeeDetailSubtitle").textContent = "正在读取当前任务负载";
+      qs("employeeDetailBody").innerHTML = `<div class="empty-list">加载中...</div>`;
+      try {
+        const result = await request(`/tasks/dashboard/employees/${encodeURIComponent(userId)}`);
+        state.employeeDetail = employeeLoadMetrics(result.employee);
+        renderEmployeeDetailDrawer();
+      } catch (error) {
+        closeEmployeeDetail();
+        toast(error.message || "员工详情读取失败");
+      } finally {
+        state.employeeDetailBusy = false;
+      }
+    }
+    async function remindTaskDelivery(taskId) {
+      if (!taskId || state.busyActionId) return;
+      state.busyActionId = taskId;
+      renderRequirementBoard();
+      try {
+        const result = await request(`/tasks/${encodeURIComponent(taskId)}/remind-delivery`, {
+          method: "POST",
+          body: {},
+        });
+        toast(result?.recipientCount ? "已提醒执行人继续处理任务" : "已发送交付提醒");
+        refreshMessages();
+      } catch (error) {
+        toast(error.message || "催交付失败");
+      } finally {
+        state.busyActionId = null;
+        renderRequirementBoard();
+      }
+    }
+    async function openAssignmentCandidates(taskId) {
+      if (!taskId || state.busyActionId) return;
+      state.assignmentCandidateTaskId = taskId;
+      state.employeeDetail = null;
+      state.assignmentCandidates = null;
+      qs("employeeDetailBackdrop")?.classList.remove("hidden");
+      qs("employeeDetailTitle").textContent = "推荐执行人";
+      qs("employeeDetailSubtitle").textContent = "根据业务类型匹配和当前负载排序";
+      qs("employeeDetailBody").innerHTML = `<div class="empty-list">正在计算推荐名单...</div>`;
+      try {
+        state.assignmentCandidates = await request(`/tasks/${encodeURIComponent(taskId)}/assignment-candidates`);
+        renderEmployeeDetailDrawer();
+      } catch (error) {
+        closeEmployeeDetail();
+        toast(error.message || "推荐执行人读取失败");
+      }
+    }
+    function renderEmployeeDetailDrawer() {
+      const body = qs("employeeDetailBody");
+      if (!body) return;
+      if (state.assignmentCandidates) {
+        const candidates = state.assignmentCandidates.candidates || [];
+        body.innerHTML = `
+          <div class="match-box">当前需求类型：${safeText(projectTypeLabel(state.assignmentCandidates.targetCategory || ""))}。推荐结果优先考虑类型匹配，再考虑当前负载。</div>
+          <div class="employee-detail-section"><h4>推荐名单</h4>
+            <div class="candidate-list">
+              ${candidates.slice(0, 8).map(candidate => `
+                <div class="candidate-row">
+                  <div><strong>${safeText(candidate.displayName)}</strong><small>${safeText(candidate.reason)} · ${employeeLoadBandLabel(employeeLoadMetrics(candidate).loadBand)}</small></div>
+                  <button class="btn primary" onclick="chooseAssignmentCandidate('${escapeAttr(candidate.userId)}')">选择</button>
+                </div>
+              `).join("") || `<div class="empty-list">没有可接收飞书通知的有效员工</div>`}
+            </div>
+          </div>
+        `;
+        return;
+      }
+      const employee = state.employeeDetail;
+      if (!employee) return;
+      qs("employeeDetailTitle").textContent = employee.displayName || "员工详情";
+      qs("employeeDetailSubtitle").textContent = employee.canReceiveFeishu ? "可接收飞书任务通知" : "尚未关联飞书账号";
+      const tasks = [...(employee.tasks || [])].sort((left, right) => {
+        const leftRisk = isTaskOverdue(left) ? 100 : isTaskDueSoon(left) ? 50 : 0;
+        const rightRisk = isTaskOverdue(right) ? 100 : isTaskDueSoon(right) ? 50 : 0;
+        return rightRisk - leftRisk || new Date(left.plannedEndAt || 0) - new Date(right.plannedEndAt || 0);
+      });
+      body.innerHTML = `
+        <div class="employee-detail-metrics">
+          <div class="employee-detail-metric"><span>执行中</span><strong>${employee.activeTaskCount}</strong></div>
+          <div class="employee-detail-metric"><span>剩余工时</span><strong>${employee.remainingHours}h</strong></div>
+          <div class="employee-detail-metric"><span>3工作日内到期</span><strong>${employee.dueSoonCount}</strong></div>
+          <div class="employee-detail-metric"><span>延期任务</span><strong>${employee.overdueCount}</strong></div>
+        </div>
+        <div class="employee-detail-section"><h4>当前任务</h4>
+          <div class="table-wrap"><table><thead><tr><th>任务</th><th>基金/平台</th><th>截止时间</th><th>状态</th></tr></thead><tbody>
+            ${tasks.map(task => `<tr><td>${safeText(task.taskName || "未命名任务")}<br><span class="muted">${safeText(task.businessCategory || "未分类")}</span></td><td>${safeText(task.customerName || "-")} / ${safeText(task.businessPlatform || "-")}</td><td>${safeText(shortDate(task.plannedEndAt))}</td><td>${safeText(taskStatusLabel(task.status))}</td></tr>`).join("") || `<tr><td colspan="4">暂无未完成任务</td></tr>`}
+          </tbody></table></div>
+        </div>
+        <div class="employee-detail-section"><h4>近30天交付表现</h4><p class="muted">已完成 ${Number(employee.recent30?.completed || 0)} 项，按时完成 ${employee.recent30?.onTimeRate == null ? "暂无数据" : `${employee.recent30.onTimeRate}%`}，退回 ${Number(employee.recent30?.returned || 0)} 次。</p></div>
+      `;
+    }
+    function chooseAssignmentCandidate(userId) {
+      const taskId = state.assignmentCandidateTaskId;
+      const select = taskId ? qs(`assignee-${taskId}`) : null;
+      if (select) {
+        select.value = userId;
+        state.assignmentEditingTaskId = taskId;
+        closeEmployeeDetail();
+        toast("已选择推荐执行人，请确认指派");
+        return;
+      }
+      closeEmployeeDetail();
+    }
+    function closeEmployeeDetail() {
+      state.employeeDetail = null;
+      state.assignmentCandidates = null;
+      state.assignmentCandidateTaskId = null;
+      qs("employeeDetailBackdrop")?.classList.add("hidden");
+    }
+    function handleEmployeeDetailBackdropClick(event) {
+      if (event.target === qs("employeeDetailBackdrop")) closeEmployeeDetail();
+    }
     function renderEmployeeTop(tasks) {
       const groups = new Map();
       for (const task of tasks) {
@@ -7834,7 +8197,7 @@
       }
       const rows = [...groups.values()].sort((a, b) => b.assigned - a.assigned || b.completed - a.completed || b.assets - a.assets).slice(0, 10);
       renderSimpleTable("employeeTopBox", rows, ["员工", "执行任务", "已完成", "延期", "资产数"], row => [
-        safeText(row.name),
+        personCellHtml(row.userId, row.name),
         row.assigned,
         row.completed,
         row.overdue,
@@ -7864,7 +8227,7 @@
       }
       const rows = [...groups.values()].sort((a, b) => b.total - a.total || b.pendingReview - a.pendingReview || b.overdue - a.overdue).slice(0, 10);
       renderSimpleTable("ownerTaskBoard", rows, ["派发人", "派发任务", "进行中", "待审核", "已完成", "延期"], row => [
-        safeText(row.name),
+        personCellHtml(row.ownerId, row.name),
         row.total,
         row.inProgress,
         row.pendingReview,

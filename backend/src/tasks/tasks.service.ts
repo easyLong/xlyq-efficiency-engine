@@ -15,6 +15,7 @@ import pptxgen from 'pptxgenjs';
 import { DataSource, In, Repository } from 'typeorm';
 import {
   buildAccessProfile,
+  hasPermission,
   normalizeAccessBusinessCategory,
 } from '../common/access-control';
 import {
@@ -122,6 +123,30 @@ type TaskProgressReminderLog = {
   task_status: string;
   review_stage: string | null;
   message: string | null;
+};
+
+type EmployeeLoadSqlRow = {
+  userId: string;
+  displayName: string | null;
+  username: string;
+  avatarUrl: string | null;
+  feishuOpenId: string | null;
+  taskId: string | null;
+  taskIsOpen: number | null;
+  taskName: string | null;
+  taskStatus: string | null;
+  reviewStage: string | null;
+  priority: string | null;
+  urgencyLevel: string | null;
+  plannedStartAt: Date | null;
+  plannedEndAt: Date | null;
+  progressPercent: number | null;
+  estimatedHours: string | null;
+  blockedReason: string | null;
+  customerName: string | null;
+  businessPlatform: string | null;
+  businessCategory: string | null;
+  dispatcherUserId: string | null;
 };
 
 @Injectable()
@@ -264,8 +289,20 @@ export class TasksService implements OnModuleInit {
     liveAssetCount = false,
     customerId?: string,
     currentUser?: UserEntity | null,
+    globalScope = false,
   ) {
-    const tasks = await this.findBoardTasks(projectId, customerId, currentUser);
+    if (globalScope) {
+      await this.assertDashboardPermission(
+        currentUser?.id ?? null,
+        'dashboard.view_global',
+      );
+    }
+    const tasks = await this.findBoardTasks(
+      projectId,
+      customerId,
+      currentUser,
+      globalScope,
+    );
     const assetCountByTaskId = await this.countAssetsByTaskIds(
       tasks.map((task) => task.id),
     );
@@ -297,18 +334,88 @@ export class TasksService implements OnModuleInit {
     };
   }
 
+  async employeeLoad(actingUserId: string | null) {
+    await this.assertDashboardPermission(
+      actingUserId,
+      'dashboard.employee_detail',
+    );
+    const rows = await this.loadEmployeeRows();
+    return {
+      asOf: new Date().toISOString(),
+      employees: this.aggregateEmployeeLoad(rows),
+    };
+  }
+
+  async employeeDetail(userId: string, actingUserId: string | null) {
+    await this.assertDashboardPermission(
+      actingUserId,
+      'dashboard.employee_detail',
+    );
+    const rows = await this.loadEmployeeRows(userId);
+    const employee = this.aggregateEmployeeLoad(rows)[0];
+    if (!employee) {
+      throw new NotFoundException('员工不存在或已停用');
+    }
+    const recent30 = await this.loadEmployeeHistory(userId);
+    return {
+      asOf: new Date().toISOString(),
+      employee: { ...employee, recent30 },
+    };
+  }
+
+  async assignmentCandidates(taskId: string, actingUserId: string | null) {
+    const task = await this.findOne(taskId);
+    await this.assertCanAssignTask(task, actingUserId);
+    const targetFacts = await this.taskReviewFacts(task);
+    const targetCategory = normalizeAccessBusinessCategory(
+      targetFacts.businessCategory,
+    );
+    const load = await this.employeeLoad(actingUserId);
+    const candidates = load.employees
+      .filter((employee) => employee.canReceiveFeishu)
+      .map((employee) => {
+        const categoryMatch = targetCategory
+          ? employee.categoryCounts[targetCategory] ?? 0
+          : 0;
+        const score =
+          categoryMatch * 100 -
+          employee.activeTaskCount * 10 -
+          employee.pendingReviewCount * 2 -
+          employee.remainingHours;
+        const reason = categoryMatch
+          ? `${targetCategory}类型有${categoryMatch}项历史任务，当前执行${employee.activeTaskCount}项`
+          : `当前执行${employee.activeTaskCount}项，预计剩余${employee.remainingHours}小时`;
+        return { ...employee, categoryMatch, score, reason };
+      })
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          left.remainingHours - right.remainingHours ||
+          left.displayName.localeCompare(right.displayName, 'zh-Hans-CN'),
+      );
+
+    return {
+      taskId,
+      targetCategory: targetCategory || null,
+      candidates,
+    };
+  }
+
   private async findBoardTasks(
     projectId?: string,
     customerId?: string,
     currentUser?: UserEntity | null,
+    globalScope = false,
   ) {
     if (!customerId) {
       const tasks = await this.tasksRepository.find({
         where: projectId ? { project_id: projectId } : {},
         order: { created_at: 'DESC' },
-        take: this.defaultListLimit,
+        ...(globalScope ? {} : { take: this.defaultListLimit }),
       });
-      return this.scopeTasksForUser(tasks, currentUser ?? null);
+      return globalScope
+        ? tasks
+        : this.scopeTasksForUser(tasks, currentUser ?? null);
     }
 
     const projects = await this.projectsRepository.find({
@@ -326,9 +433,213 @@ export class TasksService implements OnModuleInit {
     const tasks = await this.tasksRepository.find({
       where: { project_id: In(projectIds) },
       order: { created_at: 'DESC' },
-      take: this.defaultListLimit,
+      ...(globalScope ? {} : { take: this.defaultListLimit }),
     });
-    return this.scopeTasksForUser(tasks, currentUser ?? null);
+    return globalScope
+      ? tasks
+      : this.scopeTasksForUser(tasks, currentUser ?? null);
+  }
+
+  private async loadEmployeeRows(userId?: string) {
+    return this.dataSource.query<EmployeeLoadSqlRow[]>(
+      `
+        SELECT
+          employee.id AS userId,
+          employee.display_name AS displayName,
+          employee.username AS username,
+          employee.avatar_url AS avatarUrl,
+          employee.feishu_open_id AS feishuOpenId,
+          task.id AS taskId,
+          CASE WHEN task.status NOT IN ('completed', 'cancelled') THEN 1 ELSE 0 END AS taskIsOpen,
+          task.task_name AS taskName,
+          task.status AS taskStatus,
+          task.review_stage AS reviewStage,
+          task.priority AS priority,
+          task.urgency_level AS urgencyLevel,
+          task.planned_start_at AS plannedStartAt,
+          task.planned_end_at AS plannedEndAt,
+          task.progress_percent AS progressPercent,
+          task.estimated_hours AS estimatedHours,
+          task.blocked_reason AS blockedReason,
+          task.dispatcher_user_id AS dispatcherUserId,
+          customer.customer_name AS customerName,
+          requirement.business_platform AS businessPlatform,
+          requirement.business_category AS businessCategory
+        FROM users employee
+        LEFT JOIN tasks task
+          ON task.assignee_user_id = employee.id
+         AND task.deleted_at IS NULL
+         AND (
+           task.status NOT IN ('completed', 'cancelled')
+           OR (task.status = 'completed' AND task.actual_end_at >= DATE_SUB(NOW(), INTERVAL 90 DAY))
+         )
+        LEFT JOIN requirement_items item
+          ON item.id = task.requirement_item_id
+         AND item.deleted_at IS NULL
+        LEFT JOIN requirements requirement
+          ON requirement.id = item.requirement_id
+         AND requirement.deleted_at IS NULL
+        LEFT JOIN customers customer
+          ON customer.customer_code = requirement.customer_code
+         AND customer.deleted_at IS NULL
+        WHERE employee.deleted_at IS NULL
+          AND employee.status = 'active'
+          ${userId ? 'AND employee.id = ?' : ''}
+        ORDER BY employee.display_name ASC, task.planned_end_at IS NULL ASC,
+          task.planned_end_at ASC, task.created_at DESC
+      `,
+      userId ? [userId] : [],
+    );
+  }
+
+  private async loadEmployeeHistory(userId: string) {
+    const rows = await this.dataSource.query<
+      Array<{
+        completedCount: string;
+        onTimeCount: string;
+        returnedCount: string;
+      }>
+    >(
+      `
+        SELECT
+          SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completedCount,
+          SUM(CASE WHEN status = 'completed' AND (planned_end_at IS NULL OR actual_end_at IS NULL OR actual_end_at <= planned_end_at) THEN 1 ELSE 0 END) AS onTimeCount,
+          SUM(CASE WHEN status = 'returned' THEN 1 ELSE 0 END) AS returnedCount
+        FROM tasks
+        WHERE deleted_at IS NULL
+          AND assignee_user_id = ?
+          AND updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      `,
+      [userId],
+    );
+    const row = rows?.[0];
+    const completed = Number(row?.completedCount ?? 0);
+    const onTime = Number(row?.onTimeCount ?? 0);
+    return {
+      completed,
+      onTime,
+      onTimeRate: completed ? Math.round((onTime / completed) * 100) : null,
+      returned: Number(row?.returnedCount ?? 0),
+    };
+  }
+
+  private aggregateEmployeeLoad(rows: EmployeeLoadSqlRow[]) {
+    const employees = new Map<string, {
+      userId: string;
+      displayName: string;
+      username: string;
+      avatarUrl: string | null;
+      feishuOpenId: string | null;
+      canReceiveFeishu: boolean;
+      activeTaskCount: number;
+      pendingReviewCount: number;
+      remainingHours: number;
+      categoryCounts: Record<string, number>;
+      tasks: Array<Record<string, unknown>>;
+    }>();
+
+    for (const row of rows) {
+      const employee =
+        employees.get(row.userId) ?? {
+          userId: row.userId,
+          displayName: row.displayName || row.username,
+          username: row.username,
+          avatarUrl: row.avatarUrl,
+          feishuOpenId: row.feishuOpenId,
+          canReceiveFeishu: Boolean(row.feishuOpenId),
+          activeTaskCount: 0,
+          pendingReviewCount: 0,
+          remainingHours: 0,
+          categoryCounts: {},
+          tasks: [],
+        };
+
+      if (row.taskId) {
+        const status = String(row.taskStatus ?? '');
+        const category = normalizeAccessBusinessCategory(row.businessCategory);
+        const isOpen = Number(row.taskIsOpen ?? 0) === 1;
+        const estimatedHours = Number(row.estimatedHours);
+        const baseHours = Number.isFinite(estimatedHours) && estimatedHours > 0
+          ? estimatedHours
+          : 6;
+        const remainingFactor =
+          status === TaskStatus.PendingReview
+            ? 0.2
+            : status === TaskStatus.InProgress
+              ? Math.max(0.4, 1 - Number(row.progressPercent ?? 30) / 100)
+              : status === TaskStatus.Blocked
+                ? 0.75
+                : status === TaskStatus.Returned
+                  ? 0.8
+                  : 1;
+
+        if (category) {
+          employee.categoryCounts[category] =
+            (employee.categoryCounts[category] ?? 0) + 1;
+        }
+        if (!isOpen) {
+          employees.set(row.userId, employee);
+          continue;
+        }
+        if (status === TaskStatus.PendingReview) {
+          employee.pendingReviewCount += 1;
+        } else {
+          employee.activeTaskCount += 1;
+        }
+        employee.remainingHours += baseHours * remainingFactor;
+        employee.tasks.push({
+          id: row.taskId,
+          taskName: row.taskName,
+          status,
+          reviewStage: row.reviewStage,
+          priority: row.priority,
+          urgencyLevel: row.urgencyLevel,
+          plannedStartAt: row.plannedStartAt,
+          plannedEndAt: row.plannedEndAt,
+          progressPercent: row.progressPercent,
+          estimatedHours: baseHours,
+          blockedReason: row.blockedReason,
+          customerName: row.customerName,
+          businessPlatform: row.businessPlatform,
+          businessCategory: category || row.businessCategory,
+          dispatcherUserId: row.dispatcherUserId,
+        });
+      }
+      employees.set(row.userId, employee);
+    }
+
+    return [...employees.values()].map((employee) => ({
+      ...employee,
+      remainingHours: Math.round(employee.remainingHours * 10) / 10,
+      loadBand:
+        employee.activeTaskCount === 0 && employee.pendingReviewCount === 0
+          ? 'free'
+          : employee.remainingHours <= 12 && employee.activeTaskCount <= 2
+            ? 'available'
+            : employee.remainingHours <= 24
+              ? 'busy'
+              : 'full',
+    }));
+  }
+
+  private async assertDashboardPermission(
+    actingUserId: string | null,
+    permission: string,
+  ) {
+    if (!actingUserId) {
+      throw new UnauthorizedException('请先登录后查看员工负载');
+    }
+    const user = await this.usersRepository.findOne({
+      where: { id: actingUserId, status: 'active' },
+    });
+    if (!user) {
+      throw new ForbiddenException('当前账号不可用');
+    }
+    const profile = await buildAccessProfile(this.dataSource, user);
+    if (!hasPermission(profile, permission)) {
+      throw new ForbiddenException('当前账号无权查看全局员工负载');
+    }
+    return user;
   }
 
   private async scopeTasksForUser(
@@ -734,27 +1045,28 @@ export class TasksService implements OnModuleInit {
     };
   }
 
-  async aiAssignmentSuggestion(id: string) {
+  async aiAssignmentSuggestion(
+    id: string,
+    actingUserId: string | null = null,
+  ) {
+    const result = await this.assignmentCandidates(id, actingUserId);
+    const suggestion = result.candidates[0] ?? null;
     const task = await this.findOne(id);
-    const fallbackAssignee = await this.tasksRepository
-      .createQueryBuilder('t')
-      .select('t.assignee_user_id', 'assigneeUserId')
-      .addSelect('COUNT(*)', 'taskCount')
-      .where('t.assignee_user_id IS NOT NULL')
-      .groupBy('t.assignee_user_id')
-      .orderBy('COUNT(*)', 'ASC')
-      .limit(1)
-      .getRawOne<{ assigneeUserId: string | null; taskCount: string }>();
-
     return {
-      taskId: task.id,
+      taskId: id,
       currentAssigneeUserId: task.assignee_user_id,
-      suggestion: {
-        assigneeUserId: fallbackAssignee?.assigneeUserId ?? null,
-        reason:
-          '基于当前数据量，先按最低已分配任务数给出一个简单建议，后续可替换为真实 AI 评分模型。',
-        matchScore: fallbackAssignee?.assigneeUserId ? 72 : 0,
-      },
+      suggestion: suggestion
+        ? {
+            assigneeUserId: suggestion.userId,
+            reason: suggestion.reason,
+            matchScore: Math.max(0, Math.round(suggestion.score)),
+          }
+        : {
+            assigneeUserId: null,
+            reason: '当前没有可接收飞书通知的有效员工',
+            matchScore: 0,
+          },
+      candidates: result.candidates,
     };
   }
 
@@ -1526,6 +1838,90 @@ export class TasksService implements OnModuleInit {
       taskId: task.id,
       reviewStage,
       recipientCount: recipients.length,
+    };
+  }
+
+  async remindTaskDelivery(taskId: string, actingUserId: string | null) {
+    if (!actingUserId) {
+      throw new UnauthorizedException('请先登录后再催交付');
+    }
+    const task = await this.findOne(taskId);
+    const user = await this.usersRepository.findOne({
+      where: { id: actingUserId, status: 'active' },
+    });
+    if (!user) {
+      throw new ForbiddenException('当前账号不可用');
+    }
+    const profile = await buildAccessProfile(this.dataSource, user);
+    if (!profile.isAdmin && task.dispatcher_user_id !== actingUserId) {
+      throw new ForbiddenException('只有当前派发人可以催交付');
+    }
+    if (!task.assignee_user_id) {
+      throw new BadRequestException('当前任务尚未指派执行人');
+    }
+    const reminderStatuses = new Set([
+      TaskStatus.Assigned,
+      TaskStatus.InProgress,
+      TaskStatus.Blocked,
+      TaskStatus.Returned,
+    ]);
+    if (!reminderStatuses.has(task.status as TaskStatus)) {
+      throw new BadRequestException('当前任务状态不支持催交付');
+    }
+
+    const recent = await this.dataSource.query(
+      `
+        SELECT id
+        FROM task_progress_reminders
+        WHERE task_id = ?
+          AND sender_user_id = ?
+          AND review_stage = 'execution_submission'
+          AND created_at >= DATE_SUB(NOW(), INTERVAL 6 HOUR)
+          AND deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      [task.id, actingUserId],
+    );
+    if (recent?.length) {
+      throw new ConflictException('该任务已催交付，请 6 小时后再试');
+    }
+
+    await this.notificationsService.notifyTaskDeliveryReminder(
+      task,
+      user.display_name ?? user.username ?? '派发人',
+      task.assignee_user_id,
+    );
+    const message = `${user.display_name ?? user.username ?? '派发人'}催促执行人处理${task.task_name}`;
+    await this.dataSource.query(
+      `
+        INSERT INTO task_progress_reminders (
+          id,
+          task_id,
+          sender_user_id,
+          recipient_user_ids_json,
+          task_status,
+          review_stage,
+          message,
+          created_at,
+          updated_at,
+          deleted_at
+        ) VALUES (?, ?, ?, ?, ?, 'execution_submission', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL)
+      `,
+      [
+        randomUUID(),
+        task.id,
+        actingUserId,
+        JSON.stringify([task.assignee_user_id]),
+        task.status,
+        message,
+      ],
+    );
+
+    return {
+      ok: true,
+      taskId: task.id,
+      recipientCount: 1,
     };
   }
 

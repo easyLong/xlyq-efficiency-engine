@@ -42,6 +42,7 @@ export class TasksController {
     @Query('liveAssetCount') liveAssetCount?: string,
     @Query('customerCode') customerCode?: string,
     @Query('customerId') customerId?: string,
+    @Query('scope') scope?: string,
     @Req() request?: Request & { user?: UserEntity },
   ) {
     return this.tasksService.board(
@@ -49,6 +50,25 @@ export class TasksController {
       liveAssetCount === 'true',
       customerCode ?? customerId,
       request?.user,
+      scope === 'global',
+    );
+  }
+
+  @Get('dashboard/employees')
+  @Permission('dashboard.employee_detail')
+  employeeLoad(@Req() request?: Request & { user?: UserEntity }) {
+    return this.tasksService.employeeLoad(request?.user?.id ?? null);
+  }
+
+  @Get('dashboard/employees/:userId')
+  @Permission('dashboard.employee_detail')
+  employeeDetail(
+    @Param('userId') userId: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.employeeDetail(
+      userId,
+      request?.user?.id ?? null,
     );
   }
 
@@ -68,6 +88,18 @@ export class TasksController {
       `attachment; filename="assets.pptx"; filename*=UTF-8''${encodeURIComponent(result.fileName)}`,
     );
     response.send(result.buffer);
+  }
+
+  @Get(':id/assignment-candidates')
+  @Permission('task.assign_owned')
+  assignmentCandidates(
+    @Param('id') id: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.assignmentCandidates(
+      id,
+      request?.user?.id ?? null,
+    );
   }
 
   @Get(':id/status-history')
@@ -310,9 +342,27 @@ export class TasksController {
     return this.tasksService.remindTaskProgress(id, request?.user?.id ?? null);
   }
 
+  @Post(':id/remind-delivery')
+  @Permission('task.remind_execution_owned')
+  remindDelivery(
+    @Param('id') id: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.remindTaskDelivery(
+      id,
+      request?.user?.id ?? null,
+    );
+  }
+
   @Post(':id/ai-assignment-suggestion')
   @Permission('task.assign_owned')
-  aiAssignmentSuggestion(@Param('id') id: string) {
-    return this.tasksService.aiAssignmentSuggestion(id);
+  aiAssignmentSuggestion(
+    @Param('id') id: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.tasksService.aiAssignmentSuggestion(
+      id,
+      request?.user?.id ?? null,
+    );
   }
 }

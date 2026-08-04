@@ -30,12 +30,15 @@ const adminPermissions = ['*'];
 const dispatcherPermissions = [
   'page.requirements',
   'page.dashboard',
+  'dashboard.view_global',
+  'dashboard.employee_detail',
   'page.messages',
   'requirement.view_owned',
   'requirement.create',
   'requirement.edit_owned',
   'task.view_owned',
   'task.assign_owned',
+  'task.remind_execution_owned',
   'ai_preview.view_owned',
   'ai_preview.confirm_owned',
 ];

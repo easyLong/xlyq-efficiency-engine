@@ -478,6 +478,43 @@ export class NotificationsService implements OnModuleInit {
     );
   }
 
+  async notifyTaskDeliveryReminder(
+    task: TaskEntity,
+    senderName: string,
+    recipientUserId: string,
+  ) {
+    if (!recipientUserId) {
+      return null;
+    }
+    const project = await this.projectsRepository.findOne({
+      where: { id: task.project_id },
+    });
+    const fundPlatformLabel = await this.taskFundPlatformLabel(task, project);
+    const taskDetail = await this.taskDetailForNotification(task);
+    return this.send({
+      recipientUserId,
+      title: `交付提醒：${task.task_name}`,
+      content: [
+        `派发人：${senderName}`,
+        `任务：${task.task_name}`,
+        ...(taskDetail ? [`任务详情：${taskDetail}`] : []),
+        `基金平台：${fundPlatformLabel}`,
+        `当前状态：${this.taskStatusLabel(task.status)}`,
+        `截止时间：${this.formatDate(task.planned_end_at)}`,
+        `优先级：${this.priorityLabel(task.priority)}`,
+        task.blocked_reason ? `阻塞说明：${task.blocked_reason}` : '',
+        '请尽快继续处理任务，并提交交付物。',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      objectType: 'task_delivery_reminder',
+      objectId: task.id,
+      channels: ['in_app', 'feishu_app'],
+      actionUrl: this.buildTaskAssetSheetUrl(task),
+      actionText: '进入任务',
+    });
+  }
+
   async notifyTaskAssetsSubmittedForProductReview(
     task: TaskEntity,
     assetCount: number,

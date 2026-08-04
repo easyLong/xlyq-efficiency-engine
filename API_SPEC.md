@@ -32,6 +32,10 @@
 - `PATCH /api/v1/requirements/{id}`：人工编辑历史需求任务，自动同步需求项和任务标题/描述/优先级。
 - `DELETE /api/v1/requirements/{id}/bundle`：软删除需求、需求项、任务、工作目录和资产记录，并清理关联报价映射。
 - `POST /api/v1/tasks/{id}/assign`：指派任务；`provisionWorkspace=true` 时创建资产入口并发送一条带按钮的飞书消息。
+- `GET /api/v1/tasks/dashboard/employees`：读取全局 active 员工负载、当前未完成任务、近 90 天完成任务和飞书可通知状态；权限为管理员或派发者的 `dashboard.employee_detail`。
+- `GET /api/v1/tasks/dashboard/employees/{userId}`：读取指定员工当前任务明细及近 30 天完成、准时完成、退回统计。
+- `GET /api/v1/tasks/{id}/assignment-candidates`：按任务业务大类、员工历史匹配度、当前负载和预计剩余工时返回指派候选人；权限为 `task.assign_owned`。
+- `POST /api/v1/tasks/{id}/remind-delivery`：派发人催促当前执行人提交交付物；仅任务实际派发人或管理员可调用，同一任务和派发人 6 小时内只能发送一次。
 - `GET /api/v1/tasks/{id}/asset-sheet/context?token=<token>`：员工交付登记页加载任务上下文。
 - `POST /api/v1/tasks/{id}/asset-sheet/upload-image?token=<token>`：上传本地图片，返回可保存的图片 URL。
 - `POST /api/v1/tasks/{id}/asset-sheet/draft?token=<token>`：保存服务器草稿；不推进状态、不发审核通知、不计入正式资产统计。
@@ -41,7 +45,7 @@
 - `POST /api/v1/tasks/{id}/asset-review/claim?token=<token>`：原子领取当前一审或二审工作项。
 - `POST /api/v1/tasks/{id}/asset-review/approve?token=<token>`：当前领取人通过审核；一审通过进入二审，二审通过完成任务。
 - `POST /api/v1/tasks/{id}/asset-review/return?token=<token>`：当前领取人退回执行人修改，必须填写原因。
-- `GET /api/v1/tasks/board?liveAssetCount=true&customerCode=<customerCode>`：任务看板，支持实时资产数和基金客户筛选；`customerId` 仅保留兼容。
+- `GET /api/v1/tasks/board?liveAssetCount=true&customerCode=<customerCode>&scope=global`：任务看板，支持实时资产数和基金客户筛选；`scope=global` 仅对拥有 `dashboard.view_global` 的用户开放，用于派发者查看全局员工工作量；`customerId` 仅保留兼容。
 - `GET /api/v1/tasks/{id}/workflow`：返回任务、资产数、工作目录、最近状态历史和统一 workflow 快照。
 - `GET /api/v1/tasks/{id}/status-history`：返回任务状态流转审计记录。
 - `GET /api/v1/tasks/assets/export-ppt?taskIds=<id1,id2>`：按任务集合导出资产 PPT。导出口径按已确认报价子项层级分组，标题为“基金名称-结算项目”，正文只展示层级标题、原始图片和图片真实名称。
