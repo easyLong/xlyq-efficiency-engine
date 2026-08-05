@@ -46,6 +46,10 @@ export class CreateRequirementWithTaskDto {
 
   @IsOptional()
   @IsString()
+  contactName?: string;
+
+  @IsOptional()
+  @IsString()
   manualContactName?: string;
 
   @IsOptional()

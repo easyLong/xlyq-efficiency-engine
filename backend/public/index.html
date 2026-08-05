@@ -2815,6 +2815,9 @@
         context.business_platform,
       ].filter(Boolean).join(" · ");
     }
+    function requirementContactName(requirement, context = contactContextForRequirement(requirement)) {
+      return requirement?.source_contact_name || context?.contact_name || "";
+    }
     function selectedContactContext() {
       const select = qs("contactContextSelect");
       if (select?.value === "__manual_contact__") return null;
@@ -4374,7 +4377,7 @@
           item,
           task,
           customer: customerName(requirement.customer_code),
-          contactContext: context?.contact_name || "",
+          contactContext: requirementContactName(requirement, context),
           businessPlatform: dimensions.businessPlatform,
           businessCategory: projectTypeLabel(dimensions.businessCategory),
           secondaryCategory: dimensions.secondaryCategory,
@@ -6726,7 +6729,7 @@
         return {
           customerId: row.requirement?.customer_code || workbench.customerId,
           customerName: customerName(row.requirement?.customer_code || workbench.customerId),
-          contactContextName: contactContext?.contact_name || "-",
+          contactContextName: requirementContactName(row.requirement, contactContext) || "-",
           quarter: workbench.quarter,
           quotationNo: workbench.selectedQuotation?.quotation_no || "-",
           quotationName: workbench.selectedQuotation ? quotationDisplayName(workbench.selectedQuotation) : "-",
@@ -7059,6 +7062,7 @@
             plannedStartAt: plannedStartAt || undefined,
             plannedEndAt: plannedEndAt || undefined,
             contactContextId: contactContext?.id || undefined,
+            contactName: contactContext?.contact_name || undefined,
             businessPlatform: businessPlatform || undefined,
             businessCategory: qs("projectTypeSelect").value || undefined,
             secondaryCategory: secondaryCategory || undefined,
@@ -7394,7 +7398,7 @@
           dimensions,
           customerId: dimensions.customerId,
           customerName: customerName(dimensions.customerId),
-          contactContextName: contactContext ? contactContextLabel(contactContext) : "-",
+          contactContextName: requirementContactName(requirement, contactContext) || "-",
           businessPlatform: dimensions.businessPlatform || "-",
           businessCategory: projectTypeLabel(dimensions.businessCategory) || "-",
           secondaryCategory: dimensions.secondaryCategory || "-",

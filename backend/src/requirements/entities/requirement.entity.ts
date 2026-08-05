@@ -22,6 +22,9 @@ export class RequirementEntity extends BaseSoftDeleteEntity {
   source_ref_id!: string | null;
 
   @Column({ type: 'varchar', length: 128, nullable: true })
+  source_contact_name!: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
   business_name!: string | null;
 
   @Column({ type: 'varchar', length: 64, nullable: true })

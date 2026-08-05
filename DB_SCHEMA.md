@@ -481,6 +481,7 @@ business_category_owner_configs is legacy compatibility only
 | title | varchar(256) | not null | 需求标题 |
 | source_type | varchar(32) | not null | `manual/feishu_doc/feishu_message/import` |
 | source_ref_id | varchar(128) | null | 外部来源ID |
+| source_contact_name | varchar(128) | null | 本次需求实际选择的需求方；群映射存在多个需求方时避免列表回显全部姓名 |
 | status | varchar(32) | not null | `draft/pending_parse/pending_confirm/confirmed/in_progress/completed/cancelled` |
 | priority | varchar(32) | null | `low/medium/high/urgent` |
 | raw_content | text | null | 原始内容 |

@@ -260,6 +260,7 @@ CREATE TABLE `requirements` (
   `title` VARCHAR(256) NOT NULL,
   `source_type` VARCHAR(32) NOT NULL,
   `source_ref_id` VARCHAR(128) NULL,
+  `source_contact_name` VARCHAR(128) NULL,
   `business_name` VARCHAR(128) NULL,
   `business_platform` VARCHAR(64) NULL,
   `business_category` VARCHAR(32) NULL,

@@ -1279,6 +1279,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
+    const sourceContactName = this.resolveSelectedContactName(
+      dto.contactName ?? dto.manualContactName,
+      contactContext?.contact_name,
+    );
+
     await this.assertCanDispatchCustomer(currentUser, customerCode);
 
     const createBundle = async (manager?: EntityManager) => {
@@ -1288,6 +1293,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           projectId: dto.projectId,
           customerCode,
           contactContextId: contactContext?.id ?? dto.contactContextId,
+          sourceContactName,
           businessName: dto.businessName,
           businessPlatform:
             dto.businessPlatform ?? contactContext?.business_platform ?? null,
@@ -1868,6 +1874,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       secondaryCategory?: string | null;
       tertiaryCategory?: string | null;
       sourceType: string;
+      sourceContactName?: string | null;
       dispatcherUserId?: string | null;
       createdByUserId?: string | null;
       match?: {
@@ -1904,6 +1911,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         title: input.title,
         source_type: input.sourceType,
         source_ref_id: input.contactContextId ?? null,
+        source_contact_name: input.sourceContactName ?? null,
         business_name: input.businessName ?? null,
         business_platform: input.businessPlatform ?? null,
         business_category: input.businessCategory ?? null,
@@ -2049,6 +2057,24 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Contact context config not found');
     }
     return config;
+  }
+
+  private resolveSelectedContactName(
+    selectedName?: string | null,
+    mappedNames?: string | null,
+  ) {
+    const selected = this.normalizeNullableText(selectedName);
+    const names = String(mappedNames ?? '')
+      .split(/[,，、;；|]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (selected && (!names.length || names.includes(selected))) {
+      return selected.slice(0, 128);
+    }
+    if (names.length === 1) {
+      return names[0].slice(0, 128);
+    }
+    return null;
   }
 
   private async resolveManualContactContext(input: {
@@ -3136,6 +3162,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'requirements',
       'urgency_level',
       'urgency_level VARCHAR(32) NULL AFTER priority',
+    );
+    await this.addColumnIfMissing(
+      'requirements',
+      'source_contact_name',
+      'source_contact_name VARCHAR(128) NULL AFTER source_ref_id',
     );
     await this.addColumnIfMissing(
       'requirement_items',
