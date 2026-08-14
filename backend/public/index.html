@@ -5491,7 +5491,6 @@
           ${hasReviewPermission && claim.status === "other" ? `<span class="done-text">已由${safeText(claim.name)}领取</span>` : ""}
           ${canAct && can("task.accept_owned") ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : approveText}</button>` : ""}
           ${canAct && can("task.return_owned") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>` : ""}
-          ${renderTaskAssetsButton(row.task)}
         </div>
       `;
     }
