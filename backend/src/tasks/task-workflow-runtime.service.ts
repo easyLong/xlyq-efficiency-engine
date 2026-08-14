@@ -237,6 +237,19 @@ export class TaskWorkflowRuntimeService {
         )
     `);
     await this.backfillOpenWorkItemCandidates();
+
+    // Reconcile existing open work items as well. Candidate mappings can
+    // change after a task is created, so the initial backfill alone is not
+    // enough to remove reviewers who are no longer configured.
+    const activeTasks: TaskEntity[] = await this.dataSource.query(`
+      SELECT task.*
+      FROM tasks task
+      WHERE task.deleted_at IS NULL
+        AND task.current_step IN ('dispatch', 'execute', 'first_review', 'second_review')
+    `);
+    for (const task of activeTasks) {
+      await this.syncTaskCurrentStep(task);
+    }
   }
 
   private async backfillOpenWorkItemCandidates() {
@@ -449,6 +462,27 @@ export class TaskWorkflowRuntimeService {
       step,
       executor,
     );
+    if (step !== TaskWorkflowStep.Execute) {
+      const excludedCandidateClause = candidateIds.length
+        ? `AND user_id NOT IN (${candidateIds.map(() => '?').join(',')})`
+        : '';
+      await executor.query(
+        `
+          UPDATE task_work_item_candidates
+          SET status = CASE
+                WHEN status IN ('open', 'claimed', 'claimed_by_other') THEN 'cancelled'
+                ELSE status
+              END,
+              deleted_at = CURRENT_TIMESTAMP,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE work_item_id = ?
+            AND candidate_source = 'workflow_config'
+            AND deleted_at IS NULL
+            ${excludedCandidateClause}
+        `,
+        [workItemId, ...candidateIds],
+      );
+    }
     for (const userId of candidateIds) {
       await executor.query(
         `

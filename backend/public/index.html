@@ -5428,7 +5428,7 @@
         return `
           <div class="assign-action compact" onclick="event.stopPropagation()">
             <span class="done-text">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
-            ${renderTaskAssetDirectoryButton(row.task)}
+            ${renderTaskAssetsButton(row.task)}
           </div>
         `;
       }
@@ -5436,8 +5436,7 @@
         return `
           <div class="assign-action compact" onclick="event.stopPropagation()">
             <span class="done-text">${safeText(row.taskStatus)}</span>
-            <button class="btn" onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
-            ${renderTaskAssetDirectoryButton(row.task)}
+            ${renderTaskAssetsButton(row.task)}
           </div>
         `;
       }
@@ -5450,7 +5449,7 @@
             <span class="quote-status-pill">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
             <button class="btn" ${isBusy ? "disabled" : ""} onclick="startReassignTask('${row.task.id}')">${isBusy ? "处理中" : "改派"}</button>
             ${canCurrentUserRemindDelivery(row.task) ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="remindTaskDelivery('${row.task.id}')">催交付</button>` : ""}
-            ${renderTaskAssetDirectoryButton(row.task)}
+            ${renderTaskAssetsButton(row.task)}
           </div>
         `;
       }
@@ -5465,9 +5464,9 @@
     function canOpenTaskAssetSheet(task) {
       return Boolean(task?.id);
     }
-    function renderTaskAssetDirectoryButton(task) {
+    function renderTaskAssetsButton(task) {
       if (!canOpenTaskAssetSheet(task)) return "";
-      return `<button class="btn" onclick="openTaskAssetSheet('${task.id}')">资产目录</button>`;
+      return `<button class="btn" onclick="openTaskAssets('${task.id}')">查看资产</button>`;
     }
     function startReassignTask(taskId) {
       if (state.busyActionId) return;
@@ -5485,20 +5484,31 @@
       const approveText = row.task.review_stage === "product_review" ? "一审通过" : row.task.review_stage === "customer_review" ? "二审通过" : "通过验收";
       return `
         <div class="review-action" onclick="event.stopPropagation()">
-          <button class="btn" ${isBusy ? "disabled" : ""} onclick="openTaskAssetReview('${row.task.id}')">查看资产</button>
+          ${renderTaskAssetsButton(row.task)}
           ${canRemind ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="remindTaskProgress('${row.task.id}')">${isBusy ? "处理中..." : "催进度"}</button>` : ""}
           ${canClaim ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="claimTaskReview('${row.task.id}')">${isBusy ? "领取中" : "领取审核"}</button>` : ""}
           ${hasReviewPermission && claim.status === "mine" ? `<span class="quote-status-pill">我已领取</span>` : ""}
           ${hasReviewPermission && claim.status === "other" ? `<span class="done-text">已由${safeText(claim.name)}领取</span>` : ""}
           ${canAct && can("task.accept_owned") ? `<button class="btn primary" ${isBusy ? "disabled" : ""} onclick="approveTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : approveText}</button>` : ""}
           ${canAct && can("task.return_owned") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="returnTaskReview('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : "退回修改"}</button>` : ""}
-          ${renderTaskAssetDirectoryButton(row.task)}
+          ${renderTaskAssetsButton(row.task)}
         </div>
       `;
     }
     function openTaskAssetReview(taskId) {
       if (!taskId) return;
       window.open(`/asset-review.html?taskId=${encodeURIComponent(taskId)}`, "_blank", "noopener");
+    }
+    function openTaskAssets(taskId) {
+      if (!taskId) return;
+      const task = state.tasks.find(item => item.id === taskId);
+      const isCurrentExecutor = task?.assignee_user_id === state.user?.id;
+      const canEditDirectory = isCurrentExecutor && !["pending_review", "completed"].includes(task?.status);
+      if (canEditDirectory) {
+        openTaskAssetSheet(taskId);
+        return;
+      }
+      openTaskAssetReview(taskId);
     }
     async function remindTaskProgress(taskId) {
       if (!taskId || state.busyActionId) return;
