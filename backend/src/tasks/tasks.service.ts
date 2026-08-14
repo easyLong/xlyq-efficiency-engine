@@ -4122,6 +4122,7 @@ export class TasksService implements OnModuleInit {
     const profile = await buildAccessProfile(this.dataSource, user);
     if (
       profile.isAdmin ||
+      profile.effectiveRoles.includes('dispatcher') ||
       [
         task.assignee_user_id,
         task.dispatcher_user_id,
@@ -4384,7 +4385,13 @@ export class TasksService implements OnModuleInit {
     }
     const profile = await buildAccessProfile(this.dataSource, currentUser);
     const isDispatcher = task.dispatcher_user_id === currentUser.id;
+    const isDispatcherRole = profile.effectiveRoles.includes('dispatcher');
     const isAssignee = task.assignee_user_id === currentUser.id;
+    const facts = await this.taskReviewFacts(task);
+    const customerCode = String(facts.customerCode ?? '').trim();
+    const canDispatchCustomer = profile.dispatchCustomerCodes.includes(
+      customerCode,
+    );
     const canProductReview = await this.canProductReviewTask(
       task,
       currentUser.id,
@@ -4401,7 +4408,9 @@ export class TasksService implements OnModuleInit {
       profile.isAdmin ||
       (!requireReviewPermission &&
         (isDispatcher ||
+          isDispatcherRole ||
           isAssignee ||
+          canDispatchCustomer ||
           canProductReview ||
           canCustomerReview)) ||
       (requireReviewPermission && canCurrentReview)
