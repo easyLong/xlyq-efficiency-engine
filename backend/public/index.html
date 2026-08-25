@@ -180,6 +180,30 @@
     .ai-preview-panel .panel-note { margin-bottom: 10px; color: #667163; font-size: 13px; }
     .ai-preview-tabs { align-items: center; }
     .ai-preview-tabs button { flex: 0 0 auto; white-space: nowrap; }
+    .requirement-view-tabs {
+      display: inline-flex;
+      gap: 6px;
+      padding: 4px;
+      border: 1px solid #d8dfcf;
+      border-radius: 12px;
+      background: #eef3ea;
+    }
+    .requirement-view-tabs button {
+      border: 0;
+      border-radius: 9px;
+      padding: 8px 14px;
+      background: transparent;
+      color: #50604e;
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .requirement-view-tabs button.active {
+      background: #2f6b45;
+      color: #fff;
+      box-shadow: 0 6px 14px rgba(47,107,69,.16);
+    }
+    .requirement-view-tabs button:disabled { display: none; }
     .ai-preview-tabs .filter-select {
       flex: 0 1 180px;
       width: 180px;
@@ -1764,11 +1788,15 @@
         </div>
 
         <div class="requirements-history">
+          <div id="requirementViewTabs" class="requirement-view-tabs" role="tablist" aria-label="需求视图">
+            <button type="button" class="active" role="tab" aria-selected="true" onclick="setRequirementView('tasks')">任务需求列表</button>
+            <button type="button" role="tab" aria-selected="false" onclick="setRequirementView('ai')">AI识别候选需求</button>
+          </div>
           <div class="panel ai-preview-panel hidden" id="aiPreviewPanel">
             <div class="section-title">
               <div>
                 <div class="kicker">AI Preview</div>
-                <h3>AI预览需求</h3>
+                <h3>AI识别候选需求</h3>
               </div>
               <span class="tag">等待派发团队确认</span>
             </div>
@@ -1777,7 +1805,7 @@
           </div>
           <div id="requirementMetrics" class="summary-strip requirement-metrics"></div>
 
-          <div class="panel board-panel history-panel">
+          <div class="panel board-panel history-panel" id="taskRequirementPanel">
             <div class="section-title">
               <div>
                 <div class="kicker">History</div>
@@ -2292,6 +2320,7 @@
       copiedRequirementSource: null,
       tasks: [],
       aiPreviewCandidates: [],
+      requirementView: "tasks",
       aiPreviewScope: "mine",
       aiPreviewOwnerId: "all",
       quotations: [],
@@ -2413,7 +2442,12 @@
       qs("requirementCreatePanel")?.classList.toggle("hidden", !canCreateRequirement);
       qs("view-requirements")?.classList.toggle("history-only", !canCreateRequirement);
       qs("manualIntakePanel")?.classList.toggle("hidden", !canCreateRequirement);
-      qs("aiPreviewPanel")?.classList.toggle("hidden", !(can("ai_preview.view_all") || can("ai_preview.view_owned")));
+      const canViewAiPreview = can("ai_preview.view_all") || can("ai_preview.view_owned");
+      if (!canViewAiPreview) state.requirementView = "tasks";
+      qs("aiPreviewPanel")?.classList.toggle("hidden", !canViewAiPreview || state.requirementView !== "ai");
+      qs("taskRequirementPanel")?.classList.toggle("hidden", state.requirementView === "ai");
+      qs("requirementMetrics")?.classList.toggle("hidden", state.requirementView === "ai");
+      renderRequirementViewTabs();
       if (isViewActive("requirements")) {
         qs("pageSub").textContent = requirementPageSubtitle();
       }
@@ -2814,6 +2848,35 @@
         customer?.customer_name,
         context.business_platform,
       ].filter(Boolean).join(" · ");
+    }
+    function canViewAiPreview() {
+      return can("ai_preview.view_all") || can("ai_preview.view_owned");
+    }
+    function renderRequirementViewTabs() {
+      const container = qs("requirementViewTabs");
+      if (!container) return;
+      container.classList.toggle("hidden", !canViewAiPreview());
+      const aiButton = container.querySelector("button[onclick*=\"'ai'\"]");
+      if (aiButton) {
+        aiButton.disabled = !canViewAiPreview();
+        aiButton.classList.toggle("hidden", !canViewAiPreview());
+        aiButton.setAttribute("aria-selected", String(state.requirementView === "ai"));
+      }
+      const taskButton = container.querySelector("button[onclick*=\"'tasks'\"]");
+      if (taskButton) {
+        taskButton.classList.toggle("active", state.requirementView === "tasks");
+        taskButton.setAttribute("aria-selected", String(state.requirementView === "tasks"));
+      }
+      if (aiButton) aiButton.classList.toggle("active", state.requirementView === "ai");
+    }
+    function setRequirementView(view) {
+      const nextView = view === "ai" && canViewAiPreview() ? "ai" : "tasks";
+      state.requirementView = nextView;
+      qs("aiPreviewPanel")?.classList.toggle("hidden", nextView !== "ai");
+      qs("taskRequirementPanel")?.classList.toggle("hidden", nextView === "ai");
+      qs("requirementMetrics")?.classList.toggle("hidden", nextView === "ai");
+      renderRequirementViewTabs();
+      if (nextView === "ai") renderAiPreviewBoard();
     }
     function requirementContactName(requirement, context = contactContextForRequirement(requirement)) {
       return requirement?.source_contact_name || context?.contact_name || "";
@@ -3480,6 +3543,7 @@
     }
     async function applyFeishuLinkTarget(target) {
       switchView(target?.view || "requirements");
+      if (target?.candidateId) setRequirementView("ai");
       state.aiPreviewScope = "mine";
       state.aiPreviewOwnerId = "all";
       const candidateId = String(target?.candidateId || "");
@@ -4546,7 +4610,7 @@
         return;
       }
       const rows = state.aiPreviewCandidates || [];
-      panel.classList.remove("hidden");
+      panel.classList.toggle("hidden", state.requirementView !== "ai");
       const scope = state.aiPreviewScope || "mine";
       const scopeLabels = can("ai_preview.view_all") ? {
         mine: "我的待派发",
@@ -4841,7 +4905,7 @@
       updateCreateRequirementButtonLabel();
       renderAiPreviewBoard();
       qs("manualIntakePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      toast(contactContext ? `已识别需求方：${contactContext.contact_name}` : (customer ? "已填充 AI 预览需求，可修改后确认" : "已填充 AI 预览需求，请确认客户后再保存"));
+      toast(contactContext ? `已识别需求方：${contactContext.contact_name}` : (customer ? "已填充 AI 识别候选需求，可修改后确认" : "已填充 AI 识别候选需求，请确认客户后再保存"));
     }
     async function copyRequirementAsNew(event, requirementId) {
       event?.stopPropagation();
