@@ -595,6 +595,7 @@ business_category_owner_configs is legacy compatibility only
 | actual_end_at | datetime | null | 实际完成 |
 | estimated_hours | numeric(8,2) | null | 预计工时 |
 | actual_hours | numeric(8,2) | not null default 0 | 实际工时汇总 |
+| price_amount | numeric(14,2) | not null default 0 | 创建需求时指定、可在需求任务列表编辑的任务价格 |
 | progress_percent | int | not null default 0 | 进度百分比 |
 | blocked_reason | varchar(255) | null | 阻塞原因 |
 | sort_order | int | null | 排序 |

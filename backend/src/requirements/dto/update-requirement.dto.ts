@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID, Matches } from 'class-validator';
 
 export class UpdateRequirementDto {
   @IsOptional()
@@ -16,6 +16,12 @@ export class UpdateRequirementDto {
   @IsOptional()
   @IsString()
   urgencyLevel?: string;
+
+  @IsOptional()
+  @Matches(/^\d{1,12}(?:\.\d{1,2})?$/, {
+    message: 'priceAmount must be a non-negative amount with up to 2 decimals',
+  })
+  priceAmount?: string;
 
   @IsOptional()
   @IsString()

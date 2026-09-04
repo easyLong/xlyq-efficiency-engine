@@ -1621,6 +1621,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       dto.urgencyLevel !== undefined;
     const shouldSyncTask =
       shouldSyncItem ||
+      dto.priceAmount !== undefined ||
       dto.projectId !== undefined ||
       dto.businessCategory !== undefined;
     if (item && shouldSyncItem) {
@@ -1644,6 +1645,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         task.description = dto.rawContent ?? task.description;
         task.priority = priority ?? task.priority;
         task.urgency_level = urgencyLevel ?? task.urgency_level;
+        task.price_amount = dto.priceAmount ?? task.price_amount;
         await this.tasksRepository.save(task);
       }
     }
@@ -1865,6 +1867,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       priority?: string;
       urgencyLevel?: string | null;
       estimatedHours?: string;
+      priceAmount?: string;
       plannedStartAt?: string | null;
       plannedEndAt?: string | null;
       contactContextId?: string | null;
@@ -1963,6 +1966,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         urgency_level: item.urgency_level ?? urgencyLevel,
         assignee_user_id: null,
         estimated_hours: item.estimated_hours ?? null,
+        price_amount: input.priceAmount ?? '0.00',
         planned_start_at: input.plannedStartAt
           ? new Date(input.plannedStartAt)
           : null,

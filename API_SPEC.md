@@ -19,7 +19,7 @@
 
 ### 需求与任务
 
-- `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务。
+- `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务；创建时必须传入任务价格 `priceAmount`。
 - `GET /api/v1/workflow-config`：查询基金派发者、业务大类一审人员和基金二审人员配置。
 - `PUT /api/v1/workflow-config/customer-dispatchers/{customerCode}`：覆盖某基金的派发候选人。
 - `PUT /api/v1/workflow-config/product-reviewers/{reviewType}`：覆盖某业务大类的一审候选人。
@@ -29,7 +29,7 @@
 - `POST /api/v1/requirements/ai-preview-candidates/{candidateId}/reject`：将候选需求标记为伪需求，状态置为 `rejected`，AI 预览区不再展示；支持提交 `rejectReasons`、`rejectNote`、`useForPromptOptimization`，后端写入复核日志。
 - `POST /api/v1/requirements/ai-match-context`：根据文件内容匹配客户和业务大类。
 - `POST /api/v1/requirements/ai-split-with-tasks`：使用 OpenAI 兼容模型拆分需求，并为每条需求生成任务。
-- `PATCH /api/v1/requirements/{id}`：人工编辑历史需求任务，自动同步需求项和任务标题/描述/优先级。
+- `PATCH /api/v1/requirements/{id}`：人工编辑历史需求任务，自动同步需求项和任务标题、描述、优先级及任务价格。
 - `DELETE /api/v1/requirements/{id}/bundle`：软删除需求、需求项、任务、工作目录和资产记录，并清理关联报价映射。
 - `POST /api/v1/tasks/{id}/assign`：指派任务；`provisionWorkspace=true` 时创建资产入口并发送一条带按钮的飞书消息。
 - `GET /api/v1/tasks/dashboard/employees`：读取全局 active 员工负载、当前未完成任务、近 90 天完成任务和飞书可通知状态；权限为管理员或派发者的 `dashboard.employee_detail`。
@@ -278,7 +278,7 @@
 
 ### `POST /requirements/with-task`
 - 说明：快速创建需求、确认一个需求项，并自动生成一个待指派任务；当前录入页采用“一个需求对应一个任务”的链路
-- 关键字段：`projectId`、`customerId`、`title`、`rawContent`、`priority`、`estimatedHours`
+- 关键字段：`projectId`、`customerId`、`title`、`rawContent`、`priority`、`estimatedHours`、`priceAmount`；其中 `priceAmount` 为非负金额，最多两位小数
 - 返回：`requirement`、`item`、`task`
 - 角色口径：当前登录人写入 `task.created_by_user_id` 作为审计人；任务派发时写入 `dispatcher_user_id`，执行人写入 `assignee_user_id`。新任务不再写入 `reporter_user_id`。
 

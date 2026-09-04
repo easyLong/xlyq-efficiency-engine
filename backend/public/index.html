@@ -1749,6 +1749,9 @@
                     <option value="normal">不紧急不重要</option>
                   </select>
                 </label>
+                <label>任务价格（元）
+                  <input id="requirementPriceInput" type="number" min="0" step="0.01" placeholder="0.00" />
+                </label>
               </div>
               <label>需求标题
                 <input id="requirementTitle" />
@@ -4137,6 +4140,7 @@
         if (qs("plannedEndAtInput")) qs("plannedEndAtInput").value = "";
         if (qs("requirementPriorityInput")) qs("requirementPriorityInput").value = "";
         if (qs("requirementUrgencyInput")) qs("requirementUrgencyInput").value = "";
+        if (qs("requirementPriceInput")) qs("requirementPriceInput").value = "";
         if (qs("contactContextSelect")) qs("contactContextSelect").value = "";
         syncContactContextPreview(null);
       }
@@ -4424,6 +4428,7 @@
     function requirementMetaText(row) {
       return [
         row.contactContext ? `需求方：${safeText(row.contactContext)}` : "",
+        row.task ? `价格：${formatMoney(row.task.price_amount)}` : "",
         taskPlanDateRangeText(row.task) ? `计划：${taskPlanDateRangeText(row.task)}` : "",
         `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
       ].filter(Boolean).join(" · ");
@@ -4948,6 +4953,7 @@
       if (qs("plannedEndAtInput")) qs("plannedEndAtInput").value = sourceDeadline ? nextMonthlyDateInput(sourceDeadline) : "";
       updateRequirementPriorityFromDeadline();
       if (qs("requirementUrgencyInput")) qs("requirementUrgencyInput").value = requirement.urgency_level || "normal";
+      if (qs("requirementPriceInput")) qs("requirementPriceInput").value = Number(task?.price_amount || 0).toFixed(2);
       updateCreateRequirementButtonLabel();
       renderCopySourceNote();
       qs("manualIntakePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -5390,6 +5396,10 @@
                   ${urgencySelectOptions(requirement.urgency_level || "important_urgent")}
                 </select>
               </label>
+              <label>
+                任务价格（元）
+                <input id="edit-price-${requirement.id}" type="number" min="0" step="0.01" value="${escapeAttr(Number(row.task?.price_amount || 0).toFixed(2))}" />
+              </label>
               <label class="wide">
                 需求内容
                 <textarea id="edit-content-${requirement.id}" rows="4">${escapeHtml(requirement.raw_content || requirement.summary || "")}</textarea>
@@ -5630,6 +5640,8 @@
       const rawContent = qs(`edit-content-${requirementId}`)?.value.trim();
       const priority = qs(`edit-priority-${requirementId}`)?.value;
       const urgencyLevel = qs(`edit-urgency-${requirementId}`)?.value;
+      const priceAmountInput = qs(`edit-price-${requirementId}`)?.value.trim();
+      const priceAmount = Number(priceAmountInput);
       const businessPlatform = normalizeBusinessPlatform(qs(`edit-business-platform-${requirementId}`)?.value);
       const tertiaryCategory = qs(`edit-tertiary-category-${requirementId}`)?.value.trim();
       const customerId = qs(`edit-customer-${requirementId}`)?.value;
@@ -5637,6 +5649,7 @@
       if (!title) return toast("需求标题不能为空");
       if (!rawContent) return toast("需求内容不能为空");
       if (!customerId || !projectType) return toast("请选择基金客户和业务大类");
+      if (!priceAmountInput || !Number.isFinite(priceAmount) || priceAmount < 0) return toast("请填写有效的任务价格");
 
       state.busyActionId = requirementId;
       renderRequirementBoard();
@@ -5646,7 +5659,7 @@
 
         const result = await request(`/requirements/${requirementId}`, {
           method: "PATCH",
-          body: { title, rawContent, priority, urgencyLevel, customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, tertiaryCategory },
+          body: { title, rawContent, priority, urgencyLevel, priceAmount: priceAmount.toFixed(2), customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, tertiaryCategory },
         });
         if (result.requirement) {
           state.requirements = state.requirements.map(item => item.id === requirementId ? result.requirement : item);
@@ -7100,6 +7113,8 @@
       const plannedEndAt = qs("plannedEndAtInput").value;
       const priority = priorityValueFromDeadline(plannedEndAt);
       const urgencyLevel = qs("requirementUrgencyInput").value;
+      const priceAmountInput = qs("requirementPriceInput").value.trim();
+      const priceAmount = Number(priceAmountInput);
       const title = qs("requirementTitle").value.trim();
       const content = qs("requirementContent").value.trim();
       if (plannedStartAt && plannedEndAt && plannedStartAt > plannedEndAt) {
@@ -7109,6 +7124,7 @@
       if (!urgencyLevel) return toast("请选择任务紧急程度");
       if (!title) return toast("请填写需求标题");
       if (!content) return toast("请填写需求内容");
+      if (!priceAmountInput || !Number.isFinite(priceAmount) || priceAmount < 0) return toast("请填写有效的任务价格");
       const button = qs("createRequirementButton");
       if (button) {
         button.disabled = true;
@@ -7131,6 +7147,7 @@
             rawContent: content,
             priority,
             urgencyLevel,
+            priceAmount: priceAmount.toFixed(2),
             estimatedHours: "6",
             plannedStartAt: plannedStartAt || undefined,
             plannedEndAt: plannedEndAt || undefined,
@@ -7167,6 +7184,7 @@
         qs("requirementPriorityInput").value = "";
         qs("requirementPriorityInput").dataset.priority = "";
         qs("requirementUrgencyInput").value = "";
+        qs("requirementPriceInput").value = "";
         qs("requirementTitle").value = "";
         qs("requirementContent").value = "";
         state.selectedAiPreviewCandidateId = null;

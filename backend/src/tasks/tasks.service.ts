@@ -850,6 +850,7 @@ export class TasksService implements OnModuleInit {
       urgency_level: dto.urgencyLevel ?? null,
       assignee_user_id: null,
       estimated_hours: dto.estimatedHours ?? null,
+      price_amount: dto.priceAmount ?? '0.00',
       planned_start_at: dto.plannedStartAt
         ? new Date(dto.plannedStartAt)
         : null,
@@ -939,6 +940,7 @@ export class TasksService implements OnModuleInit {
         ? new Date(dto.plannedEndAt)
         : task.planned_end_at,
       estimated_hours: dto.estimatedHours ?? task.estimated_hours,
+      price_amount: dto.priceAmount ?? task.price_amount,
     });
     return this.tasksRepository.save(task);
   }
@@ -2427,6 +2429,11 @@ export class TasksService implements OnModuleInit {
       'tasks',
       'urgency_level',
       'urgency_level VARCHAR(32) NULL AFTER priority',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'price_amount',
+      'price_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER actual_hours',
     );
     await this.addColumnIfMissing(
       'tasks',

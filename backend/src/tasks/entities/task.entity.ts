@@ -74,6 +74,9 @@ export class TaskEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'decimal', precision: 8, scale: 2, default: 0 })
   actual_hours!: string;
 
+  @Column({ type: 'decimal', precision: 14, scale: 2, default: 0 })
+  price_amount!: string;
+
   @Column({ type: 'int', default: 0 })
   progress_percent!: number;
 

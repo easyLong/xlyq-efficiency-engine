@@ -365,6 +365,7 @@ CREATE TABLE `tasks` (
   `actual_end_at` DATETIME NULL,
   `estimated_hours` DECIMAL(8,2) NULL,
   `actual_hours` DECIMAL(8,2) NOT NULL DEFAULT 0,
+  `price_amount` DECIMAL(14,2) NOT NULL DEFAULT 0 COMMENT '任务价格',
   `progress_percent` INT NOT NULL DEFAULT 0,
   `blocked_reason` VARCHAR(255) NULL,
   `sort_order` INT NULL,

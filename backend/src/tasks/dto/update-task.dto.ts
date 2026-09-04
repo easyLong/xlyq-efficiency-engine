@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, Matches } from 'class-validator';
 
 export class UpdateTaskDto {
   @IsOptional()
@@ -28,4 +28,10 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsString()
   estimatedHours?: string;
+
+  @IsOptional()
+  @Matches(/^\d{1,12}(?:\.\d{1,2})?$/, {
+    message: 'priceAmount must be a non-negative amount with up to 2 decimals',
+  })
+  priceAmount?: string;
 }

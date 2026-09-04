@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsNotEmpty,
+  Matches,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class CreateTaskDto {
   @IsUUID()
@@ -27,6 +33,12 @@ export class CreateTaskDto {
   @IsOptional()
   @IsString()
   estimatedHours?: string;
+
+  @IsOptional()
+  @Matches(/^\d{1,12}(?:\.\d{1,2})?$/, {
+    message: 'priceAmount must be a non-negative amount with up to 2 decimals',
+  })
+  priceAmount?: string;
 
   @IsOptional()
   @IsString()
