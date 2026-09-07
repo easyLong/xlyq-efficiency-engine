@@ -67,6 +67,63 @@ export class BusinessCalendarService implements OnModuleInit {
     return remaining !== null && remaining < 0;
   }
 
+  async isOverdueBatch(
+    deadlines: Array<Date | string | null | undefined>,
+    now: Date | string = new Date(),
+  ) {
+    const fromDay = this.startOfLocalDay(now);
+    if (!fromDay || !deadlines.length) {
+      return deadlines.map(() => false);
+    }
+
+    const deadlineDays = deadlines.map((deadline) =>
+      this.startOfLocalDay(deadline),
+    );
+    const validDeadlineDays = deadlineDays.filter(
+      (day): day is Date => day !== null,
+    );
+    if (!validDeadlineDays.length) {
+      return deadlines.map(() => false);
+    }
+
+    const rangeStart = new Date(
+      Math.min(
+        fromDay.getTime(),
+        ...validDeadlineDays.map((day) => day.getTime()),
+      ),
+    );
+    const rangeEnd = new Date(
+      Math.max(
+        fromDay.getTime(),
+        ...validDeadlineDays.map((day) =>
+          this.addDays(day, 14).getTime(),
+        ),
+      ),
+    );
+    const overrides = await this.loadOverrides(rangeStart, rangeEnd);
+
+    return deadlineDays.map((deadlineDay) => {
+      if (!deadlineDay) return false;
+      const dueDay = this.effectiveDeadlineDayFromOverrides(
+        deadlineDay,
+        overrides,
+      );
+      if (!dueDay || dueDay >= fromDay) return false;
+
+      let workdayCount = 0;
+      for (
+        let cursor = this.addDays(dueDay, 1);
+        cursor <= fromDay;
+        cursor = this.addDays(cursor, 1)
+      ) {
+        if (this.isWorkdayWithOverrides(cursor, overrides)) {
+          workdayCount += 1;
+        }
+      }
+      return workdayCount > 0;
+    });
+  }
+
   async isDueWithinWorkdays(
     deadline: Date | string | null | undefined,
     workdaysAhead: number,
@@ -153,6 +210,20 @@ export class BusinessCalendarService implements OnModuleInit {
     }
     const weekday = day.getDay();
     return weekday >= 1 && weekday <= 5;
+  }
+
+  private effectiveDeadlineDayFromOverrides(
+    day: Date,
+    overrides: Map<string, boolean>,
+  ) {
+    let cursor = day;
+    for (let index = 0; index <= 14; index += 1) {
+      if (this.isWorkdayWithOverrides(cursor, overrides)) {
+        return cursor;
+      }
+      cursor = this.addDays(cursor, 1);
+    }
+    return day;
   }
 
   private addDays(day: Date, days: number) {

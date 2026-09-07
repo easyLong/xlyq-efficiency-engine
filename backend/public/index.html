@@ -2310,6 +2310,8 @@
       workflowConfigSelectedUserIds: [],
       workflowConfigSaving: false,
       businessCalendar: [],
+      businessCalendarMap: new Map(),
+      businessWorkdayCache: new Map(),
       groupFilters: {
         customerCode: "all",
         businessPlatform: "all",
@@ -2719,6 +2721,12 @@
       state.businessCategoryRelations = appData.businessCategoryRelations || [];
       state.workflowConfig = appData.workflowConfig || state.workflowConfig;
       state.businessCalendar = appData.businessCalendar || [];
+      state.businessCalendarMap = new Map(
+        state.businessCalendar
+          .map(item => [String(item.date || item.calendar_date || "").slice(0, 10), item])
+          .filter(([key]) => key),
+      );
+      state.businessWorkdayCache = new Map();
       state.users = appData.users;
       const refreshedUser = state.users.find(user => user.id === state.user?.id || user.username === state.user?.username);
       if (refreshedUser) {
@@ -3537,7 +3545,9 @@
         console.error(error);
         toast(`历史任务渲染失败：${error.message}`);
       }
-      await refreshAnalytics().catch(error => toast(`统计刷新失败：${error.message}`));
+      if (isViewActive("dashboard")) {
+        await refreshAnalytics().catch(error => toast(`统计刷新失败：${error.message}`));
+      }
       try {
         startAutoRefresh();
       } catch (error) {
@@ -4313,7 +4323,7 @@
     function businessCalendarEntry(value) {
       const key = localDateKey(value);
       if (!key) return null;
-      return (state.businessCalendar || []).find(item => String(item.date || item.calendar_date || "").slice(0, 10) === key) || null;
+      return state.businessCalendarMap?.get(key) || null;
     }
     function isBusinessWorkday(value) {
       const day = startOfLocalDay(value);
@@ -4337,16 +4347,27 @@
     }
     function businessWorkdaysUntil(deadlineValue, fromValue = new Date()) {
       const fromDay = startOfLocalDay(fromValue);
+      const deadlineKey = localDateKey(deadlineValue);
+      const fromKey = localDateKey(fromDay);
+      const cacheKey = `${deadlineKey}|${fromKey}`;
+      if (state.businessWorkdayCache?.has(cacheKey)) {
+        return state.businessWorkdayCache.get(cacheKey);
+      }
       const dueDay = effectiveBusinessDeadlineDay(deadlineValue);
       if (!fromDay || !dueDay) return null;
-      if (localDateKey(fromDay) === localDateKey(dueDay)) return 0;
+      if (fromKey === localDateKey(dueDay)) {
+        state.businessWorkdayCache?.set(cacheKey, 0);
+        return 0;
+      }
       const start = dueDay < fromDay ? dueDay : fromDay;
       const end = dueDay < fromDay ? fromDay : dueDay;
       let count = 0;
       for (let cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1); cursor <= end; cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1)) {
         if (isBusinessWorkday(cursor)) count += 1;
       }
-      return dueDay < fromDay ? -count : count;
+      const result = dueDay < fromDay ? -count : count;
+      state.businessWorkdayCache?.set(cacheKey, result);
+      return result;
     }
     function priorityValueFromDeadline(deadlineValue) {
       const diffDays = businessWorkdaysUntil(deadlineValue);
@@ -7394,12 +7415,21 @@
       qs("metrics").innerHTML = `<div class="panel metric"><span>正在刷新</span><strong>...</strong><span>同步需求进度和资产交付</span></div>`;
       try {
         const analyticsCustomers = selectedAnalyticsCustomers(customerId);
-        const board = await request(`/tasks/board?${query.toString()}`);
-        const employeeBoard = customerId === "all"
-          ? board
-          : await request(`/tasks/board?${new URLSearchParams({ liveAssetCount: "true", ...(canViewGlobalDashboard ? { scope: "global" } : {}) }).toString()}`);
+        state.businessWorkdayCache = new Map();
+        const boardPromise = request(`/tasks/board?${query.toString()}`);
+        const employeeBoardPromise = customerId === "all"
+          ? boardPromise
+          : request(`/tasks/board?${new URLSearchParams({ liveAssetCount: "true", ...(canViewGlobalDashboard ? { scope: "global" } : {}) }).toString()}`);
+        const employeeLoadPromise = can("dashboard.employee_detail")
+          ? request("/tasks/dashboard/employees")
+          : Promise.resolve(null);
+        const [board, employeeBoard, employeeLoad] = await Promise.all([
+          boardPromise,
+          employeeBoardPromise,
+          employeeLoadPromise,
+        ]);
         if (can("dashboard.employee_detail")) {
-          state.employeeLoad = await request("/tasks/dashboard/employees");
+          state.employeeLoad = employeeLoad;
           renderEmployeeLoad();
         } else {
           state.employeeLoad = null;

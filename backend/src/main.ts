@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { json, urlencoded } from 'express';
+import compression from 'compression';
 import { join } from 'node:path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
@@ -13,6 +14,7 @@ async function bootstrap() {
   const host = process.env.HOST ?? '0.0.0.0';
   app.use(json({ limit: '12mb' }));
   app.use(urlencoded({ extended: true, limit: '12mb' }));
+  app.use(compression({ threshold: 1024 }));
   app.setGlobalPrefix('api/v1');
   app.useStaticAssets(join(process.cwd(), 'public'));
   app.useGlobalPipes(

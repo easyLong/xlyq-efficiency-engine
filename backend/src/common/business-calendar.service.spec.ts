@@ -52,4 +52,26 @@ describe('BusinessCalendarService', () => {
       true,
     );
   });
+
+  it('calculates overdue flags for a batch with one calendar query', async () => {
+    const overrides = [];
+    const dataSource = {
+      query: jest.fn((_sql: string, params?: string[]) => {
+        if (!params?.length) return [];
+        const [start, end] = params;
+        return overrides.filter(
+          (row) => row.calendar_date >= start && row.calendar_date <= end,
+        );
+      }),
+    };
+    const service = new BusinessCalendarService(dataSource as never);
+
+    await expect(
+      service.isOverdueBatch(
+        ['2026-07-31', '2026-08-01', null],
+        '2026-08-03',
+      ),
+    ).resolves.toEqual([true, false, false]);
+    expect(dataSource.query).toHaveBeenCalledTimes(1);
+  });
 });

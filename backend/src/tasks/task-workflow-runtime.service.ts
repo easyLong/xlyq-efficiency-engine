@@ -741,10 +741,8 @@ export class TaskWorkflowRuntimeService {
       return new Set<string>();
     }
     if (this.businessCalendar) {
-      const flags = await Promise.all(
-        tasks.map((task) =>
-          this.businessCalendar!.isOverdue(task.planned_end_at),
-        ),
+      const flags = await this.businessCalendar.isOverdueBatch(
+        tasks.map((task) => task.planned_end_at),
       );
       return new Set(
         tasks.filter((_, index) => flags[index]).map((task) => task.id),

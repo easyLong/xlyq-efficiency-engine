@@ -18,6 +18,8 @@ import { UpdateWechatGroupConfigDto } from './dto/update-wechat-group-config.dto
 
 @Injectable()
 export class ContactContextsService implements OnModuleInit {
+  private groupContactMappingsSchemaPromise: Promise<void> | null = null;
+
   constructor(
     @InjectRepository(CustomerEntity)
     private readonly customersRepository: Repository<CustomerEntity>,
@@ -462,7 +464,19 @@ export class ContactContextsService implements OnModuleInit {
     });
   }
 
-  private async ensureGroupContactMappingsSchema() {
+  private ensureGroupContactMappingsSchema() {
+    if (!this.groupContactMappingsSchemaPromise) {
+      this.groupContactMappingsSchemaPromise = this.ensureGroupContactMappingsSchemaNow().catch(
+        (error) => {
+          this.groupContactMappingsSchemaPromise = null;
+          throw error;
+        },
+      );
+    }
+    return this.groupContactMappingsSchemaPromise;
+  }
+
+  private async ensureGroupContactMappingsSchemaNow() {
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS group_contact_mappings (
         id CHAR(36) NOT NULL,
