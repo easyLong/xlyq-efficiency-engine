@@ -1,4 +1,11 @@
-import { IsOptional, IsString, IsUUID, Matches } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+} from 'class-validator';
 
 export class UpdateRequirementDto {
   @IsOptional()
@@ -62,4 +69,10 @@ export class UpdateRequirementDto {
   @IsOptional()
   @IsString()
   tertiaryCategory?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  tertiaryCategoryCodes?: string[];
 }

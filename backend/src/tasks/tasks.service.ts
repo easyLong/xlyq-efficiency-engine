@@ -851,6 +851,7 @@ export class TasksService implements OnModuleInit {
       assignee_user_id: null,
       estimated_hours: dto.estimatedHours ?? null,
       price_amount: dto.priceAmount ?? '0.00',
+      contribution_points: dto.contributionPoints ?? '0.00',
       planned_start_at: dto.plannedStartAt
         ? new Date(dto.plannedStartAt)
         : null,
@@ -915,6 +916,7 @@ export class TasksService implements OnModuleInit {
         priority: item.priority ?? undefined,
         urgencyLevel: item.urgency_level ?? undefined,
         estimatedHours: item.estimated_hours ?? undefined,
+        contributionPoints: item.contribution_points ?? undefined,
       },
       createdByUserId,
     );
@@ -941,6 +943,7 @@ export class TasksService implements OnModuleInit {
         : task.planned_end_at,
       estimated_hours: dto.estimatedHours ?? task.estimated_hours,
       price_amount: dto.priceAmount ?? task.price_amount,
+      contribution_points: dto.contributionPoints ?? task.contribution_points,
     });
     return this.tasksRepository.save(task);
   }
@@ -2434,6 +2437,11 @@ export class TasksService implements OnModuleInit {
       'tasks',
       'price_amount',
       'price_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER actual_hours',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'contribution_points',
+      'contribution_points DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER price_amount',
     );
     await this.addColumnIfMissing(
       'tasks',

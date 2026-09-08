@@ -33,6 +33,7 @@ const dispatcherPermissions = [
   'dashboard.view_global',
   'dashboard.employee_detail',
   'page.messages',
+  'page.group_management',
   'requirement.view_owned',
   'requirement.create',
   'requirement.edit_owned',

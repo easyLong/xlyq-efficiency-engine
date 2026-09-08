@@ -38,4 +38,7 @@ export class RequirementItemEntity extends BaseSoftDeleteEntity {
 
   @Column({ type: 'decimal', precision: 8, scale: 2, nullable: true })
   estimated_hours!: string | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  contribution_points!: string;
 }

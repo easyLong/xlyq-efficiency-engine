@@ -2,9 +2,8 @@ import { DataSource } from 'typeorm';
 
 export const WORKFLOW_REVIEW_TYPES = [
   'design',
-  'copywriting',
   'operation',
-  'community',
+  'content',
 ] as const;
 
 export type WorkflowReviewType = (typeof WORKFLOW_REVIEW_TYPES)[number];
@@ -73,11 +72,7 @@ async function upgradeCustomerWorkflowMembers(dataSource: DataSource) {
   }
 
   if (
-    !(await columnExists(
-      dataSource,
-      'customer_workflow_members',
-      'deleted_at',
-    ))
+    !(await columnExists(dataSource, 'customer_workflow_members', 'deleted_at'))
   ) {
     await dataSource.query(`
       ALTER TABLE customer_workflow_members

@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
 import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
 import { CustomerEntity } from '../customers/entities/customer.entity';
+import { DimensionsModule } from '../dimensions/dimensions.module';
 import { ProjectEntity } from '../projects/entities/project.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { QuotationItemEntity } from '../quotations/entities/quotation-item.entity';
@@ -24,6 +25,7 @@ import { RequirementsService } from './requirements.service';
 @Module({
   imports: [
     NotificationsModule,
+    DimensionsModule,
     WorkflowConfigsModule,
     TypeOrmModule.forFeature([
       RequirementEntity,

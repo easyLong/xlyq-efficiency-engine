@@ -140,6 +140,70 @@
     }
     .requirements-compose .copy-source-note.active { display: block; }
     .requirements-compose .btns { margin-top: 2px; }
+    .tertiary-picker {
+      position: relative;
+      width: 100%;
+      border: 1px solid #d8dfcf;
+      border-radius: 10px;
+      background: #fbfcf8;
+      z-index: 2;
+    }
+    .tertiary-picker summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 40px;
+      padding: 9px 10px;
+      color: #2d3b2f;
+      cursor: pointer;
+      list-style: none;
+    }
+    .tertiary-picker summary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tertiary-picker summary::-webkit-details-marker { display: none; }
+    .tertiary-picker summary::after { content: "⌄"; color: #6a7567; font-size: 15px; }
+    .tertiary-picker[open] summary::after { content: "⌃"; }
+    .tertiary-picker-options {
+      display: grid;
+      gap: 2px;
+      width: min(560px, calc(100vw - 48px));
+      max-height: 220px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 1px 4px 4px;
+      border-top: 1px solid #e6ece1;
+    }
+    .tertiary-picker[open] { z-index: 30; }
+    .tertiary-picker[open] .tertiary-picker-options {
+      position: absolute;
+      top: calc(100% - 1px);
+      left: -1px;
+      border: 1px solid #d8dfcf;
+      border-top: 0;
+      border-radius: 0 0 10px 10px;
+      background: #fff;
+      box-shadow: 0 12px 26px rgba(35, 54, 39, .14);
+    }
+    .tertiary-picker-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      padding: 3px 5px;
+      width: 100%;
+      min-width: 0;
+      border-radius: 8px;
+      color: #263426;
+      cursor: pointer;
+      line-height: 1.2;
+    }
+    .tertiary-picker-option:hover { background: #eef5eb; }
+    .tertiary-picker-option input[type="checkbox"] { width: 15px; height: 15px; margin: 0; flex: 0 0 15px; accent-color: #356d45; }
+    .tertiary-picker-option-body { flex: 1; min-width: 0; overflow: hidden; }
+    .tertiary-picker-option-name { display: block; overflow: hidden; text-overflow: clip; white-space: nowrap; font-size: 13px; }
+    .tertiary-picker-store { display: none !important; }
+    .edit-panel .tertiary-picker { background: #fff; }
+    .classification-field { display: grid; gap: 7px; color: #687366; font-size: 13px; margin-bottom: 10px; }
     #view-requirements .intake-tabs {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -815,7 +879,7 @@
     }
     .dashboard-filter-bar {
       display: grid;
-      grid-template-columns: repeat(4, minmax(132px, 1fr)) repeat(2, minmax(120px, 150px)) auto;
+      grid-template-columns: repeat(4, minmax(112px, 1fr)) minmax(260px, 2fr) repeat(2, minmax(120px, 150px));
       gap: 8px;
       align-items: end;
     }
@@ -844,8 +908,38 @@
       border-radius: 10px;
       white-space: nowrap;
     }
+    .dashboard-filter-bar .date-preset-field {
+      grid-column: auto;
+      min-width: 0;
+      margin: 0;
+      color: #687366;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .date-preset-field .filter-label { display: block; }
+    .date-preset-buttons {
+      display: flex;
+      gap: 4px;
+      margin-top: 4px;
+      min-width: 0;
+    }
+    .date-preset-buttons .btn {
+      min-height: 34px;
+      flex: 1 1 auto;
+      padding: 7px 9px;
+      border-radius: 10px;
+      color: #536052;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .date-preset-buttons .btn.active {
+      background: #e5f0e4;
+      border-color: #8db294;
+      color: #2f6b45;
+      box-shadow: inset 0 0 0 1px rgba(47, 107, 69, .12);
+    }
     .dashboard-filter-bar.settlement-filter-bar {
-      grid-template-columns: repeat(6, minmax(112px, 1fr)) minmax(170px, auto);
+      grid-template-columns: repeat(4, minmax(112px, 1fr)) minmax(260px, 2fr) repeat(2, minmax(120px, 150px)) minmax(150px, 170px);
     }
     .settlement-filter-bar #settlementDimensionFilters { display: contents; }
     .settlement-actions {
@@ -1606,6 +1700,7 @@
       .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .quote-action.with-contract, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
       .dashboard-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .dashboard-filter-bar.settlement-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dashboard-filter-bar .date-preset-field { grid-column: span 2; }
       .dimension-summary-card { grid-template-columns: 1fr; }
       .edit-panel { grid-template-columns: 1fr; }
       .quotation-import-actions { flex-wrap: wrap; }
@@ -1623,6 +1718,7 @@
     @media (max-width: 620px) {
       .dashboard-filter-bar { grid-template-columns: 1fr; }
       .dashboard-filter-bar.settlement-filter-bar { grid-template-columns: 1fr; }
+      .dashboard-filter-bar .date-preset-field { grid-column: span 1; }
       .login { padding: 16px; }
       .login-card { border-radius: 18px; }
       .login-form { padding: 28px 22px 24px; }
@@ -1726,11 +1822,16 @@
                   <select id="projectTypeSelect" onchange="syncProjectSelection(false)"></select>
                 </label>
                 <label>二级分类
-                  <select id="secondaryCategoryInput"></select>
+                  <select id="secondaryCategoryInput" onchange="renderTertiaryCategorySelect()"></select>
                 </label>
-                <label>三级分类
-                  <input id="tertiaryCategoryInput" placeholder="可由需求方带出，也可人工修改" />
-                </label>
+                <div class="classification-field">三级分类
+                  <details id="tertiaryCategoryPicker" class="tertiary-picker">
+                    <summary><span data-tertiary-picker-label="tertiaryCategoryInput">请选择三级分类</span></summary>
+                    <div id="tertiaryCategoryPickerOptions" class="tertiary-picker-options"></div>
+                  </details>
+                  <select id="tertiaryCategoryInput" class="tertiary-picker-store" multiple tabindex="-1" aria-hidden="true"></select>
+                  <span id="classificationMetricSummary" class="muted">请选择三级分类</span>
+                </div>
                 <label>开始时间
                   <input id="plannedStartAtInput" type="date" />
                 </label>
@@ -1943,7 +2044,7 @@
             <div>
               <div class="kicker">Settlement</div>
               <h3>结算统计</h3>
-              <p>基于“已确认报价子项 + 任务资产数量”统计结算金额和资产数量，支持按基金、平台和业务分类查看。</p>
+            <p>基于任务上的分类、任务价格和交付资产统计结算金额，支持按基金、平台和三级分类查看。</p>
             </div>
             <span class="tag">金额 / 资产 / 维度图表</span>
           </div>
@@ -1952,6 +2053,15 @@
               <select id="settlementCustomerSelect" onchange="setSettlementPrimaryCustomer(this.value)"></select>
             </label>
             <div id="settlementDimensionFilters"></div>
+            <div class="date-preset-field">
+              <span class="filter-label">时间范围</span>
+              <div class="date-preset-buttons">
+                <button type="button" class="btn" data-settlement-date-preset="recent3months" onclick="setSettlementDatePreset('recent3months')">最近三个月</button>
+                <button type="button" class="btn" data-settlement-date-preset="currentMonth" onclick="setSettlementDatePreset('currentMonth')">本月</button>
+                <button type="button" class="btn" data-settlement-date-preset="previousMonth" onclick="setSettlementDatePreset('previousMonth')">上个月</button>
+                <button type="button" class="btn" data-settlement-date-preset="all" onclick="clearSettlementDetailFilters()">不限</button>
+              </div>
+            </div>
             <label>开始时间
               <input type="date" id="settlementStartDateInput" onchange="setSettlementDetailFilter('startDate', this.value)" />
             </label>
@@ -1961,7 +2071,6 @@
             <label class="filter-action settlement-actions">
               <span>操作</span>
               <button class="btn primary" onclick="loadSettlementStatement()">刷新统计</button>
-              <button class="btn" onclick="clearSettlementDetailFilters()">清空时间</button>
             </label>
           </div>
         </div>
@@ -2211,6 +2320,25 @@
             </div>
           </div>
         </div>
+        <div class="panel">
+          <div class="section-title">
+            <div>
+              <div class="kicker">Classification Standard</div>
+              <h3>三级分类工时与积分</h3>
+              <p>三级分类可在需求中多选；任务预估工时和积分取所选项目之和。</p>
+            </div>
+            <button class="btn" onclick="reloadCategoryTree()">刷新</button>
+          </div>
+          <div class="form-grid">
+            <label>业务大类<select id="classificationCategoryInput" onchange="renderClassificationSecondaryOptions()"></select></label>
+            <label>二级分类<select id="classificationSecondaryInput"></select></label>
+            <label>三级分类名称<input id="classificationNameInput" placeholder="例如：原创长图文案" /></label>
+            <label>预估工时<input id="classificationHoursInput" type="number" min="0" step="0.25" value="6" /></label>
+            <label>积分<input id="classificationPointsInput" type="number" min="0" step="0.01" value="0" /></label>
+          </div>
+          <div class="btns"><button class="btn primary" onclick="createTertiaryCategory()">新增三级分类</button></div>
+          <div id="classificationConfigBoard" class="table-wrap"></div>
+        </div>
       </section>
 
       <section id="view-messages" class="grid hidden">
@@ -2320,6 +2448,7 @@
       },
       businessPlatformDimensions: [],
       businessCategoryRelations: [],
+      categoryTree: [],
       requirements: [],
       requirementItems: [],
       copiedRequirementSource: null,
@@ -2338,7 +2467,6 @@
       mappingQuarter: null,
       mappingQuotationId: null,
       settlementCustomerId: "all",
-      settlementQuarter: null,
       settlementStatement: null,
       settlementDetailFilters: {
         startDate: "",
@@ -2719,6 +2847,7 @@
       state.businessPlatformDimensions = appData.businessPlatformDimensions || [];
       applyBusinessPlatformDimensions(state.businessPlatformDimensions);
       state.businessCategoryRelations = appData.businessCategoryRelations || [];
+      state.categoryTree = appData.categoryTree || [];
       state.workflowConfig = appData.workflowConfig || state.workflowConfig;
       state.businessCalendar = appData.businessCalendar || [];
       state.businessCalendarMap = new Map(
@@ -2765,7 +2894,6 @@
       qs("settlementCustomerSelect").innerHTML = [`<option value="all">全部基金客户</option>`, ...fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`)].join("");
       state.mappingCustomerId ||= fundScopedCustomers[0]?.customer_code || null;
       state.mappingQuarter ||= currentQuarter();
-      state.settlementQuarter ||= currentQuarter();
       if (state.mappingCustomerId) qs("mappingCustomerSelect").value = state.mappingCustomerId;
       qs("mappingQuarterSelect").value = state.mappingQuarter;
       qs("settlementCustomerSelect").value = state.settlementCustomerId;
@@ -2785,6 +2913,7 @@
       renderAiPreviewBoard();
       renderRequirementBoard();
       if (state.workflowConfig) renderWorkflowConfiguration();
+      renderClassificationConfig();
       if (can("quote.view_all")) {
         renderQuotationsBoard();
         renderQuotationMetrics([]);
@@ -3846,13 +3975,14 @@
     function requirementDimensionSnapshot(requirement, task = null) {
       const context = contactContextForRequirement(requirement);
       const project = projectForRequirement(requirement);
+      const classification = settlementClassification(task, requirement, project);
       return {
         customerId: requirement?.customer_code || project?.customer_code || "",
         contactContextId: requirement?.source_ref_id || "",
         businessPlatform: requirement?.business_platform || context?.business_platform || "",
-        businessCategory: requirement?.business_category || project?.project_type || "",
-        secondaryCategory: requirement?.secondary_category || "",
-        tertiaryCategory: requirement?.tertiary_category || "",
+        businessCategory: classification.businessCategoryCode,
+        secondaryCategory: classification.secondaryCategory === "未分类" ? "" : classification.secondaryCategory,
+        tertiaryCategory: classification.tertiaryCategory === "未分类" ? "" : classification.tertiaryCategory,
         assigneeUserId: task?.assignee_user_id || "",
       };
     }
@@ -3949,6 +4079,15 @@
         </label>
       `;
     }
+    function settlementDimensionOptions(key) {
+      if (key === "businessCategory") {
+        return (state.categoryTree || []).map(category => ({ value: category.code, label: category.name }));
+      }
+      if (key === "secondaryCategory") {
+        return (state.categoryTree || []).flatMap(category => (category.secondaries || []).map(secondary => ({ value: secondary.name, label: `${category.name} / ${secondary.name}` })));
+      }
+      return dimensionOptions(key, false);
+    }
     function renderDimensionFilters(containerId, onChangeHandler, includeCustomer = true, linked = false) {
       const box = qs(containerId);
       if (!box) return;
@@ -3959,21 +4098,38 @@
         ["二级分类", "secondaryCategory", "全部二级分类"],
         ...(["analyticsDimensionFilters", "settlementDimensionFilters"].includes(containerId) ? [] : [["员工", "assigneeUserId", "全部员工"]]),
       ];
-      const dimensionHtml = specs.map(([label, key, allLabel]) => dimensionSelect(label, key, allLabel, onChangeHandler, linked)).join("");
+      const dimensionHtml = specs.map(([label, key, allLabel]) => {
+        const options = containerId === "settlementDimensionFilters" ? settlementDimensionOptions(key) : null;
+        if (!options) return dimensionSelect(label, key, allLabel, onChangeHandler, linked);
+        const selected = state.dimensionFilters[key] || "all";
+        return `<label>${label}
+          <select class="filter-select" onchange="${onChangeHandler}('${key}', this.value)">
+            <option value="all" ${selected === "all" ? "selected" : ""}>${allLabel}</option>
+            ${options.map(option => `<option value="${escapeAttr(option.value)}" ${selected === option.value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
+          </select>
+        </label>`;
+      }).join("");
       const dateHtml = containerId === "analyticsDimensionFilters" ? dashboardDateFilterControls() : "";
       box.innerHTML = `${dimensionHtml}${dateHtml}`;
     }
     function dashboardDateFilterControls() {
       const filters = state.dashboardDateFilters || { startDate: "", endDate: "" };
+      const active = activeDatePreset(filters);
       return `
+        <div class="date-preset-field">
+          <span class="filter-label">时间范围</span>
+          <div class="date-preset-buttons">
+            ${datePresetButton("最近三个月", "recent3months", active, "setDashboardDatePreset")}
+            ${datePresetButton("本月", "currentMonth", active, "setDashboardDatePreset")}
+            ${datePresetButton("上个月", "previousMonth", active, "setDashboardDatePreset")}
+            ${datePresetButton("不限", "all", active, "clearDashboardDateFilters")}
+          </div>
+        </div>
         <label>开始时间
           <input type="date" value="${escapeAttr(filters.startDate || "")}" onchange="setDashboardDateFilter('startDate', this.value)" />
         </label>
         <label>结束时间
           <input type="date" value="${escapeAttr(filters.endDate || "")}" onchange="setDashboardDateFilter('endDate', this.value)" />
-        </label>
-        <label class="filter-action">
-          <button class="btn" onclick="clearDashboardDateFilters()">清空时间</button>
         </label>
       `;
     }
@@ -4028,6 +4184,10 @@
     function setDashboardDateFilter(key, value) {
       state.dashboardDateFilters = state.dashboardDateFilters || { startDate: "", endDate: "" };
       state.dashboardDateFilters[key] = value || "";
+      refreshAnalytics();
+    }
+    function setDashboardDatePreset(preset) {
+      state.dashboardDateFilters = datePresetRange(preset);
       refreshAnalytics();
     }
     function clearDashboardDateFilters() {
@@ -4320,6 +4480,34 @@
         String(date.getDate()).padStart(2, "0"),
       ].join("-");
     }
+    function datePresetRange(preset, value = new Date()) {
+      const today = startOfLocalDay(value);
+      if (!today) return { startDate: "", endDate: "" };
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      if (preset === "recent3months") {
+        return { startDate: localDateKey(new Date(year, month - 2, 1)), endDate: localDateKey(today) };
+      }
+      if (preset === "currentMonth") {
+        return { startDate: localDateKey(new Date(year, month, 1)), endDate: localDateKey(today) };
+      }
+      if (preset === "previousMonth") {
+        return { startDate: localDateKey(new Date(year, month - 1, 1)), endDate: localDateKey(new Date(year, month, 0)) };
+      }
+      return { startDate: "", endDate: "" };
+    }
+    function activeDatePreset(filters) {
+      const current = filters || {};
+      if (!current.startDate && !current.endDate) return "all";
+      for (const preset of ["recent3months", "currentMonth", "previousMonth"]) {
+        const range = datePresetRange(preset);
+        if (range.startDate === (current.startDate || "") && range.endDate === (current.endDate || "")) return preset;
+      }
+      return "";
+    }
+    function datePresetButton(label, preset, active, handler) {
+      return `<button type="button" class="btn${active === preset ? " active" : ""}" onclick="${handler}('${preset}')">${label}</button>`;
+    }
     function businessCalendarEntry(value) {
       const key = localDateKey(value);
       if (!key) return null;
@@ -4449,6 +4637,8 @@
     function requirementMetaText(row) {
       return [
         row.contactContext ? `需求方：${safeText(row.contactContext)}` : "",
+        row.requirement.tertiary_category ? `三级分类：${safeText(row.requirement.tertiary_category)}` : "",
+        row.task ? `预估：${Number(row.task.estimated_hours || 0).toFixed(2)}小时 / ${Number(row.task.contribution_points || 0).toFixed(2)}积分` : "",
         row.task ? `价格：${formatMoney(row.task.price_amount)}` : "",
         taskPlanDateRangeText(row.task) ? `计划：${taskPlanDateRangeText(row.task)}` : "",
         `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
@@ -4921,7 +5111,12 @@
       if (qs("businessPlatformInput")) qs("businessPlatformInput").value = businessPlatform;
       renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", candidate.secondary_category || "");
       if (qs("secondaryCategoryInput")) qs("secondaryCategoryInput").value = candidate.secondary_category || "";
-      if (qs("tertiaryCategoryInput")) qs("tertiaryCategoryInput").value = candidate.tertiary_category || "";
+      renderTertiaryCategorySelect(
+        qs("projectTypeSelect")?.value || "",
+        candidate.secondary_category || "",
+        [],
+        String(candidate.tertiary_category || "").split(/[、,，]/).map(item => item.trim()).filter(Boolean),
+      );
       if (qs("plannedStartAtInput")) qs("plannedStartAtInput").value = dateInputValue(candidate.start_time);
       if (qs("plannedEndAtInput")) qs("plannedEndAtInput").value = dateInputValue(candidate.deadline);
       updateRequirementPriorityFromDeadline();
@@ -4966,7 +5161,12 @@
       const businessPlatform = normalizeBusinessPlatform(requirement.business_platform || context?.business_platform || "");
       if (qs("businessPlatformInput")) qs("businessPlatformInput").value = businessPlatform;
       renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", requirement.secondary_category || "");
-      if (qs("tertiaryCategoryInput")) qs("tertiaryCategoryInput").value = requirement.tertiary_category || "";
+      renderTertiaryCategorySelect(
+        qs("projectTypeSelect")?.value || "",
+        requirement.secondary_category || "",
+        parseTertiaryCategoryCodes(requirement),
+        String(requirement.tertiary_category || "").split(/[、,，]/).map(item => item.trim()).filter(Boolean),
+      );
       if (qs("requirementTitle")) qs("requirementTitle").value = requirement.title || row.item?.item_title || task?.task_name || "";
       if (qs("requirementContent")) qs("requirementContent").value = requirement.raw_content || requirement.summary || row.item?.item_description || "";
       if (qs("plannedStartAtInput")) qs("plannedStartAtInput").value = todayInputValue();
@@ -5384,7 +5584,7 @@
               </label>
               <label>
                 业务大类
-                <select id="edit-project-type-${requirement.id}" onchange="renderEditProjectHint('${requirement.id}')">
+                <select id="edit-project-type-${requirement.id}" onchange="renderEditProjectHint('${requirement.id}'); renderEditClassification('${requirement.id}')">
                   ${editProjectTypeOptions(project?.project_type)}
                 </select>
               </label>
@@ -5398,9 +5598,35 @@
                 </select>
               </label>
               <label>
-                三级分类
-                <input id="edit-tertiary-category-${requirement.id}" value="${escapeAttr(requirement.tertiary_category || "")}" />
+                二级分类
+                <select id="edit-secondary-category-${requirement.id}" onchange="renderEditTertiaryCategories('${requirement.id}')">
+                  ${secondaryCategoryOptions(project?.project_type || requirement.business_category || "", requirement.secondary_category || "")}
+                </select>
               </label>
+              <div class="classification-field">
+                三级分类（可多选）
+                <details id="edit-tertiary-picker-${requirement.id}" class="tertiary-picker">
+                  <summary><span data-tertiary-picker-label="edit-tertiary-category-${requirement.id}">${tertiaryPickerLabelText(String(requirement.tertiary_category || "").split(/[、,，]/).map(item => item.trim()).filter(Boolean))}</span></summary>
+                  <div id="edit-tertiary-options-${requirement.id}" class="tertiary-picker-options">
+                    ${tertiaryCategoryPickerOptionsHtml(
+                      project?.project_type || requirement.business_category || "",
+                      requirement.secondary_category || "",
+                      parseTertiaryCategoryCodes(requirement),
+                      String(requirement.tertiary_category || "").split(/[、,，]/).map(item => item.trim()).filter(Boolean),
+                      `edit-tertiary-category-${requirement.id}`,
+                    )}
+                  </div>
+                </details>
+                <select id="edit-tertiary-category-${requirement.id}" class="tertiary-picker-store" multiple tabindex="-1" aria-hidden="true" data-category="${escapeAttr(project?.project_type || requirement.business_category || "")}" data-secondary="${escapeAttr(requirement.secondary_category || "")}">
+                  ${tertiaryCategoryOptionsHtml(
+                    project?.project_type || requirement.business_category || "",
+                    requirement.secondary_category || "",
+                    parseTertiaryCategoryCodes(requirement),
+                    String(requirement.tertiary_category || "").split(/[、,，]/).map(item => item.trim()).filter(Boolean),
+                  )}
+                </select>
+                <span id="edit-classification-summary-${requirement.id}" class="muted">选择后自动汇总工时与积分</span>
+              </div>
               <label>
                 需求标题
                 <input id="edit-title-${requirement.id}" value="${escapeAttr(requirement.title || "")}" />
@@ -5453,6 +5679,25 @@
       const projectType = qs(`edit-project-type-${requirementId}`)?.value;
       const hint = qs(`edit-project-hint-${requirementId}`);
       if (hint) hint.textContent = editProjectHint(customerId, projectType);
+    }
+    function renderEditClassification(requirementId) {
+      const category = qs(`edit-project-type-${requirementId}`)?.value || "";
+      const secondary = qs(`edit-secondary-category-${requirementId}`);
+      if (!secondary) return;
+      secondary.innerHTML = secondaryCategoryOptions(category, "");
+      renderEditTertiaryCategories(requirementId);
+    }
+    function renderEditTertiaryCategories(requirementId) {
+      const category = qs(`edit-project-type-${requirementId}`)?.value || "";
+      const secondary = qs(`edit-secondary-category-${requirementId}`)?.value || "";
+      const select = qs(`edit-tertiary-category-${requirementId}`);
+      if (!select) return;
+      renderTertiaryPicker(`edit-tertiary-category-${requirementId}`, `edit-tertiary-options-${requirementId}`, category, secondary);
+      updateEditClassificationSummary(requirementId);
+    }
+    function updateEditClassificationSummary(requirementId) {
+      const select = qs(`edit-tertiary-category-${requirementId}`);
+      updateClassificationSummary(select, qs(`edit-classification-summary-${requirementId}`));
     }
     function normalizedBusinessCategoryCode(value) {
       const normalized = String(value || "").trim();
@@ -5664,12 +5909,15 @@
       const priceAmountInput = qs(`edit-price-${requirementId}`)?.value.trim();
       const priceAmount = Number(priceAmountInput);
       const businessPlatform = normalizeBusinessPlatform(qs(`edit-business-platform-${requirementId}`)?.value);
-      const tertiaryCategory = qs(`edit-tertiary-category-${requirementId}`)?.value.trim();
+      const secondaryCategory = qs(`edit-secondary-category-${requirementId}`)?.value || "";
+      const tertiaryCategoryCodes = selectedTertiaryCategoryCodes(qs(`edit-tertiary-category-${requirementId}`));
       const customerId = qs(`edit-customer-${requirementId}`)?.value;
       const projectType = qs(`edit-project-type-${requirementId}`)?.value;
       if (!title) return toast("需求标题不能为空");
       if (!rawContent) return toast("需求内容不能为空");
       if (!customerId || !projectType) return toast("请选择基金客户和业务大类");
+      if (!secondaryCategory) return toast("请选择二级分类");
+      if (!tertiaryCategoryCodes.length) return toast("请选择至少一个三级分类");
       if (!priceAmountInput || !Number.isFinite(priceAmount) || priceAmount < 0) return toast("请填写有效的任务价格");
 
       state.busyActionId = requirementId;
@@ -5680,7 +5928,7 @@
 
         const result = await request(`/requirements/${requirementId}`, {
           method: "PATCH",
-          body: { title, rawContent, priority, urgencyLevel, priceAmount: priceAmount.toFixed(2), customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, tertiaryCategory },
+          body: { title, rawContent, priority, urgencyLevel, priceAmount: priceAmount.toFixed(2), customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, businessCategory: projectType, secondaryCategory, tertiaryCategoryCodes },
         });
         if (result.requirement) {
           state.requirements = state.requirements.map(item => item.id === requirementId ? result.requirement : item);
@@ -6547,21 +6795,212 @@
     function normalizeBusinessPlatform(value) {
       return businessPlatforms.includes(value) ? value : "";
     }
-    function secondaryCategoryOptions(categoryValue = "", selectedValue = "") {
+    function secondaryCategoryOptions(categoryValue = "", selectedValue = "", emptyLabel = "全部二级分类") {
       const def = businessCategoryDefinitions().find(item => item.value === categoryValue);
-      const values = [...(def?.secondaries || [])];
+      const tree = categoryTreeNode(categoryValue);
+      const values = tree
+        ? tree.secondaries.map(item => item.name)
+        : [...(def?.secondaries || [])];
       if (selectedValue && !values.includes(selectedValue)) values.unshift(selectedValue);
       return [
-        `<option value="">全部二级分类</option>`,
+        `<option value="">${escapeHtml(emptyLabel)}</option>`,
         ...values.map(value => `<option value="${escapeAttr(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHtml(value)}</option>`),
       ].join("");
     }
     function renderSecondaryCategorySelect(categoryValue = "", selectedValue = "") {
       const select = qs("secondaryCategoryInput");
       if (!select) return;
-      select.innerHTML = secondaryCategoryOptions(categoryValue, selectedValue);
+      select.innerHTML = secondaryCategoryOptions(categoryValue, selectedValue, "请选择二级分类");
       select.dataset.category = categoryValue;
       if (selectedValue) select.value = selectedValue;
+      renderTertiaryCategorySelect(categoryValue, select.value || "");
+    }
+    function categoryTreeNode(categoryValue = "") {
+      return (state.categoryTree || []).find(item => item.code === categoryValue || item.name === categoryValue);
+    }
+    function renderClassificationConfig() {
+      const categorySelect = qs("classificationCategoryInput");
+      const board = qs("classificationConfigBoard");
+      if (!categorySelect || !board) return;
+      const categories = state.categoryTree || [];
+      const selectedCategory = categorySelect.value || categories[0]?.code || "";
+      categorySelect.innerHTML = categories.map(item => `<option value="${escapeAttr(item.code)}" ${item.code === selectedCategory ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
+      renderClassificationSecondaryOptions();
+      const rows = categories.flatMap(category => (category.secondaries || []).flatMap(secondary =>
+        (secondary.tertiaries || []).map(tertiary => ({ category, secondary, tertiary }))
+      ));
+      board.innerHTML = rows.length ? `
+        <table><thead><tr><th>业务大类</th><th>二级分类</th><th>三级分类</th><th>产品类型</th><th>预估工时</th><th>积分</th><th>操作</th></tr></thead>
+        <tbody>${rows.map(({ category, secondary, tertiary }) => `
+          <tr>
+            <td>${escapeHtml(category.name)}</td><td>${escapeHtml(secondary.name)}</td>
+            <td><input id="classification-name-${tertiary.code}" value="${escapeAttr(tertiary.name)}" /></td>
+            <td>${escapeHtml(tertiary.productType || "未设置")}</td>
+            <td><input id="classification-hours-${tertiary.code}" type="number" min="0" step="0.25" value="${escapeAttr(tertiary.estimatedHours || "0.00")}" /></td>
+            <td><input id="classification-points-${tertiary.code}" type="number" min="0" step="0.01" value="${escapeAttr(tertiary.contributionPoints || "0.00")}" /></td>
+            <td><button class="btn" onclick="saveTertiaryCategory('${escapeAttr(tertiary.code)}')">保存</button></td>
+          </tr>`).join("")}</tbody></table>
+      ` : `<div class="empty-list">暂无三级分类，请先新增。</div>`;
+    }
+    function renderClassificationSecondaryOptions() {
+      const categoryCode = qs("classificationCategoryInput")?.value || "";
+      const select = qs("classificationSecondaryInput");
+      if (!select) return;
+      const rows = categoryTreeNode(categoryCode)?.secondaries || [];
+      select.innerHTML = rows.map(item => `<option value="${escapeAttr(item.code)}">${escapeHtml(item.name)}</option>`).join("");
+    }
+    async function reloadCategoryTree(showToast = true) {
+      try {
+        state.categoryTree = unwrap(await request("/dimensions/category-tree"));
+        renderClassificationConfig();
+        renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", qs("secondaryCategoryInput")?.value || "");
+        if (showToast) toast("分类标准已刷新");
+      } catch (error) {
+        toast(error.message || "分类标准刷新失败");
+      }
+    }
+    function metricInputValue(id, label) {
+      const raw = qs(id)?.value.trim() || "";
+      const value = Number(raw);
+      if (!raw || !Number.isFinite(value) || value < 0) throw new Error(`请填写有效的${label}`);
+      return value.toFixed(2);
+    }
+    async function createTertiaryCategory() {
+      const parentCode = qs("classificationSecondaryInput")?.value || "";
+      const name = qs("classificationNameInput")?.value.trim() || "";
+      if (!parentCode || !name) return toast("请选择二级分类并填写三级分类名称");
+      try {
+        await request("/dimensions", {
+          method: "POST",
+          body: {
+            dimensionType: "tertiary_category",
+            dimensionCode: `${parentCode}_item_${Date.now().toString(36)}`,
+            dimensionName: name,
+            parentCode,
+            status: "active",
+            estimatedHours: metricInputValue("classificationHoursInput", "预估工时"),
+            contributionPoints: metricInputValue("classificationPointsInput", "积分"),
+          },
+        });
+        qs("classificationNameInput").value = "";
+        await reloadCategoryTree(false);
+        toast("三级分类已新增");
+      } catch (error) {
+        toast(error.message || "新增失败");
+      }
+    }
+    async function saveTertiaryCategory(code) {
+      const row = (state.categoryTree || []).flatMap(category => category.secondaries || []).flatMap(secondary => secondary.tertiaries || []).find(item => item.code === code);
+      if (!row) return toast("未找到三级分类");
+      const name = qs(`classification-name-${code}`)?.value.trim() || "";
+      if (!name) return toast("三级分类名称不能为空");
+      try {
+        const dimensions = unwrap(await request(`/dimensions?type=tertiary_category&status=active`));
+        const entity = dimensions.find(item => (item.dimension_code || item.dimensionCode) === code);
+        if (!entity?.id) return toast("未找到三级分类配置记录");
+        await request(`/dimensions/${entity.id}`, {
+          method: "PATCH",
+          body: {
+            dimensionName: name,
+            estimatedHours: metricInputValue(`classification-hours-${code}`, "预估工时"),
+            contributionPoints: metricInputValue(`classification-points-${code}`, "积分"),
+          },
+        });
+        await reloadCategoryTree(false);
+        toast("分类工时与积分已保存");
+      } catch (error) {
+        toast(error.message || "保存失败");
+      }
+    }
+    function tertiaryCategoryItems(categoryValue = "", secondaryValue = "") {
+      const category = categoryTreeNode(categoryValue);
+      const secondary = (category?.secondaries || []).find(item => item.code === secondaryValue || item.name === secondaryValue);
+      return secondary?.tertiaries || [];
+    }
+    function parseTertiaryCategoryCodes(requirement) {
+      try {
+        const parsed = JSON.parse(requirement?.tertiary_category_codes_json || "[]");
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch (_) {
+        return [];
+      }
+    }
+    function selectedTertiaryCategoryCodes(select = qs("tertiaryCategoryInput")) {
+      return [...(select?.selectedOptions || [])].map(option => option.value).filter(Boolean);
+    }
+    function tertiaryPickerLabelText(selectedNames = []) {
+      const names = [...new Set(selectedNames.map(item => String(item).trim()).filter(Boolean))];
+      return !names.length ? "请选择三级分类" : names.length <= 2 ? names.join("、") : `已选 ${names.length} 项三级分类`;
+    }
+    function tertiaryCategoryPickerOptionsHtml(categoryValue, secondaryValue, selectedCodes = [], selectedNames = [], storeId = "tertiaryCategoryInput") {
+      const selected = new Set(selectedCodes);
+      const names = new Set(selectedNames);
+      const items = tertiaryCategoryItems(categoryValue, secondaryValue);
+      if (!items.length) return `<div class="muted">该二级分类暂无三级分类配置</div>`;
+      return items.map(item => {
+        const checked = selected.has(item.code) || names.has(item.name);
+        return `<label class="tertiary-picker-option">
+          <input type="checkbox" value="${escapeAttr(item.code)}" data-tertiary-picker-store="${escapeAttr(storeId)}" ${checked ? "checked" : ""} onchange="syncTertiaryPicker('${escapeAttr(storeId)}')" />
+          <span class="tertiary-picker-option-body"><span class="tertiary-picker-option-name">${escapeHtml(item.name)}</span></span>
+        </label>`;
+      }).join("");
+    }
+    function updateTertiaryPickerLabel(storeId) {
+      const store = qs(storeId);
+      const label = [...document.querySelectorAll("[data-tertiary-picker-label]")].find(item => item.dataset.tertiaryPickerLabel === storeId);
+      if (!store || !label) return;
+      const names = [...(store.selectedOptions || [])].map(option => option.textContent.trim()).filter(Boolean);
+      label.textContent = tertiaryPickerLabelText(names);
+    }
+    function syncTertiaryPicker(storeId) {
+      const store = qs(storeId);
+      if (!store) return;
+      const checked = new Set([...document.querySelectorAll("input[data-tertiary-picker-store]")].filter(input => input.dataset.tertiaryPickerStore === storeId && input.checked).map(input => input.value));
+      [...store.options].forEach(option => { option.selected = checked.has(option.value); });
+      updateTertiaryPickerLabel(storeId);
+      if (storeId === "tertiaryCategoryInput") updateClassificationSummary(store);
+      else if (storeId.startsWith("edit-tertiary-category-")) updateEditClassificationSummary(storeId.replace("edit-tertiary-category-", ""));
+    }
+    function renderTertiaryPicker(storeId, optionsId, categoryValue, secondaryValue, selectedCodes = [], selectedNames = []) {
+      const store = qs(storeId);
+      const options = qs(optionsId);
+      if (!store || !options) return;
+      store.dataset.category = categoryValue;
+      store.dataset.secondary = secondaryValue;
+      store.innerHTML = tertiaryCategoryOptionsHtml(categoryValue, secondaryValue, selectedCodes, selectedNames);
+      options.innerHTML = tertiaryCategoryPickerOptionsHtml(categoryValue, secondaryValue, selectedCodes, selectedNames, storeId);
+      updateTertiaryPickerLabel(storeId);
+    }
+    function tertiaryCategoryOptionsHtml(categoryValue, secondaryValue, selectedCodes = [], selectedNames = []) {
+      const selected = new Set(selectedCodes);
+      const names = new Set(selectedNames);
+      const items = tertiaryCategoryItems(categoryValue, secondaryValue);
+      if (!items.length) return `<option value="" disabled>该二级分类暂无三级分类配置</option>`;
+      return items.map(item => `<option value="${escapeAttr(item.code)}" ${(selected.has(item.code) || names.has(item.name)) ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
+    }
+    function renderTertiaryCategorySelect(categoryValue = qs("projectTypeSelect")?.value || "", secondaryValue = qs("secondaryCategoryInput")?.value || "", selectedCodes = [], selectedNames = []) {
+      const select = qs("tertiaryCategoryInput");
+      if (!select) return;
+      renderTertiaryPicker("tertiaryCategoryInput", "tertiaryCategoryPickerOptions", categoryValue, secondaryValue, selectedCodes, selectedNames);
+      updateClassificationSummary();
+    }
+    function updateClassificationSummary(select = qs("tertiaryCategoryInput"), target = qs("classificationMetricSummary")) {
+      if (!target) return;
+      const selected = [...(select?.selectedOptions || [])];
+      if (!selected.length) {
+        target.textContent = "请选择三级分类（可多选）";
+        return;
+      }
+      const categoryValue = select?.dataset.category || qs("projectTypeSelect")?.value || "";
+      const secondaryValue = select?.dataset.secondary || qs("secondaryCategoryInput")?.value || "";
+      const byCode = new Map(tertiaryCategoryItems(categoryValue, secondaryValue).map(item => [item.code, item]));
+      const totals = selected.reduce((sum, option) => {
+        const item = byCode.get(option.value);
+        sum.hours += Number(item?.estimatedHours || 0);
+        sum.points += Number(item?.contributionPoints || 0);
+        return sum;
+      }, { hours: 0, points: 0 });
+      target.textContent = `已选 ${selected.length} 项，自动汇总 ${totals.hours.toFixed(2)} 小时 / ${totals.points.toFixed(2)} 积分`;
     }
     function rulesForQuotationItem(quotationItemId) {
       return (state.mappingWorkbench?.dimensionRules || []).filter(rule => rule.quotation_item_id === quotationItemId && rule.status !== "inactive");
@@ -6781,33 +7220,31 @@
       state.dimensionFilters.contactContextId = "all";
       state.dimensionFilters.assigneeUserId = "all";
       const customerId = qs("settlementCustomerSelect")?.value || state.settlementCustomerId || "all";
-      const quarter = state.settlementQuarter || currentQuarter();
       state.settlementCustomerId = customerId;
-      state.settlementQuarter = quarter;
       syncPrimaryCustomerSelects(customerId);
       renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
-      const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
-      const customers = customerId === "all"
-        ? (fundCustomers.length ? fundCustomers : state.customers)
-        : state.customers.filter(customer => customer.customer_code === customerId);
       try {
-        const [board, workbenchBundle] = await Promise.all([
-          request(`/tasks/board?${new URLSearchParams({
-            liveAssetCount: "true",
-            ...(customerId !== "all" ? { customerCode: customerId } : {}),
-          }).toString()}`),
-          loadQuarterWorkbenches(customers, quarter),
-        ]);
+        const board = await request(`/tasks/board?${new URLSearchParams({
+          liveAssetCount: "true",
+          ...(customerId !== "all" ? { customerCode: customerId } : {}),
+        }).toString()}`);
         if (requestSeq !== state.settlementRequestSeq) return;
-        const workbenches = workbenchBundle.workbenches || [];
         const taskRows = Object.entries(board).flatMap(([status, tasks]) => (tasks || []).map(task => ({ status, ...task })));
-        const taskByRequirementItemId = new Map(taskRows.filter(task => task.requirement_item_id).map(task => [task.requirement_item_id, task]));
-        const rows = workbenches
-          .flatMap(workbench => buildSettlementRows(workbench, taskByRequirementItemId))
-          .filter(row => dimensionMatchesRequirement(row.requirement || { customer_code: row.customerId }, row.task));
+        let requirements = state.requirements || [];
+        let requirementItems = state.requirementItems || [];
+        if (!requirements.length || !requirementItems.length) {
+          const historyBoard = await request("/requirements/history-board");
+          requirements = unwrap(historyBoard?.requirements);
+          requirementItems = unwrap(historyBoard?.requirementItems);
+        }
+        const requirementById = new Map(requirements.map(requirement => [requirement.id, requirement]));
+        const requirementByItemId = new Map(requirementItems
+          .map(item => [item.id, requirementById.get(item.requirement_id)])
+          .filter(([, requirement]) => requirement));
+        const rows = buildSettlementRows(taskRows, requirementByItemId)
+          .filter(settlementDimensionMatchesRow);
         state.settlementStatement = {
           customerId,
-          quarter,
           rows,
           summary: buildSettlementSummary(rows),
         };
@@ -6817,52 +7254,78 @@
         toast(error.message);
       }
     }
-    async function loadQuarterWorkbenches(customers, quarter) {
-      const customerCodes = customers.map(customer => customer.customer_code).filter(Boolean);
-      if (!customerCodes.length) return { quarter, workbenches: [], summary: {} };
-      return request(`/quote-mappings/quarter-workbenches?${new URLSearchParams({
-        customerCodes: customerCodes.join(","),
-        quarter,
-      }).toString()}`);
+    function settlementBusinessCategoryCode(value) {
+      const matched = (state.categoryTree || []).find(item => item.code === value || item.name === value);
+      return matched?.code || "";
     }
-    function buildSettlementRows(workbench, taskByRequirementItemId) {
-      return (workbench?.rows || []).map(row => {
-        const task = taskByRequirementItemId.get(row.requirementItem.id) || null;
+    function settlementClassification(task, requirement, project) {
+      const rawBusinessCategory = task?.business_category || task?.businessCategory || requirement?.business_category || project?.project_type || "";
+      const businessCategoryCode = settlementBusinessCategoryCode(rawBusinessCategory);
+      const category = categoryTreeNode(businessCategoryCode);
+      const rawSecondaryCategory = task?.secondary_category || task?.secondaryCategory || requirement?.secondary_category || "";
+      const secondary = (category?.secondaries || []).find(item => item.code === rawSecondaryCategory || item.name === rawSecondaryCategory);
+      const rawTertiaryCategory = task?.tertiary_category || task?.tertiaryCategory || requirement?.tertiary_category || "";
+      const tertiaryValues = String(rawTertiaryCategory).split(/[、,，]/).map(item => item.trim()).filter(Boolean);
+      const tertiaryNames = tertiaryValues.map(value => {
+        const item = (secondary?.tertiaries || []).find(candidate => candidate.code === value || candidate.name === value);
+        return item?.name || "";
+      }).filter(Boolean);
+      return {
+        businessCategoryCode,
+        businessCategory: category?.name || "未分类",
+        secondaryCategory: secondary?.name || "未分类",
+        tertiaryCategory: tertiaryNames.length ? tertiaryNames.join("、") : "未分类",
+      };
+    }
+    function settlementDimensionMatchesRow(row) {
+      const values = {
+        customerId: row.customerId,
+        contactContextId: row.requirement?.source_ref_id || "",
+        businessPlatform: row.businessPlatform === "-" ? "" : row.businessPlatform,
+        businessCategory: row.businessCategoryCode,
+        secondaryCategory: row.secondaryCategory === "-" ? "" : row.secondaryCategory,
+        tertiaryCategory: row.tertiaryCategory === "-" ? "" : row.tertiaryCategory,
+        assigneeUserId: row.task?.assignee_user_id || "",
+      };
+      return Object.entries(state.dimensionFilters).every(([key, selected]) => !selected || selected === "all" || values[key] === selected);
+    }
+    function buildSettlementRows(tasks, requirementByItemId) {
+      return (tasks || []).map(task => {
+        const requirement = requirementByItemId.get(task?.requirement_item_id || task?.requirementItemId) || null;
+        const project = projectForTask(task);
         const assetCount = Number(task?.asset_count ?? task?.assetCount ?? 0);
-        const unitPrice = Number(row.quotationItem?.unit_price || 0);
-        const isConfirmed = row.mapping?.mapping_status === "matched" && !!row.quotationItem;
-        const amount = isConfirmed && assetCount > 0 ? assetCount * unitPrice : 0;
-        const contactContext = contactContextForRequirement(row.requirement);
+        const taskPrice = Number(task?.price_amount ?? task?.priceAmount ?? 0);
+        const contactContext = contactContextForRequirement(requirement);
+        const customerId = requirement?.customer_code || project?.customer_code || "";
+        const classification = settlementClassification(task, requirement, project);
+        const status = settlementRowStatus(task, assetCount, taskPrice);
         return {
-          customerId: row.requirement?.customer_code || workbench.customerId,
-          customerName: customerName(row.requirement?.customer_code || workbench.customerId),
-          contactContextName: requirementContactName(row.requirement, contactContext) || "-",
-          quarter: workbench.quarter,
-          quotationNo: workbench.selectedQuotation?.quotation_no || "-",
-          quotationName: workbench.selectedQuotation ? quotationDisplayName(workbench.selectedQuotation) : "-",
-          requirementCode: row.requirement?.requirement_code || "-",
-          requirementTitle: row.requirement?.title || row.requirementItem.item_title,
-          requirementItemTitle: row.requirementItem.item_title,
+          customerId,
+          customerName: customerName(customerId) || project?.project_name || "-",
+          contactContextName: requirementContactName(requirement, contactContext) || "-",
+          requirementCode: requirement?.requirement_code || "-",
+          requirementTitle: requirement?.title || task?.task_name || "-",
+          requirementItemTitle: requirement?.title || task?.task_name || "-",
           taskNo: task?.task_no || "-",
           taskName: task?.task_name || "-",
           assetCount,
-          quotationItemName: row.quotationItem?.item_name || "-",
-          businessPlatform: row.requirement?.business_platform || "-",
-          businessCategory: projectTypeLabel(row.requirement?.business_category) || "-",
-          secondaryCategory: row.requirement?.secondary_category || "-",
+          businessPlatform: task?.business_platform || task?.businessPlatform || requirement?.business_platform || contactContext?.business_platform || "-",
+          businessCategoryCode: classification.businessCategoryCode,
+          businessCategory: classification.businessCategory,
+          secondaryCategory: classification.secondaryCategory,
+          tertiaryCategory: classification.tertiaryCategory,
           employeeName: assigneeName(task?.assignee_user_id),
-          unitPrice,
-          amount,
-          status: settlementRowStatus(row, assetCount),
-          requirement: row.requirement,
+          taskPrice,
+          amount: status === "可结算" ? taskPrice : 0,
+          status,
+          requirement,
           task,
         };
       });
     }
-    function settlementRowStatus(row, assetCount) {
-      if (!row.mapping?.quotation_item_id) return "待适配";
-      if (row.mapping.mapping_status !== "matched") return "报价待确认";
-      if (assetCount <= 0) return "未开始";
+    function settlementRowStatus(task, assetCount, taskPrice) {
+      if (!Number.isFinite(taskPrice) || taskPrice <= 0) return "待定价";
+      if (assetCount <= 0 && task?.status !== "completed") return "待交付";
       return "可结算";
     }
     function buildSettlementSummary(rows) {
@@ -6876,17 +7339,18 @@
     }
     function renderSettlementStatement() {
       const statement = state.settlementStatement || { rows: [], summary: {} };
-      const summary = statement.summary || {};
+      const rows = filteredSettlementDetailRows(statement.rows || []);
+      const summary = buildSettlementSummary(rows);
       qs("settlementScopeHint").textContent = `${statement.customerId === "all" ? "全部基金" : customerName(statement.customerId)}`;
       qs("settlementMetrics").innerHTML = [
         ["预计结算金额", formatMoney(summary.amount || 0)],
         ["可结算资产", summary.assetCount || 0],
-        ["可结算需求", summary.billableCount || 0],
-        ["待处理需求", summary.pendingCount || 0],
+        ["可结算任务", summary.billableCount || 0],
+        ["待处理任务", summary.pendingCount || 0],
       ].map(([label, value]) => `<div class="mini-metric"><span>${label}</span><strong>${value}</strong></div>`).join("");
-      renderSettlementCharts(statement.rows || []);
+      renderSettlementCharts(rows);
       syncSettlementDateInputs();
-      renderSettlementDetails(filteredSettlementDetailRows(statement.rows || []));
+      renderSettlementDetails(rows);
     }
     function buildSettlementDimensionTotals(rows, labelFn) {
       const groups = new Map();
@@ -6921,7 +7385,7 @@
       if (!selectedSecondary || selectedSecondary === "all") {
         return { name: "二级分类", labelFor: row => normalize(row.secondaryCategory, "未设置二级分类") };
       }
-      return { name: "报价子项", labelFor: row => normalize(row.quotationItemName, "未关联报价子项") };
+      return { name: "三级分类", labelFor: row => normalize(row.tertiaryCategory, "未设置三级分类") };
     }
     function renderSettlementCharts(rows) {
       const amountBox = qs("settlementAmountChart");
@@ -6962,6 +7426,10 @@
       const filters = state.settlementDetailFilters;
       if (qs("settlementStartDateInput")) qs("settlementStartDateInput").value = filters.startDate || "";
       if (qs("settlementEndDateInput")) qs("settlementEndDateInput").value = filters.endDate || "";
+      const active = activeDatePreset(filters);
+      document.querySelectorAll("[data-settlement-date-preset]").forEach(button => {
+        button.classList.toggle("active", button.dataset.settlementDatePreset === active);
+      });
     }
     function filteredSettlementDetailRows(rows) {
       const filters = state.settlementDetailFilters;
@@ -6977,35 +7445,38 @@
         state.settlementDetailFilters = { startDate: "", endDate: "" };
       }
       state.settlementDetailFilters[key] = value || "";
-      const rows = state.settlementStatement?.rows || [];
-      syncSettlementDateInputs();
-      renderSettlementDetails(filteredSettlementDetailRows(rows));
+      renderSettlementStatement();
+    }
+    function setSettlementDatePreset(preset) {
+      state.settlementDetailFilters = datePresetRange(preset);
+      renderSettlementStatement();
     }
     function clearSettlementDetailFilters() {
       state.settlementDetailFilters = { startDate: "", endDate: "" };
-      const rows = state.settlementStatement?.rows || [];
-      syncSettlementDateInputs();
-      renderSettlementDetails(filteredSettlementDetailRows(rows));
+      renderSettlementStatement();
     }
     function renderSettlementDetails(rows) {
       const box = qs("settlementDetails");
       if (!rows.length) {
-        box.innerHTML = `<div class="empty-list">暂无结算明细。请先完成需求、合同报价和报价子项选择。</div>`;
+        box.innerHTML = `<div class="empty-list">暂无结算明细。请先创建任务并设置任务价格。</div>`;
         return;
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>基金 / 季度</th><th>对接人</th><th>时间</th><th>需求任务</th><th>报价子项</th><th>资产个数</th><th>单价</th><th>结算金额</th><th>状态</th></tr></thead>
+          <thead><tr><th>基金</th><th>对接人</th><th>时间</th><th>需求任务</th><th>业务大类</th><th>二级分类</th><th>三级分类</th><th>执行人</th><th>资产个数</th><th>任务价格</th><th>结算金额</th><th>状态</th></tr></thead>
           <tbody>
             ${rows.map(row => `
               <tr>
-                <td>${safeText(row.customerName)}<br><span class="row-sub">${safeText(row.quarter)} · ${safeText(row.quotationName)}${row.quotationNo && row.quotationNo !== "-" ? `<br>系统编号 ${safeText(row.quotationNo)}` : ""}</span></td>
+                <td>${safeText(row.customerName)}</td>
                 <td>${safeText(row.contactContextName)}</td>
                 <td>${safeText(settlementRowDateKey(row) || "-")}</td>
                 <td><div class="row-title">${safeText(row.requirementItemTitle)}</div><div class="row-sub">${safeText(row.requirementCode)}<br>${safeText(row.taskNo)} ${safeText(row.taskName)}</div></td>
-                <td>${safeText(row.quotationItemName)}</td>
-                <td>${row.assetCount > 0 ? row.assetCount : "未开始"}</td>
-                <td>${formatMoney(row.unitPrice)}</td>
+                <td>${safeText(row.businessCategory)}</td>
+                <td>${safeText(row.secondaryCategory)}</td>
+                <td>${safeText(row.tertiaryCategory)}</td>
+                <td>${safeText(row.employeeName)}</td>
+                <td>${row.assetCount > 0 ? row.assetCount : "未交付"}</td>
+                <td>${formatMoney(row.taskPrice)}</td>
                 <td>${formatMoney(row.amount)}</td>
                 <td><span class="tag">${safeText(row.status)}</span></td>
               </tr>
@@ -7020,24 +7491,23 @@
         toast("暂无可导出的结算明细");
         return;
       }
-      const headers = ["基金", "对接人", "季度", "合同报价", "时间", "需求编号", "需求标题", "需求项", "任务编号", "任务名称", "报价子项", "业务平台", "业务大类", "二级分类", "资产个数", "单价", "结算金额", "状态"];
+      const headers = ["基金", "对接人", "时间", "需求编号", "需求标题", "需求项", "任务编号", "任务名称", "业务平台", "业务大类", "二级分类", "三级分类", "执行人", "资产个数", "任务价格", "结算金额", "状态"];
       const tableRows = rows.map(row => [
         row.customerName,
         row.contactContextName,
-        row.quarter,
-        row.quotationName,
         settlementRowDateKey(row) || "-",
         row.requirementCode,
         row.requirementTitle,
         row.requirementItemTitle,
         row.taskNo,
         row.taskName,
-        row.quotationItemName,
         row.businessPlatform,
         row.businessCategory,
         row.secondaryCategory,
-        row.assetCount > 0 ? row.assetCount : "未开始",
-        Number(row.unitPrice || 0).toFixed(2),
+        row.tertiaryCategory,
+        row.employeeName,
+        row.assetCount > 0 ? row.assetCount : "未交付",
+        Number(row.taskPrice || 0).toFixed(2),
         Number(row.amount || 0).toFixed(2),
         row.status,
       ]);
@@ -7056,7 +7526,7 @@
             <table>
               <thead><tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
               <tbody>
-                ${tableRows.map(row => `<tr>${row.map((cell, index) => `<td class="${index === 15 || index === 16 ? "num" : ""}">${escapeHtml(cell ?? "-")}</td>`).join("")}</tr>`).join("")}
+                ${tableRows.map(row => `<tr>${row.map((cell, index) => `<td class="${index === 14 || index === 15 ? "num" : ""}">${escapeHtml(cell ?? "-")}</td>`).join("")}</tr>`).join("")}
               </tbody>
             </table>
           </body>
@@ -7129,7 +7599,7 @@
       if (!project) return toast("请先选择客户和业务大类");
       const businessPlatform = normalizeBusinessPlatform(qs("businessPlatformInput").value);
       const secondaryCategory = qs("secondaryCategoryInput").value;
-      const tertiaryCategory = qs("tertiaryCategoryInput").value.trim();
+      const tertiaryCategoryCodes = selectedTertiaryCategoryCodes();
       const plannedStartAt = qs("plannedStartAtInput").value;
       const plannedEndAt = qs("plannedEndAtInput").value;
       const priority = priorityValueFromDeadline(plannedEndAt);
@@ -7143,6 +7613,8 @@
       }
       if (!plannedEndAt || !priority) return toast("请填写截止时间以计算任务优先级");
       if (!urgencyLevel) return toast("请选择任务紧急程度");
+      if (!secondaryCategory) return toast("请选择二级分类");
+      if (!tertiaryCategoryCodes.length) return toast("请选择至少一个三级分类");
       if (!title) return toast("请填写需求标题");
       if (!content) return toast("请填写需求内容");
       if (!priceAmountInput || !Number.isFinite(priceAmount) || priceAmount < 0) return toast("请填写有效的任务价格");
@@ -7169,7 +7641,6 @@
             priority,
             urgencyLevel,
             priceAmount: priceAmount.toFixed(2),
-            estimatedHours: "6",
             plannedStartAt: plannedStartAt || undefined,
             plannedEndAt: plannedEndAt || undefined,
             contactContextId: contactContext?.id || undefined,
@@ -7177,7 +7648,7 @@
             businessPlatform: businessPlatform || undefined,
             businessCategory: qs("projectTypeSelect").value || undefined,
             secondaryCategory: secondaryCategory || undefined,
-            tertiaryCategory,
+            tertiaryCategoryCodes,
             sourceCandidateId: selectedCandidateId || undefined,
           },
         });

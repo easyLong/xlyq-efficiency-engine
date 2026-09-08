@@ -64,6 +64,7 @@
         quotations,
         businessPlatformDimensions,
         businessCategoryRelations,
+        categoryTree,
         businessCalendar,
         workflowConfig,
         health,
@@ -79,6 +80,7 @@
         quoteVisible ? request("/quotations") : Promise.resolve([]),
         request("/dimensions?type=business_platform").catch(() => []),
         request("/dimensions/business-category-relations").catch(() => []),
+        request("/dimensions/category-tree").catch(() => []),
         request(
           `/business-calendar/range?start=${dateKey(businessCalendarStart)}&end=${dateKey(businessCalendarEnd)}`,
         ).catch(() => []),
@@ -99,6 +101,7 @@
         aiPreviewCandidates: unwrap(aiPreviewCandidates),
         businessPlatformDimensions: unwrap(businessPlatformDimensions),
         businessCategoryRelations: unwrap(businessCategoryRelations),
+        categoryTree: unwrap(categoryTree),
         businessCalendar: unwrap(businessCalendar),
         workflowConfig,
         health,

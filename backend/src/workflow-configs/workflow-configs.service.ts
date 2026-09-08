@@ -17,9 +17,8 @@ export type CustomerWorkflowRole = (typeof CUSTOMER_WORKFLOW_ROLES)[number];
 
 const businessCategories = [
   { code: 'design', name: '设计' },
-  { code: 'copywriting', name: '文案' },
   { code: 'operation', name: '运营' },
-  { code: 'community', name: '社区' },
+  { code: 'content', name: '内容' },
 ] as const;
 
 @Injectable()

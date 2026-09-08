@@ -1,4 +1,10 @@
-import { IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 
 export class UpdateDimensionDictionaryDto {
   @IsOptional()
@@ -18,6 +24,11 @@ export class UpdateDimensionDictionaryDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(32)
+  productType?: string | null;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(64)
   parentCode?: string | null;
 
@@ -34,4 +45,33 @@ export class UpdateDimensionDictionaryDto {
   @IsString()
   @MaxLength(255)
   remark?: string | null;
+
+  @IsOptional()
+  @Matches(/^\d{1,6}(?:\.\d{1,2})?$/)
+  estimatedHours?: string | null;
+
+  @IsOptional()
+  @Matches(/^\d{1,8}(?:\.\d{1,2})?$/)
+  contributionPoints?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  measureUnit?: string | null;
+
+  @IsOptional()
+  @IsString()
+  contentScope?: string | null;
+
+  @IsOptional()
+  @IsString()
+  deliveryStandard?: string | null;
+
+  @IsOptional()
+  @IsString()
+  scoringBoundary?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  referenceMinutes?: number | null;
 }

@@ -22,6 +22,7 @@ import { ensureIndex } from '../common/schema-maintenance';
 import { ensureWorkflowConfigTables } from '../common/workflow-config-schema';
 import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
 import { CustomerEntity } from '../customers/entities/customer.entity';
+import { DimensionsService } from '../dimensions/dimensions.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectEntity } from '../projects/entities/project.entity';
 import { QuotationItemEntity } from '../quotations/entities/quotation-item.entity';
@@ -89,25 +90,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       ],
     },
     {
-      value: 'copywriting',
-      label: '文案',
-      keywords: [
-        '文案',
-        '原创',
-        '共建',
-        '数据更新',
-        '素材编辑',
-        '编辑',
-        'word',
-        'Word',
-        'WORD',
-        'word版本',
-        '推文',
-        '策划',
-        '方案',
-      ],
-    },
-    {
       value: 'operation',
       label: '运营',
       keywords: [
@@ -123,9 +105,24 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       ],
     },
     {
-      value: 'community',
-      label: '社区',
-      keywords: ['社区', '粉丝投放', '精华贴', '氛围贴', '讨论区', '配置圈'],
+      value: 'content',
+      label: '内容',
+      keywords: [
+        '内容',
+        '投教',
+        '陪伴',
+        '营销',
+        '直播',
+        '视频',
+        '脚本',
+        '海报',
+        'Banner',
+        'PPT',
+        '数据处理',
+        '文案修改',
+        '审核校对',
+        '征信卡片',
+      ],
     },
   ];
   constructor(
@@ -157,6 +154,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     private readonly notificationsService: NotificationsService,
     private readonly workflowConfigsService: WorkflowConfigsService,
     private readonly taskWorkflowRuntime: TaskWorkflowRuntimeService,
+    private readonly dimensionsService: DimensionsService,
   ) {}
 
   async onModuleInit() {
@@ -1286,6 +1284,14 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
 
     await this.assertCanDispatchCustomer(currentUser, customerCode);
 
+    const classification = dto.tertiaryCategoryCodes?.length
+      ? await this.dimensionsService.resolveTertiarySelection(
+          dto.businessCategory,
+          dto.secondaryCategory,
+          dto.tertiaryCategoryCodes,
+        )
+      : null;
+
     const createBundle = async (manager?: EntityManager) => {
       const bundle = await this.createRequirementTaskBundle(
         {
@@ -1299,7 +1305,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
             dto.businessPlatform ?? contactContext?.business_platform ?? null,
           businessCategory: dto.businessCategory ?? null,
           secondaryCategory: dto.secondaryCategory ?? null,
-          tertiaryCategory: dto.tertiaryCategory ?? null,
+          tertiaryCategory:
+            classification?.names.join('、') ?? dto.tertiaryCategory ?? null,
+          tertiaryCategoryCodes: classification?.codes ?? [],
+          estimatedHours: classification?.estimatedHours ?? dto.estimatedHours,
+          contributionPoints: classification?.contributionPoints ?? '0.00',
           sourceType: dto.sourceCandidateId ? 'ai_preview_confirmed' : 'manual',
           dispatcherUserId: currentUser?.id ?? null,
           createdByUserId: currentUser?.id ?? null,
@@ -1575,6 +1585,18 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       dto.urgencyLevel !== undefined
         ? this.normalizeUrgencyLevel(dto.urgencyLevel)
         : requirement.urgency_level;
+    const targetBusinessCategory =
+      dto.businessCategory ?? requirement.business_category;
+    const targetSecondaryCategory =
+      dto.secondaryCategory ?? requirement.secondary_category;
+    const classification =
+      dto.tertiaryCategoryCodes !== undefined
+        ? await this.dimensionsService.resolveTertiarySelection(
+            targetBusinessCategory,
+            targetSecondaryCategory,
+            dto.tertiaryCategoryCodes,
+          )
+        : null;
 
     if (targetProjectId) {
       const project = await this.projectsRepository.findOne({
@@ -1600,7 +1622,15 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       business_category: dto.businessCategory ?? requirement.business_category,
       secondary_category:
         dto.secondaryCategory ?? requirement.secondary_category,
-      tertiary_category: dto.tertiaryCategory ?? requirement.tertiary_category,
+      tertiary_category:
+        classification?.names.join('、') ??
+        (dto.tertiaryCategoryCodes?.length === 0
+          ? null
+          : (dto.tertiaryCategory ?? requirement.tertiary_category)),
+      tertiary_category_codes_json:
+        dto.tertiaryCategoryCodes !== undefined
+          ? JSON.stringify(classification?.codes ?? [])
+          : requirement.tertiary_category_codes_json,
       raw_content: dto.rawContent ?? requirement.raw_content,
       summary: dto.summary ?? requirement.summary,
     });
@@ -1619,16 +1649,22 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       dto.rawContent !== undefined ||
       dto.priority !== undefined ||
       dto.urgencyLevel !== undefined;
+    const shouldSyncClassification = dto.tertiaryCategoryCodes !== undefined;
     const shouldSyncTask =
       shouldSyncItem ||
+      shouldSyncClassification ||
       dto.priceAmount !== undefined ||
       dto.projectId !== undefined ||
       dto.businessCategory !== undefined;
-    if (item && shouldSyncItem) {
+    if (item && (shouldSyncItem || shouldSyncClassification)) {
       item.item_title = dto.title ?? item.item_title;
       item.item_description = dto.rawContent ?? item.item_description;
       item.priority = priority ?? item.priority;
       item.urgency_level = urgencyLevel ?? item.urgency_level;
+      if (shouldSyncClassification) {
+        item.estimated_hours = classification?.estimatedHours ?? '0.00';
+        item.contribution_points = classification?.contributionPoints ?? '0.00';
+      }
       await this.requirementItemsRepository.save(item);
     }
 
@@ -1646,6 +1682,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         task.priority = priority ?? task.priority;
         task.urgency_level = urgencyLevel ?? task.urgency_level;
         task.price_amount = dto.priceAmount ?? task.price_amount;
+        if (shouldSyncClassification) {
+          task.estimated_hours = classification?.estimatedHours ?? '0.00';
+          task.contribution_points =
+            classification?.contributionPoints ?? '0.00';
+        }
         await this.tasksRepository.save(task);
       }
     }
@@ -1876,6 +1917,8 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       businessCategory?: string | null;
       secondaryCategory?: string | null;
       tertiaryCategory?: string | null;
+      tertiaryCategoryCodes?: string[];
+      contributionPoints?: string;
       sourceType: string;
       sourceContactName?: string | null;
       dispatcherUserId?: string | null;
@@ -1920,6 +1963,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         business_category: input.businessCategory ?? null,
         secondary_category: input.secondaryCategory ?? null,
         tertiary_category: input.tertiaryCategory ?? null,
+        tertiary_category_codes_json: JSON.stringify(
+          input.tertiaryCategoryCodes ?? [],
+        ),
         status: 'draft',
         priority,
         urgency_level: urgencyLevel,
@@ -1942,6 +1988,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         priority,
         urgency_level: urgencyLevel,
         estimated_hours: input.estimatedHours ?? '6',
+        contribution_points: input.contributionPoints ?? '0.00',
         status: 'confirmed',
         quote_scope_status: 'not_started',
       }),
@@ -1967,6 +2014,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         assignee_user_id: null,
         estimated_hours: item.estimated_hours ?? null,
         price_amount: input.priceAmount ?? '0.00',
+        contribution_points: item.contribution_points ?? '0.00',
         planned_start_at: input.plannedStartAt
           ? new Date(input.plannedStartAt)
           : null,
@@ -2914,7 +2962,14 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       return 'design';
     }
     if (
-      ['copywriting', 'copy', 'content'].includes(lower) ||
+      ['content', 'contents'].includes(lower) ||
+      normalized === '内容' ||
+      normalized === '内容组'
+    ) {
+      return 'content';
+    }
+    if (
+      ['copywriting', 'copy'].includes(lower) ||
       normalized.includes('文案')
     ) {
       return 'copywriting';
@@ -3173,9 +3228,24 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'source_contact_name VARCHAR(128) NULL AFTER source_ref_id',
     );
     await this.addColumnIfMissing(
+      'requirements',
+      'tertiary_category_codes_json',
+      'tertiary_category_codes_json TEXT NULL AFTER tertiary_category',
+    );
+    await this.addColumnIfMissing(
       'requirement_items',
       'urgency_level',
       'urgency_level VARCHAR(32) NULL AFTER priority',
+    );
+    await this.addColumnIfMissing(
+      'requirement_items',
+      'contribution_points',
+      'contribution_points DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER estimated_hours',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'contribution_points',
+      'contribution_points DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER price_amount',
     );
     await ensureIndex(
       this.dataSource,

@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsNotEmpty,
   Matches,
   IsOptional,
@@ -82,6 +84,12 @@ export class CreateRequirementWithTaskDto {
   @IsOptional()
   @IsString()
   tertiaryCategory?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  tertiaryCategoryCodes?: string[];
 
   @IsOptional()
   @IsString()

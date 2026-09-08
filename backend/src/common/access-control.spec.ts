@@ -74,6 +74,7 @@ describe('workflow access profile', () => {
     expect(profile.customerReviewCodes).toEqual(['Bosera']);
     expect(profile.permissions).toEqual(
       expect.arrayContaining([
+        'page.group_management',
         'requirement.create',
         'task.assign_owned',
         'task.accept_owned',

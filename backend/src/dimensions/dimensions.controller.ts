@@ -35,7 +35,14 @@ export class DimensionsController {
 
   @Get('business-category-relations')
   businessCategoryRelations(@Query('status') status = 'active') {
-    return this.dimensionsService.findBusinessCategorySecondaryRelations(status);
+    return this.dimensionsService.findBusinessCategorySecondaryRelations(
+      status,
+    );
+  }
+
+  @Get('category-tree')
+  categoryTree() {
+    return this.dimensionsService.categoryTree();
   }
 
   @Post()
