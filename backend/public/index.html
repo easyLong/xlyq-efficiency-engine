@@ -2827,9 +2827,12 @@
       const permission = viewPermission(view);
       return !permission || can(permission);
     }
+    function canManageInternalReports() {
+      return isAdminUser() || can("requirement.create");
+    }
     function applyRoleVisibility() {
       const canCreateRequirement = can("requirement.create");
-      const canCreateWorkReport = can("work_report.create");
+      const canCreateWorkReport = canManageInternalReports() && can("work_report.create");
       document.querySelectorAll("[data-view]").forEach(element => {
         element.classList.toggle("hidden", !canView(element.dataset.view));
       });
@@ -2842,11 +2845,12 @@
         !canCreateRequirement || !canCreateWorkReport,
       );
       if (!canCreateRequirement && canCreateWorkReport) state.intakeMode = "report";
+      if (!canManageInternalReports() && state.requirementView === "reports") state.requirementView = "tasks";
       switchIntakeMode(state.intakeMode);
       const canViewAiPreview = can("ai_preview.view_all") || can("ai_preview.view_owned");
       if (!canViewAiPreview && state.requirementView === "ai") state.requirementView = "tasks";
       qs("aiPreviewPanel")?.classList.toggle("hidden", !canViewAiPreview || state.requirementView !== "ai");
-      qs("workReportListPanel")?.classList.toggle("hidden", state.requirementView !== "reports");
+      qs("workReportListPanel")?.classList.toggle("hidden", !canManageInternalReports() || state.requirementView !== "reports");
       qs("taskRequirementPanel")?.classList.toggle("hidden", state.requirementView !== "tasks");
       qs("requirementMetrics")?.classList.toggle("hidden", state.requirementView !== "tasks");
       renderRequirementViewTabs();
@@ -3271,7 +3275,7 @@
     function renderRequirementViewTabs() {
       const container = qs("requirementViewTabs");
       if (!container) return;
-      const canViewReports = can("work_report.view_own") || can("work_report.create");
+      const canViewReports = canManageInternalReports() && (can("work_report.view_own") || can("work_report.create"));
       container.classList.toggle("hidden", !canViewAiPreview() && !canViewReports);
       const aiButton = container.querySelector("button[onclick*=\"'ai'\"]");
       if (aiButton) {
@@ -3293,7 +3297,7 @@
       }
     }
     function setRequirementView(view) {
-      const canViewReports = can("work_report.view_own") || can("work_report.create");
+      const canViewReports = canManageInternalReports() && (can("work_report.view_own") || can("work_report.create"));
       const nextView = view === "ai" && canViewAiPreview()
         ? "ai"
         : view === "reports" && canViewReports
@@ -3301,7 +3305,7 @@
           : "tasks";
       state.requirementView = nextView;
       qs("aiPreviewPanel")?.classList.toggle("hidden", nextView !== "ai");
-      qs("workReportListPanel")?.classList.toggle("hidden", nextView !== "reports");
+      qs("workReportListPanel")?.classList.toggle("hidden", !canManageInternalReports() || nextView !== "reports");
       qs("taskRequirementPanel")?.classList.toggle("hidden", nextView !== "tasks");
       qs("requirementMetrics")?.classList.toggle("hidden", nextView !== "tasks");
       renderRequirementViewTabs();
@@ -4606,12 +4610,12 @@
     }
     function switchIntakeMode(mode) {
       const canCreateRequirement = can("requirement.create");
-      const canCreateWorkReport = can("work_report.create");
+      const canCreateWorkReport = canManageInternalReports() && can("work_report.create");
       const nextMode = mode === "report" && canCreateWorkReport
         ? "report"
         : canCreateRequirement
           ? "manual"
-          : "report";
+          : "manual";
       state.intakeMode = nextMode;
       qs("manualTabButton")?.classList.toggle("active", nextMode === "manual");
       qs("reportTabButton")?.classList.toggle("active", nextMode === "report");
@@ -5088,11 +5092,16 @@
       </div>`;
     }
     function requirementMetaText(row) {
+      const isCurrentExecutor = row.task?.assignee_user_id === state.user?.id;
       return [
         row.contactContext ? `需求方：${safeText(row.contactContext)}` : "",
         row.requirement.tertiary_category ? `三级分类：${safeText(row.requirement.tertiary_category)}` : "",
-        row.task ? `预估：${Number(row.task.estimated_hours || 0).toFixed(2)}小时 / ${Number(row.task.contribution_points || 0).toFixed(2)}贡献分` : "",
-        row.task ? `价格：${formatMoney(row.task.price_amount)}` : "",
+        row.task
+          ? isCurrentExecutor
+            ? `贡献分：${Number(row.task.contribution_points || 0).toFixed(2)}`
+            : `预估：${Number(row.task.estimated_hours || 0).toFixed(2)}小时 / ${Number(row.task.contribution_points || 0).toFixed(2)}贡献分`
+          : "",
+        row.task && !isCurrentExecutor ? `价格：${formatMoney(row.task.price_amount)}` : "",
         taskPlanDateRangeText(row.task) ? `计划：${taskPlanDateRangeText(row.task)}` : "",
         `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
       ].filter(Boolean).join(" · ");
