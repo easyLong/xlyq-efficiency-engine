@@ -168,6 +168,7 @@ describe('TasksService delivery flow', () => {
       fileRepositoryInTx,
       directoryRepositoryInTx,
       usersRepository,
+      workflowConfigsService,
       notificationsService,
       taskWorkflowRuntime,
       savedFiles,
@@ -386,5 +387,31 @@ describe('TasksService delivery flow', () => {
       TaskStatus.PendingReview,
       'product_review',
     ]);
+  });
+
+  it('allows the operation dispatcher to perform first review when no reviewer is configured', async () => {
+    const { service, workflowConfigsService } = buildService();
+    workflowConfigsService.findBusinessCategoryReviewerIds.mockResolvedValue(
+      [],
+    );
+    const operationTask = {
+      ...task,
+      status: TaskStatus.PendingReview,
+      review_stage: 'product_review',
+      product_review_type: 'operation',
+      dispatcher_user_id: 'user-1',
+      assignee_user_id: 'user-1',
+    };
+
+    const canReview = await (
+      service as unknown as {
+        canProductReviewTask: (
+          value: typeof operationTask,
+          reviewerUserId: string,
+        ) => Promise<boolean>;
+      }
+    ).canProductReviewTask(operationTask, 'user-1');
+
+    expect(canReview).toBe(true);
   });
 });

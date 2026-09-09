@@ -332,3 +332,29 @@ describe('task work item claiming', () => {
     expect(query).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('operation first-review fallback', () => {
+  it('uses the dispatcher when operation has no configured reviewer, including self-review', async () => {
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('FROM tasks task')) {
+        return [{ businessCategory: 'operation', customerCode: 'Wanjia' }];
+      }
+      if (sql.includes('FROM business_category_review_members')) return [];
+      return [];
+    });
+    const runtime = new TaskWorkflowRuntimeService({ query } as never);
+    const task = {
+      id: 'operation-task-1',
+      dispatcher_user_id: 'dispatcher-1',
+      assignee_user_id: 'dispatcher-1',
+    } as TaskEntity;
+
+    const candidates = await (runtime as any).resolveCandidateIds(
+      task,
+      'first_review',
+      { query },
+    );
+
+    expect(candidates).toEqual(['dispatcher-1']);
+  });
+});

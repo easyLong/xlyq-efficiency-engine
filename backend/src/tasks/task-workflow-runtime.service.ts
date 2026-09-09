@@ -827,6 +827,9 @@ export class TaskWorkflowRuntimeService {
         `,
         [category],
       );
+      if (category === 'operation' && !rows.length && task.dispatcher_user_id) {
+        return [task.dispatcher_user_id];
+      }
       return uniqueIds(
         rows
           .map((row) => row.userId)

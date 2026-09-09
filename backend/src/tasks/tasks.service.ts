@@ -4225,9 +4225,18 @@ export class TasksService implements OnModuleInit {
     const reviewType =
       task.product_review_type ??
       (await this.resolveTaskProductReviewType(task));
-    return this.workflowConfigsService.findBusinessCategoryReviewerIds(
+    const reviewerIds =
+      await this.workflowConfigsService.findBusinessCategoryReviewerIds(
       reviewType,
-    );
+      );
+    if (reviewerIds.length) return reviewerIds;
+    if (
+      normalizeAccessBusinessCategory(reviewType) === 'operation' &&
+      task.dispatcher_user_id
+    ) {
+      return [task.dispatcher_user_id];
+    }
+    return reviewerIds;
   }
 
   private async customerReviewerIds(task: TaskEntity) {
