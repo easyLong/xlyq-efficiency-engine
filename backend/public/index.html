@@ -1136,6 +1136,84 @@
     }
     .employee-insights-view.hidden { display: none; }
     .employee-insights-view > .dashboard-card { margin-top: 0; }
+    .employee-insights-view > .dashboard-card {
+      padding: 13px 14px 14px;
+    }
+    .employee-insights-view .section-title {
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .employee-insights-view .section-title h3 { font-size: 18px; }
+    .employee-insights-view .employee-history-ranking-hint {
+      margin: -1px 0 7px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .employee-insights-view .table-wrap table { font-size: 12px; }
+    .employee-insights-view .table-wrap th,
+    .employee-insights-view .table-wrap td {
+      padding: 7px 7px;
+      line-height: 1.3;
+    }
+    .employee-insights-view .table-person {
+      min-width: 104px;
+      gap: 6px;
+    }
+    .employee-insights-view .table-avatar {
+      width: 24px;
+      height: 24px;
+      font-size: 11px;
+    }
+    .employee-insights-view .employee-rank-badge {
+      width: 26px;
+      height: 26px;
+      font-size: 16px;
+    }
+    .employee-insights-view .employee-rank-number { min-width: 26px; }
+    .employee-insights-view .employee-ranking-more { margin-top: 6px; }
+    .employee-insights-view .employee-ranking-more summary { padding: 7px 4px 1px; }
+    .employee-insights-view .employee-ranking-more[open] summary { padding-bottom: 6px; }
+    .employee-insights-view #employeeTopBox table,
+    .employee-insights-view #employeeTopMoreBox table,
+    .employee-insights-view #employeeCenterOverviewBox table {
+      table-layout: fixed;
+    }
+    .employee-insights-view #employeeTopBox table,
+    .employee-insights-view #employeeTopMoreBox table { min-width: 580px; }
+    .employee-insights-view #employeeTopBox th,
+    .employee-insights-view #employeeTopMoreBox th,
+    .employee-insights-view #employeeCenterOverviewBox th {
+      white-space: nowrap;
+    }
+    .employee-insights-view #employeeTopBox th:nth-child(1),
+    .employee-insights-view #employeeTopBox td:nth-child(1),
+    .employee-insights-view #employeeTopMoreBox th:nth-child(1),
+    .employee-insights-view #employeeTopMoreBox td:nth-child(1) { width: 48px; }
+    .employee-insights-view #employeeTopBox th:nth-child(2),
+    .employee-insights-view #employeeTopBox td:nth-child(2),
+    .employee-insights-view #employeeTopMoreBox th:nth-child(2),
+    .employee-insights-view #employeeTopMoreBox td:nth-child(2) { width: 150px; }
+    .employee-insights-view #employeeTopBox th:nth-child(3),
+    .employee-insights-view #employeeTopBox td:nth-child(3),
+    .employee-insights-view #employeeTopMoreBox th:nth-child(3),
+    .employee-insights-view #employeeTopMoreBox td:nth-child(3) { width: 86px; }
+    .employee-insights-view #employeeTopBox th:nth-child(n+4),
+    .employee-insights-view #employeeTopBox td:nth-child(n+4),
+    .employee-insights-view #employeeTopMoreBox th:nth-child(n+4),
+    .employee-insights-view #employeeTopMoreBox td:nth-child(n+4) { width: 68px; }
+    .employee-insights-view #employeeCenterOverviewBox table { min-width: 540px; }
+    .employee-insights-view #employeeCenterOverviewBox th:nth-child(1),
+    .employee-insights-view #employeeCenterOverviewBox td:nth-child(1) { width: 48px; }
+    .employee-insights-view #employeeCenterOverviewBox th:nth-child(2),
+    .employee-insights-view #employeeCenterOverviewBox td:nth-child(2) { width: 140px; }
+    .employee-insights-view #employeeCenterOverviewBox th:nth-child(n+3),
+    .employee-insights-view #employeeCenterOverviewBox td:nth-child(n+3) { width: 82px; }
+    .employee-insights-view .table-person { min-width: 0; }
+    .employee-insights-view .table-person > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .employee-insights-view #employeeLoadPanel {
       margin: 0;
       padding: 0;
@@ -1862,6 +1940,52 @@
     }
     .workflow-config-empty { padding: 36px 14px; color: #758074; text-align: center; }
     .hidden { display: none !important; }
+    @media (min-width: 981px) and (max-width: 1440px) {
+      .employee-insights-panel { padding: 12px; }
+      .employee-insights-tabs { margin-bottom: 8px; }
+      .employee-insights-view > .dashboard-card { padding: 10px 12px 12px; }
+      .employee-insights-view .section-title { margin-bottom: 6px; }
+      .employee-insights-view .section-title h3 { font-size: 17px; }
+      .employee-history-ranking-control { gap: 5px; }
+      .employee-history-ranking-control select {
+        min-width: 96px;
+        min-height: 29px;
+        padding: 5px 7px;
+        font-size: 12px;
+      }
+      .employee-insights-view .employee-history-ranking-hint {
+        margin-bottom: 5px;
+        font-size: 11px;
+      }
+      .employee-insights-view .table-wrap table { font-size: 12px; }
+      .employee-insights-view .table-wrap th,
+      .employee-insights-view .table-wrap td { padding: 6px; }
+      .employee-insights-view #employeeTopBox table,
+      .employee-insights-view #employeeTopMoreBox table { min-width: 540px; }
+      .employee-insights-view #employeeTopBox th:nth-child(1),
+      .employee-insights-view #employeeTopBox td:nth-child(1),
+      .employee-insights-view #employeeTopMoreBox th:nth-child(1),
+      .employee-insights-view #employeeTopMoreBox td:nth-child(1) { width: 42px; }
+      .employee-insights-view #employeeTopBox th:nth-child(2),
+      .employee-insights-view #employeeTopBox td:nth-child(2),
+      .employee-insights-view #employeeTopMoreBox th:nth-child(2),
+      .employee-insights-view #employeeTopMoreBox td:nth-child(2) { width: 128px; }
+      .employee-insights-view #employeeTopBox th:nth-child(3),
+      .employee-insights-view #employeeTopBox td:nth-child(3),
+      .employee-insights-view #employeeTopMoreBox th:nth-child(3),
+      .employee-insights-view #employeeTopMoreBox td:nth-child(3) { width: 78px; }
+      .employee-insights-view #employeeTopBox th:nth-child(n+4),
+      .employee-insights-view #employeeTopBox td:nth-child(n+4),
+      .employee-insights-view #employeeTopMoreBox th:nth-child(n+4),
+      .employee-insights-view #employeeTopMoreBox td:nth-child(n+4) { width: 60px; }
+      .employee-insights-view #employeeCenterOverviewBox table { min-width: 500px; }
+      .employee-insights-view #employeeCenterOverviewBox th:nth-child(1),
+      .employee-insights-view #employeeCenterOverviewBox td:nth-child(1) { width: 42px; }
+      .employee-insights-view #employeeCenterOverviewBox th:nth-child(2),
+      .employee-insights-view #employeeCenterOverviewBox td:nth-child(2) { width: 120px; }
+      .employee-insights-view #employeeCenterOverviewBox th:nth-child(n+3),
+      .employee-insights-view #employeeCenterOverviewBox td:nth-child(n+3) { width: 72px; }
+    }
     @media (max-width: 980px) {
       .shell, .login-card, .cols-2, .cols-4, .workbench-grid, .intake-grid, .pool-layout, .form-grid, .summary-strip, .dashboard-board-grid, .dashboard-stat-row, .priority-strip, .dimension-summary-grid, .requirements-workspace, .requirement-metrics, #view-requirements .history-filter-grid, .requirement-card-main, .requirement-card-footer, .quote-action, .quote-action.with-contract, .assign-action, .quotation-import-grid, .quote-item-edit-grid { grid-template-columns: 1fr; }
       .dashboard-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
