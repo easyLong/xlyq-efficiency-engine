@@ -9362,17 +9362,26 @@
         });
       const metric = employeeHistoryMetricSpec();
       const groups = new Map();
-      for (const task of visibleTasks) {
-        if (!task.assignee_user_id) continue;
-        const current = groups.get(task.assignee_user_id) || {
-          userId: task.assignee_user_id,
-          name: assigneeName(task.assignee_user_id),
+      const eligibleUsers = (state.users || [])
+        .filter(user => user.status !== "inactive")
+        .filter(user => {
+          if (selectedCenter === "all") return true;
+          return employeeCenterLabel(user.center_name || user.centerName) === selectedCenter;
+        });
+      for (const user of eligibleUsers) {
+        groups.set(user.id, {
+          userId: user.id,
+          name: user.display_name || user.username || "未命名员工",
           completed: 0,
           assigned: 0,
           overdue: 0,
           hours: 0,
           points: 0,
-        };
+        });
+      }
+      for (const task of visibleTasks) {
+        if (!task.assignee_user_id || !groups.has(task.assignee_user_id)) continue;
+        const current = groups.get(task.assignee_user_id);
         current.assigned += 1;
         current.hours += Number(task.estimated_hours ?? task.estimatedHours ?? 0) || 0;
         current.points += Number(task.contribution_points ?? task.contributionPoints ?? 0) || 0;
