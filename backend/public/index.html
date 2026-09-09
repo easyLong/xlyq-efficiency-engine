@@ -2358,10 +2358,9 @@
                 <div class="employee-history-ranking-control">
                   <label class="employee-ranking-filter"><span>排名维度</span>
                     <select id="employeeHistoryMetric" onchange="setEmployeeHistoryMetric(this.value)">
+                      <option value="points">贡献分</option>
                       <option value="completed">已完成数量</option>
                       <option value="assigned">执行任务</option>
-                      <option value="hours">预估工时</option>
-                      <option value="points">贡献分</option>
                     </select>
                   </label>
                   <label class="employee-ranking-filter"><span>中心</span>
@@ -2371,7 +2370,7 @@
                   </label>
                 </div>
               </div>
-              <p id="employeeHistoryMetricHint" class="employee-history-ranking-hint">默认按已完成数量排名；仅受上方时间范围影响。</p>
+              <p id="employeeHistoryMetricHint" class="employee-history-ranking-hint">默认按贡献分排名；仅受上方时间范围影响。</p>
               <div id="employeeTopBox" class="table-wrap"></div>
             </div>
           </div>
@@ -2760,7 +2759,7 @@
       employeeLoad: null,
       employeeLoadCategory: "all",
       employeeLoadSort: "recommended",
-      employeeHistoryMetric: "completed",
+      employeeHistoryMetric: "points",
       employeeHistoryCenter: "all",
       employeeHistoryTasks: [],
       employeeInsightView: "history",
@@ -9305,14 +9304,13 @@
       const specs = {
         completed: { label: "已完成数量", get: row => row.completed, format: value => String(value) },
         assigned: { label: "执行任务", get: row => row.assigned, format: value => String(value) },
-        hours: { label: "预估工时", get: row => row.hours, format: value => `${Number(value || 0).toFixed(2)}h` },
         points: { label: "贡献分", get: row => row.points, format: value => Number(value || 0).toFixed(2) },
       };
-      return specs[metric] || specs.completed;
+      return specs[metric] || specs.points;
     }
     function setEmployeeHistoryMetric(metric) {
-      const specs = ["completed", "assigned", "hours", "points"];
-      state.employeeHistoryMetric = specs.includes(metric) ? metric : "completed";
+      const specs = ["completed", "assigned", "points"];
+      state.employeeHistoryMetric = specs.includes(metric) ? metric : "points";
       renderEmployeeTop(state.employeeHistoryTasks || []);
     }
     const employeeHistoryCenterOrder = ["TOK产品中心", "客户成功中心", "业务运营", "业务内容"];
@@ -9375,7 +9373,6 @@
           completed: 0,
           assigned: 0,
           overdue: 0,
-          hours: 0,
           points: 0,
         });
       }
@@ -9383,7 +9380,6 @@
         if (!task.assignee_user_id || !groups.has(task.assignee_user_id)) continue;
         const current = groups.get(task.assignee_user_id);
         current.assigned += 1;
-        current.hours += Number(task.estimated_hours ?? task.estimatedHours ?? 0) || 0;
         current.points += Number(task.contribution_points ?? task.contributionPoints ?? 0) || 0;
         if (isTaskCompleted(task)) current.completed += 1;
         if (isTaskOverdue(task)) current.overdue += 1;
@@ -9395,7 +9391,7 @@
       if (hint) hint.textContent = `按${metric.label}从高到低排名，共 ${rows.length} 名员工；${selectedCenter === "all" ? "全部中心" : selectedCenter}；仅受上方时间范围影响。`;
       const metricSelect = qs("employeeHistoryMetric");
       if (metricSelect) metricSelect.value = state.employeeHistoryMetric;
-      const headers = ["排名", "员工", metric.label, "执行任务", "已完成", "延期", "预估工时", "贡献分"];
+      const headers = ["排名", "员工", metric.label, "执行任务", "已完成", "延期", "贡献分"];
       const toCells = (row, index) => [
         employeeRankCell(index),
         personCellHtml(row.userId, row.name),
@@ -9403,7 +9399,6 @@
         row.assigned,
         row.completed,
         row.overdue,
-        `${row.hours.toFixed(2)}h`,
         row.points.toFixed(2),
       ];
       const topRows = rows.slice(0, 10);
