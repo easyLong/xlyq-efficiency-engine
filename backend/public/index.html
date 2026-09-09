@@ -6452,9 +6452,19 @@
       const type = selectedProjectType();
       if (!customer || !type) return null;
       const secondarySelect = qs("secondaryCategoryInput");
+      const preserveTertiarySelection = secondarySelect?.dataset.category === type.value;
+      const tertiarySelect = qs("tertiaryCategoryInput");
+      const selectedTertiaryCodes = preserveTertiarySelection
+        ? selectedTertiaryCategoryCodes(tertiarySelect)
+        : [];
+      const selectedTertiaryNames = preserveTertiarySelection
+        ? [...(tertiarySelect?.selectedOptions || [])].map(option => option.textContent.trim()).filter(Boolean)
+        : [];
       renderSecondaryCategorySelect(
         type.value,
-        secondarySelect?.dataset.category === type.value ? secondarySelect.value || "" : "",
+        preserveTertiarySelection ? secondarySelect.value || "" : "",
+        selectedTertiaryCodes,
+        selectedTertiaryNames,
       );
 
       let project = state.projects.find(p => p.customer_code === customer.customer_code && p.project_type === type.value);
@@ -7239,13 +7249,13 @@
         ...values.map(value => `<option value="${escapeAttr(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHtml(value)}</option>`),
       ].join("");
     }
-    function renderSecondaryCategorySelect(categoryValue = "", selectedValue = "") {
+    function renderSecondaryCategorySelect(categoryValue = "", selectedValue = "", selectedTertiaryCodes = [], selectedTertiaryNames = []) {
       const select = qs("secondaryCategoryInput");
       if (!select) return;
       select.innerHTML = secondaryCategoryOptions(categoryValue, selectedValue, "请选择二级分类");
       select.dataset.category = categoryValue;
       if (selectedValue) select.value = selectedValue;
-      renderTertiaryCategorySelect(categoryValue, select.value || "");
+      renderTertiaryCategorySelect(categoryValue, select.value || "", selectedTertiaryCodes, selectedTertiaryNames);
     }
     function categoryTreeNode(categoryValue = "") {
       return (state.categoryTree || []).find(item => item.code === categoryValue || item.name === categoryValue);
@@ -8027,8 +8037,23 @@
     async function createRequirement() {
       if (!can("requirement.create")) return toast("当前账号没有新建需求权限。");
       const selectedCandidateId = state.selectedAiPreviewCandidateId;
+      const selectedCategory = qs("projectTypeSelect")?.value || "";
+      const selectedSecondary = qs("secondaryCategoryInput")?.value || "";
+      const selectedTertiarySelect = qs("tertiaryCategoryInput");
+      const selectedTertiaryCodesBeforeSync = selectedTertiaryCategoryCodes(selectedTertiarySelect);
+      const selectedTertiaryNamesBeforeSync = [...(selectedTertiarySelect?.selectedOptions || [])]
+        .map(option => option.textContent.trim())
+        .filter(Boolean);
       const project = await syncProjectSelection(true);
       if (!project) return toast("请先选择客户和业务大类");
+      if (selectedTertiaryCodesBeforeSync.length) {
+        renderTertiaryCategorySelect(
+          selectedCategory,
+          qs("secondaryCategoryInput")?.value || selectedSecondary,
+          selectedTertiaryCodesBeforeSync,
+          selectedTertiaryNamesBeforeSync,
+        );
+      }
       const businessPlatform = normalizeBusinessPlatform(qs("businessPlatformInput").value);
       const secondaryCategory = qs("secondaryCategoryInput").value;
       const tertiaryCategoryCodes = selectedTertiaryCategoryCodes();
