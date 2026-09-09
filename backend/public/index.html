@@ -1084,6 +1084,15 @@
       font-size: 13px;
       font-weight: 800;
     }
+    .employee-ranking-above-average td {
+      background: #fff8f7;
+    }
+    .employee-ranking-above-average td:first-child {
+      box-shadow: inset 3px 0 0 #e7aaa3;
+    }
+    .employee-ranking-above-average:hover td {
+      background: #fff1ef;
+    }
     .employee-ranking-more {
       margin-top: 10px;
       border-top: 1px solid #e5eadf;
@@ -2370,7 +2379,7 @@
                   </label>
                 </div>
               </div>
-              <p id="employeeHistoryMetricHint" class="employee-history-ranking-hint">默认按贡献分排名；仅受上方时间范围影响。</p>
+              <p id="employeeHistoryMetricHint" class="employee-history-ranking-hint">默认按贡献分从高到低排名；平均贡献分：暂无数据。</p>
               <div id="employeeTopBox" class="table-wrap"></div>
             </div>
           </div>
@@ -2381,9 +2390,9 @@
                   <div class="kicker">组织概览</div>
                   <h3>中心效能排行</h3>
                 </div>
-                <span class="tag">按执行量统计</span>
+                <span class="tag">按总贡献分排名</span>
               </div>
-              <p class="employee-history-ranking-hint">按飞书一级组织单元汇总任务，完成率 = 完成量 ÷ 执行量。</p>
+              <p class="employee-history-ranking-hint">按飞书一级组织单元汇总任务，按总贡献分从高到低排名；完成率 = 完成量 ÷ 执行量。</p>
               <div id="employeeCenterOverviewBox" class="table-wrap"></div>
             </div>
           </div>
@@ -9388,7 +9397,8 @@
       const rows = [...groups.values()]
         .sort((a, b) => metric.get(b) - metric.get(a) || b.completed - a.completed || b.assigned - a.assigned);
       const hint = qs("employeeHistoryMetricHint");
-      if (hint) hint.textContent = `按${metric.label}从高到低排名，共 ${rows.length} 名员工；${selectedCenter === "all" ? "全部中心" : selectedCenter}；仅受上方时间范围影响。`;
+      const averagePoints = rows.length ? rows.reduce((sum, row) => sum + Number(row.points || 0), 0) / rows.length : 0;
+      if (hint) hint.textContent = `按${metric.label}从高到低排名，共 ${rows.length} 名员工；${selectedCenter === "all" ? "全部中心" : selectedCenter}；平均贡献分：${averagePoints.toFixed(2)}；浅红色表示高于平均贡献分；仅受上方时间范围影响。`;
       const metricSelect = qs("employeeHistoryMetric");
       if (metricSelect) metricSelect.value = state.employeeHistoryMetric;
       const headers = ["排名", "员工", metric.label, "执行任务", "已完成", "延期", "贡献分"];
@@ -9412,6 +9422,16 @@
         );
         renderSimpleTable("employeeTopMoreBox", moreRows, headers, toCells, "暂无更多员工任务数据", 10);
       }
+      const highlightAboveAverage = (boxId, dataRows) => {
+        const tableRows = qs(boxId)?.querySelector("table tbody")?.rows || [];
+        [...tableRows].forEach((tableRow, index) => {
+          if (Number(dataRows[index]?.points || 0) > averagePoints) {
+            tableRow.classList.add("employee-ranking-above-average");
+          }
+        });
+      };
+      highlightAboveAverage("employeeTopBox", topRows);
+      if (moreRows.length) highlightAboveAverage("employeeTopMoreBox", moreRows);
     }
     function employeeCenterLabel(value) {
       const center = String(value || "").trim();
@@ -9427,13 +9447,15 @@
     function renderEmployeeCenterOverview(tasks) {
       const users = (state.users || []).filter(user => user.status !== "inactive");
       const hasCenterMapping = users.some(user => employeeCenterLabel(user.center_name || user.centerName));
-      const headers = ["\u6392\u540d", "\u4e2d\u5fc3", "\u6267\u884c\u91cf", "\u5b8c\u6210\u91cf", "\u5b8c\u6210\u7387"];
+      const headers = ["\u6392\u540d", "\u4e2d\u5fc3", "\u603b\u8d21\u732e\u5206", "\u6267\u884c\u91cf", "\u5b8c\u6210\u91cf", "\u5b8c\u6210\u7387", "\u5e73\u5747\u8d21\u732e\u5206"];
       const toCells = (row, index) => [
         employeeRankCell(index),
         safeText(row.center),
+        row.points.toFixed(2),
         row.execution,
         row.completed,
         `${row.execution ? ((row.completed / row.execution) * 100).toFixed(1) : "0.0"}%`,
+        row.execution ? (row.points / row.execution).toFixed(2) : "0.00",
       ];
       if (!hasCenterMapping) {
         renderSimpleTable(
@@ -9452,14 +9474,15 @@
         const user = userById.get(task.assignee_user_id);
         const center = employeeCenterLabel(user?.center_name || user?.centerName);
         if (!center) continue;
-        const current = groups.get(center) || { center, execution: 0, completed: 0 };
+        const current = groups.get(center) || { center, execution: 0, completed: 0, points: 0 };
         current.execution += 1;
+        current.points += Number(task.contribution_points ?? task.contributionPoints ?? 0) || 0;
         if (isTaskCompleted(task)) current.completed += 1;
         groups.set(center, current);
       }
       const rows = [...groups.values()]
         .filter(row => row.execution > 0)
-        .sort((a, b) => b.execution - a.execution || b.completed - a.completed || a.center.localeCompare(b.center));
+        .sort((a, b) => b.points - a.points || b.execution - a.execution || b.completed - a.completed || a.center.localeCompare(b.center));
       renderSimpleTable("employeeCenterOverviewBox", rows, headers, toCells, "\u6682\u65e0\u4e2d\u5fc3\u4efb\u52a1\u6570\u636e");
     }
     function renderOwnerTaskBoard(tasks) {
