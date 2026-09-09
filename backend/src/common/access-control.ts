@@ -30,6 +30,8 @@ const adminPermissions = ['*'];
 const dispatcherPermissions = [
   'page.requirements',
   'page.dashboard',
+  'page.settlement',
+  'settlement.view_all',
   'dashboard.view_global',
   'dashboard.employee_detail',
   'page.messages',

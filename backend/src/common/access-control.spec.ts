@@ -75,6 +75,8 @@ describe('workflow access profile', () => {
     expect(profile.permissions).toEqual(
       expect.arrayContaining([
         'page.group_management',
+        'page.settlement',
+        'settlement.view_all',
         'requirement.create',
         'task.assign_owned',
         'task.accept_owned',
