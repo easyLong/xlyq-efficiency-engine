@@ -1042,6 +1042,12 @@
       font-size: 11px;
       font-weight: 800;
     }
+    .employee-ranking-filter {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
     .employee-history-ranking-control select {
       min-height: 32px;
       min-width: 112px;
@@ -2350,13 +2356,19 @@
                   <h3>员工历史任务统计</h3>
                 </div>
                 <div class="employee-history-ranking-control">
-                  <span>排名维度</span>
-                  <select id="employeeHistoryMetric" onchange="setEmployeeHistoryMetric(this.value)">
-                    <option value="completed">已完成数量</option>
-                    <option value="assigned">执行任务</option>
-                    <option value="hours">预估工时</option>
-                    <option value="points">积分</option>
-                  </select>
+                  <label class="employee-ranking-filter"><span>排名维度</span>
+                    <select id="employeeHistoryMetric" onchange="setEmployeeHistoryMetric(this.value)">
+                      <option value="completed">已完成数量</option>
+                      <option value="assigned">执行任务</option>
+                      <option value="hours">预估工时</option>
+                      <option value="points">贡献分</option>
+                    </select>
+                  </label>
+                  <label class="employee-ranking-filter"><span>中心</span>
+                    <select id="employeeHistoryCenter" onchange="setEmployeeHistoryCenter(this.value)">
+                      <option value="all">全部中心</option>
+                    </select>
+                  </label>
                 </div>
               </div>
               <p id="employeeHistoryMetricHint" class="employee-history-ranking-hint">默认按已完成数量排名；仅受上方时间范围影响。</p>
@@ -2556,8 +2568,8 @@
           <div class="section-title">
             <div>
               <div class="kicker">Classification Standard</div>
-              <h3>三级分类工时与积分</h3>
-              <p>三级分类可在需求中多选；任务预估工时和积分取所选项目之和。</p>
+              <h3>三级分类工时与贡献分</h3>
+              <p>三级分类可在需求中多选；任务预估工时和贡献分取所选项目之和。</p>
             </div>
             <button class="btn" onclick="reloadCategoryTree()">刷新</button>
           </div>
@@ -2566,7 +2578,7 @@
             <label>二级分类<select id="classificationSecondaryInput"></select></label>
             <label>三级分类名称<input id="classificationNameInput" placeholder="例如：原创长图文案" /></label>
             <label>预估工时<input id="classificationHoursInput" type="number" min="0" step="0.25" value="6" /></label>
-            <label>积分<input id="classificationPointsInput" type="number" min="0" step="0.01" value="0" /></label>
+            <label>贡献分<input id="classificationPointsInput" type="number" min="0" step="0.01" value="0" /></label>
           </div>
           <div class="btns"><button class="btn primary" onclick="createTertiaryCategory()">新增三级分类</button></div>
           <div id="classificationConfigBoard" class="table-wrap"></div>
@@ -2749,6 +2761,7 @@
       employeeLoadCategory: "all",
       employeeLoadSort: "recommended",
       employeeHistoryMetric: "completed",
+      employeeHistoryCenter: "all",
       employeeHistoryTasks: [],
       employeeInsightView: "history",
       employeeDetail: null,
@@ -5070,7 +5083,7 @@
       return [
         row.contactContext ? `需求方：${safeText(row.contactContext)}` : "",
         row.requirement.tertiary_category ? `三级分类：${safeText(row.requirement.tertiary_category)}` : "",
-        row.task ? `预估：${Number(row.task.estimated_hours || 0).toFixed(2)}小时 / ${Number(row.task.contribution_points || 0).toFixed(2)}积分` : "",
+        row.task ? `预估：${Number(row.task.estimated_hours || 0).toFixed(2)}小时 / ${Number(row.task.contribution_points || 0).toFixed(2)}贡献分` : "",
         row.task ? `价格：${formatMoney(row.task.price_amount)}` : "",
         taskPlanDateRangeText(row.task) ? `计划：${taskPlanDateRangeText(row.task)}` : "",
         `创建：${new Date(row.requirement.created_at).toLocaleString()}`,
@@ -6057,7 +6070,7 @@
                     String(requirement.tertiary_category || "").split(/[、,，]/).map(item => item.trim()).filter(Boolean),
                   )}
                 </select>
-                <span id="edit-classification-summary-${requirement.id}" class="muted">选择后自动汇总工时与积分</span>
+                <span id="edit-classification-summary-${requirement.id}" class="muted">选择后自动汇总工时与贡献分</span>
               </div>
               <label>
                 需求标题
@@ -7272,7 +7285,7 @@
         (secondary.tertiaries || []).map(tertiary => ({ category, secondary, tertiary }))
       ));
       board.innerHTML = rows.length ? `
-        <table><thead><tr><th>业务大类</th><th>二级分类</th><th>三级分类</th><th>产品类型</th><th>预估工时</th><th>积分</th><th>操作</th></tr></thead>
+        <table><thead><tr><th>业务大类</th><th>二级分类</th><th>三级分类</th><th>产品类型</th><th>预估工时</th><th>贡献分</th><th>操作</th></tr></thead>
         <tbody>${rows.map(({ category, secondary, tertiary }) => `
           <tr>
             <td>${escapeHtml(category.name)}</td><td>${escapeHtml(secondary.name)}</td>
@@ -7321,7 +7334,7 @@
             parentCode,
             status: "active",
             estimatedHours: metricInputValue("classificationHoursInput", "预估工时"),
-            contributionPoints: metricInputValue("classificationPointsInput", "积分"),
+            contributionPoints: metricInputValue("classificationPointsInput", "贡献分"),
           },
         });
         qs("classificationNameInput").value = "";
@@ -7345,11 +7358,11 @@
           body: {
             dimensionName: name,
             estimatedHours: metricInputValue(`classification-hours-${code}`, "预估工时"),
-            contributionPoints: metricInputValue(`classification-points-${code}`, "积分"),
+            contributionPoints: metricInputValue(`classification-points-${code}`, "贡献分"),
           },
         });
         await reloadCategoryTree(false);
-        toast("分类工时与积分已保存");
+        toast("分类工时与贡献分已保存");
       } catch (error) {
         toast(error.message || "保存失败");
       }
@@ -7442,7 +7455,7 @@
         sum.points += Number(item?.contributionPoints || 0);
         return sum;
       }, { hours: 0, points: 0 });
-      target.textContent = `已选 ${selected.length} 项，自动汇总 ${totals.hours.toFixed(2)} 小时 / ${totals.points.toFixed(2)} 积分`;
+      target.textContent = `已选 ${selected.length} 项，自动汇总 ${totals.hours.toFixed(2)} 小时 / ${totals.points.toFixed(2)} 贡献分`;
     }
     function rulesForQuotationItem(quotationItemId) {
       return (state.mappingWorkbench?.dimensionRules || []).filter(rule => rule.quotation_item_id === quotationItemId && rule.status !== "inactive");
@@ -9293,13 +9306,40 @@
         completed: { label: "已完成数量", get: row => row.completed, format: value => String(value) },
         assigned: { label: "执行任务", get: row => row.assigned, format: value => String(value) },
         hours: { label: "预估工时", get: row => row.hours, format: value => `${Number(value || 0).toFixed(2)}h` },
-        points: { label: "积分", get: row => row.points, format: value => Number(value || 0).toFixed(2) },
+        points: { label: "贡献分", get: row => row.points, format: value => Number(value || 0).toFixed(2) },
       };
       return specs[metric] || specs.completed;
     }
     function setEmployeeHistoryMetric(metric) {
       const specs = ["completed", "assigned", "hours", "points"];
       state.employeeHistoryMetric = specs.includes(metric) ? metric : "completed";
+      renderEmployeeTop(state.employeeHistoryTasks || []);
+    }
+    const employeeHistoryCenterOrder = ["TOK产品中心", "客户成功中心", "业务运营", "业务内容"];
+    function employeeHistoryCenterOptions() {
+      const available = new Set();
+      for (const user of state.users || []) {
+        const center = employeeCenterLabel(user.center_name || user.centerName);
+        if (center && employeeHistoryCenterOrder.includes(center)) available.add(center);
+      }
+      return employeeHistoryCenterOrder.filter(center => available.has(center));
+    }
+    function syncEmployeeHistoryCenterSelect() {
+      const select = qs("employeeHistoryCenter");
+      if (!select) return;
+      const options = employeeHistoryCenterOptions();
+      if (state.employeeHistoryCenter !== "all" && !options.includes(state.employeeHistoryCenter)) {
+        state.employeeHistoryCenter = "all";
+      }
+      select.innerHTML = [
+        `<option value="all">全部中心</option>`,
+        ...options.map(center => `<option value="${escapeAttr(center)}">${safeText(center)}</option>`),
+      ].join("");
+      select.value = state.employeeHistoryCenter;
+    }
+    function setEmployeeHistoryCenter(center) {
+      const options = employeeHistoryCenterOptions();
+      state.employeeHistoryCenter = center === "all" || options.includes(center) ? center : "all";
       renderEmployeeTop(state.employeeHistoryTasks || []);
     }
     function employeeRankCell(index) {
@@ -9311,9 +9351,18 @@
     }
     function renderEmployeeTop(tasks) {
       state.employeeHistoryTasks = tasks || [];
+      syncEmployeeHistoryCenterSelect();
+      const selectedCenter = state.employeeHistoryCenter || "all";
+      const userById = getLookupMaps().userById;
+      const visibleTasks = selectedCenter === "all"
+        ? state.employeeHistoryTasks
+        : state.employeeHistoryTasks.filter(task => {
+          const user = userById.get(task.assignee_user_id);
+          return employeeCenterLabel(user?.center_name || user?.centerName) === selectedCenter;
+        });
       const metric = employeeHistoryMetricSpec();
       const groups = new Map();
-      for (const task of tasks) {
+      for (const task of visibleTasks) {
         if (!task.assignee_user_id) continue;
         const current = groups.get(task.assignee_user_id) || {
           userId: task.assignee_user_id,
@@ -9334,10 +9383,10 @@
       const rows = [...groups.values()]
         .sort((a, b) => metric.get(b) - metric.get(a) || b.completed - a.completed || b.assigned - a.assigned);
       const hint = qs("employeeHistoryMetricHint");
-      if (hint) hint.textContent = `按${metric.label}从高到低排名，共 ${rows.length} 名员工；仅受上方时间范围影响。`;
+      if (hint) hint.textContent = `按${metric.label}从高到低排名，共 ${rows.length} 名员工；${selectedCenter === "all" ? "全部中心" : selectedCenter}；仅受上方时间范围影响。`;
       const metricSelect = qs("employeeHistoryMetric");
       if (metricSelect) metricSelect.value = state.employeeHistoryMetric;
-      const headers = ["排名", "员工", metric.label, "执行任务", "已完成", "延期", "预估工时", "积分"];
+      const headers = ["排名", "员工", metric.label, "执行任务", "已完成", "延期", "预估工时", "贡献分"];
       const toCells = (row, index) => [
         employeeRankCell(index),
         personCellHtml(row.userId, row.name),
