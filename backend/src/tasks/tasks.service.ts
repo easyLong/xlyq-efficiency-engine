@@ -134,7 +134,9 @@ type EmployeeLoadSqlRow = {
   feishuOpenId: string | null;
   taskId: string | null;
   taskIsOpen: number | null;
+  taskNo: string | null;
   taskName: string | null;
+  taskDescription: string | null;
   taskStatus: string | null;
   reviewStage: string | null;
   priority: string | null;
@@ -441,7 +443,9 @@ export class TasksService implements OnModuleInit {
           employee.feishu_open_id AS feishuOpenId,
           task.id AS taskId,
           CASE WHEN task.status NOT IN ('completed', 'cancelled') THEN 1 ELSE 0 END AS taskIsOpen,
+          task.task_no AS taskNo,
           task.task_name AS taskName,
+          task.description AS taskDescription,
           task.status AS taskStatus,
           task.review_stage AS reviewStage,
           task.priority AS priority,
@@ -582,7 +586,9 @@ export class TasksService implements OnModuleInit {
         employee.remainingHours += baseHours * remainingFactor;
         employee.tasks.push({
           id: row.taskId,
+          taskNo: row.taskNo,
           taskName: row.taskName,
+          description: row.taskDescription,
           status,
           reviewStage: row.reviewStage,
           priority: row.priority,

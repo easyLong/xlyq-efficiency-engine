@@ -1150,6 +1150,37 @@
     .employee-detail-metric strong { display: block; margin-top: 5px; font-size: 20px; }
     .employee-detail-section { margin-top: 16px; }
     .employee-detail-section h4 { margin: 0 0 8px; }
+    .employee-task-detail { min-width: 88px; }
+    .employee-task-detail summary {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 9px;
+      border: 1px solid #cbdcc9;
+      border-radius: 8px;
+      background: #f1f7ef;
+      color: #356d45;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      list-style: none;
+      white-space: nowrap;
+    }
+    .employee-task-detail summary::-webkit-details-marker { display: none; }
+    .employee-task-detail-content {
+      width: min(340px, 58vw);
+      margin-top: 7px;
+      padding: 10px;
+      border: 1px solid #d8e4d4;
+      border-radius: 10px;
+      background: #fbfdf9;
+      box-shadow: 0 8px 20px rgba(45, 63, 46, .1);
+      white-space: normal;
+    }
+    .employee-task-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 10px; }
+    .employee-task-detail-item span { display: block; color: #7a8578; font-size: 11px; }
+    .employee-task-detail-item strong { display: block; margin-top: 2px; color: #263426; font-size: 12px; line-height: 1.35; word-break: break-word; }
+    .employee-task-detail-description { margin: 9px 0 0; padding-top: 8px; border-top: 1px solid #e7eee4; color: #586458; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
     .candidate-list { display: grid; gap: 8px; }
     .candidate-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid #d8dfcf; border-radius: 12px; padding: 10px; }
     .candidate-row:hover { border-color: #9fb8cf; background: #f8fbff; }
@@ -2307,7 +2338,7 @@
             <span class="tag">按上方时间范围联动</span>
           </div>
           <div class="employee-insights-tabs" role="tablist" aria-label="员工分析视图">
-            <button id="employeeInsightHistoryTab" type="button" class="active" role="tab" aria-selected="true" onclick="setEmployeeInsightView('history')">历史统计</button>
+            <button id="employeeInsightHistoryTab" type="button" class="active" role="tab" aria-selected="true" onclick="setEmployeeInsightView('history')">员工效能排行</button>
             <button id="employeeInsightCenterTab" type="button" role="tab" aria-selected="false" onclick="setEmployeeInsightView('center')">中心效能排行</button>
             <button id="employeeInsightLoadTab" type="button" role="tab" aria-selected="false" onclick="setEmployeeInsightView('load')">实时负载</button>
           </div>
@@ -8323,7 +8354,6 @@
               && dashboardDateMatches(requirement, task);
           });
         const visibleTasks = rows;
-        const totalAssets = visibleTasks.reduce((sum, task) => sum + Number(task.asset_count || task.assetCount || 0), 0);
         const completedRequirementIds = new Set();
         let completedUnlinkedTasks = 0;
         visibleTasks.filter(isTaskCompleted).forEach(task => {
@@ -8353,7 +8383,6 @@
           ["待审核任务", pendingReviewCount, "员工已提交，等待成品审核或客户确认"],
           ["已完成需求", completedDemandCount, "客户确认通过并已归档的需求"],
           ["延期任务", overdueCount, `3个工作日内到期 ${dueSoonCount} 项`],
-          ["交付资产数", totalAssets, "自动读取资产表中的图片和交付链接"],
         ].map(([label, value, hint]) => `<div class="panel metric"><span>${label}</span><strong>${value}</strong><span>${hint}</span></div>`).join("");
         const analyticsContext = {
           visibleTasks,
@@ -9142,6 +9171,33 @@
         toast(error.message || "推荐执行人读取失败");
       }
     }
+    function employeeTaskDetailHtml(task) {
+      const progress = task.progressPercent == null ? "-" : `${Number(task.progressPercent)}%`;
+      const estimatedHours = task.estimatedHours == null ? "-" : `${Number(task.estimatedHours).toFixed(2)} 小时`;
+      const dispatcher = task.dispatcherUserId ? assigneeName(task.dispatcherUserId) : "-";
+      return `
+        <details class="employee-task-detail" onclick="event.stopPropagation()">
+          <summary>查看详情</summary>
+          <div class="employee-task-detail-content">
+            <div class="employee-task-detail-grid">
+              <div class="employee-task-detail-item"><span>任务编号</span><strong>${safeText(task.taskNo || "-")}</strong></div>
+              <div class="employee-task-detail-item"><span>状态</span><strong>${safeText(taskStatusLabel(task.status))}</strong></div>
+              <div class="employee-task-detail-item"><span>业务分类</span><strong>${safeText(task.businessCategory || "-")}</strong></div>
+              <div class="employee-task-detail-item"><span>优先级</span><strong>${safeText(task.priority || "-")}</strong></div>
+              <div class="employee-task-detail-item"><span>预估工时</span><strong>${estimatedHours}</strong></div>
+              <div class="employee-task-detail-item"><span>当前进度</span><strong>${progress}</strong></div>
+              <div class="employee-task-detail-item"><span>开始时间</span><strong>${safeText(shortDate(task.plannedStartAt) || "-")}</strong></div>
+              <div class="employee-task-detail-item"><span>截止时间</span><strong>${safeText(shortDate(task.plannedEndAt) || "-")}</strong></div>
+              <div class="employee-task-detail-item"><span>客户</span><strong>${safeText(task.customerName || "-")}</strong></div>
+              <div class="employee-task-detail-item"><span>业务平台</span><strong>${safeText(task.businessPlatform || "-")}</strong></div>
+              <div class="employee-task-detail-item"><span>派发人</span><strong>${safeText(dispatcher)}</strong></div>
+            </div>
+            <p class="employee-task-detail-description">${safeText(task.description || "暂无任务说明")}</p>
+            ${task.blockedReason ? `<p class="employee-task-detail-description">阻塞原因：${safeText(task.blockedReason)}</p>` : ""}
+          </div>
+        </details>
+      `;
+    }
     function renderEmployeeDetailDrawer() {
       const body = qs("employeeDetailBody");
       if (!body) return;
@@ -9179,8 +9235,8 @@
           <div class="employee-detail-metric"><span>延期任务</span><strong>${employee.overdueCount}</strong></div>
         </div>
         <div class="employee-detail-section"><h4>当前任务</h4>
-          <div class="table-wrap"><table><thead><tr><th>任务</th><th>基金/平台</th><th>截止时间</th><th>状态</th></tr></thead><tbody>
-            ${tasks.map(task => `<tr><td>${safeText(task.taskName || "未命名任务")}<br><span class="muted">${safeText(task.businessCategory || "未分类")}</span></td><td>${safeText(task.customerName || "-")} / ${safeText(task.businessPlatform || "-")}</td><td>${safeText(shortDate(task.plannedEndAt))}</td><td>${safeText(taskStatusLabel(task.status))}</td></tr>`).join("") || `<tr><td colspan="4">暂无未完成任务</td></tr>`}
+          <div class="table-wrap"><table><thead><tr><th>任务</th><th>基金/平台</th><th>截止时间</th><th>状态</th><th>详情</th></tr></thead><tbody>
+            ${tasks.map(task => `<tr><td>${safeText(task.taskName || "未命名任务")}<br><span class="muted">${safeText(task.businessCategory || "未分类")}</span></td><td>${safeText(task.customerName || "-")} / ${safeText(task.businessPlatform || "-")}</td><td>${safeText(shortDate(task.plannedEndAt))}</td><td>${safeText(taskStatusLabel(task.status))}</td><td>${employeeTaskDetailHtml(task)}</td></tr>`).join("") || `<tr><td colspan="5">暂无未完成任务</td></tr>`}
           </tbody></table></div>
         </div>
         <div class="employee-detail-section"><h4>近30天交付表现</h4><p class="muted">已完成 ${Number(employee.recent30?.completed || 0)} 项，按时完成 ${employee.recent30?.onTimeRate == null ? "暂无数据" : `${employee.recent30.onTimeRate}%`}，退回 ${Number(employee.recent30?.returned || 0)} 次。</p></div>
