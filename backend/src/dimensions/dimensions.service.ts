@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
+import { contributionPointsFromHours } from '../common/efficiency-metrics';
 import { UpdateDimensionDictionaryDto } from './dto/update-dimension-dictionary.dto';
 import { UpsertDimensionDictionaryDto } from './dto/upsert-dimension-dictionary.dto';
 import { BusinessCategorySecondaryCategoryEntity } from './entities/business-category-secondary-category.entity';
@@ -45,6 +46,7 @@ export class DimensionsService implements OnModuleInit {
     await this.seedBusinessCategorySecondaryRelations();
     await this.syncCategoryTertiaryMetrics();
     await this.seedCompatibilityTertiaryCategories();
+    await this.normalizeMissingTertiaryPoints();
   }
 
   async findAll(input?: {
@@ -274,11 +276,12 @@ export class DimensionsService implements OnModuleInit {
       ordered
         .reduce((sum, item) => sum + Number(item[field] ?? 0), 0)
         .toFixed(2);
+    const estimatedHours = total('estimated_hours');
     return {
       codes: uniqueCodes,
       names: ordered.map((item) => item.dimension_name),
-      estimatedHours: total('estimated_hours'),
-      contributionPoints: total('contribution_points'),
+      estimatedHours,
+      contributionPoints: contributionPointsFromHours(estimatedHours),
     };
   }
 
@@ -375,7 +378,7 @@ export class DimensionsService implements OnModuleInit {
         sortOrder: 10,
         status: 'active',
         estimatedHours: '6.00',
-        contributionPoints: '0.00',
+        contributionPoints: '60.00',
         remark: '兼容既有分类的默认三级项，请按实际标准调整工时与积分',
       });
     }
@@ -406,6 +409,18 @@ export class DimensionsService implements OnModuleInit {
         item.referenceMinutes ?? existing.reference_minutes;
       await this.dimensionsRepository.save(existing);
     }
+  }
+
+  private async normalizeMissingTertiaryPoints() {
+    await this.dataSource.query(`
+      UPDATE dimension_dictionaries
+      SET contribution_points = ROUND(estimated_hours * 10, 2)
+      WHERE dimension_type = 'tertiary_category'
+        AND deleted_at IS NULL
+        AND estimated_hours IS NOT NULL
+        AND estimated_hours > 0
+        AND (contribution_points IS NULL OR contribution_points = 0)
+    `);
   }
 
   private async ensureBusinessCategorySecondaryTable() {

@@ -49,4 +49,9 @@ export class WorkflowConfigsController {
       dto.userIds,
     );
   }
+
+  @Put('report-recipients')
+  replaceReportRecipients(@Body() dto: ReplaceWorkflowMembersDto) {
+    return this.workflowConfigsService.replaceReportRecipients(dto.userIds);
+  }
 }

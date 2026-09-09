@@ -33,10 +33,18 @@ type FeishuUserItem = {
 type FeishuDepartmentItem = {
   department_id?: string;
   open_department_id?: string;
+  parent_department_id?: string;
+  open_parent_department_id?: string;
   name?: string;
   status?: {
     is_deleted?: boolean;
   };
+};
+
+type SyncDepartment = {
+  id: string;
+  name: string | null;
+  centerName: string | null;
 };
 
 @Injectable()
@@ -59,6 +67,8 @@ export class FeishuUserSyncService {
     const includeSubDepartments = dto.includeSubDepartments !== false;
     const synced: UserEntity[] = [];
     const syncedOpenIds = new Set<string>();
+    const syncedUsers = new Map<string, UserEntity>();
+    const centerByOpenId = new Map<string, string | null>();
 
     const log = await this.createSyncLog({
       objectType: 'user',
@@ -86,17 +96,31 @@ export class FeishuUserSyncService {
           });
 
           for (const item of body.data?.items ?? []) {
-            if (!item.open_id || syncedOpenIds.has(item.open_id)) {
+            if (!item.open_id) {
               continue;
             }
-            syncedOpenIds.add(item.open_id);
-            const user = await this.upsertFeishuUser(item);
-            if (user) {
+            let user: UserEntity | null = syncedUsers.get(item.open_id) ?? null;
+            if (!user) {
+              user = await this.upsertFeishuUser(item);
+              if (user) syncedUsers.set(item.open_id, user);
+            }
+            if (user && !syncedOpenIds.has(item.open_id)) {
+              syncedOpenIds.add(item.open_id);
               synced.push(user);
+            }
+            if (user && department.centerName) {
+              centerByOpenId.set(item.open_id, department.centerName);
+            } else if (user && !centerByOpenId.has(item.open_id)) {
+              centerByOpenId.set(item.open_id, null);
             }
           }
           pageToken = body.data?.has_more ? (body.data.page_token ?? '') : '';
         } while (pageToken);
+      }
+
+      for (const [openId, user] of syncedUsers) {
+        user.center_name = centerByOpenId.get(openId) ?? null;
+        await this.usersRepository.save(user);
       }
 
       log.status = 'success';
@@ -127,50 +151,86 @@ export class FeishuUserSyncService {
     pageSize: number;
     includeSubDepartments: boolean;
   }) {
-    const departments = new Map<string, { id: string; name: string | null }>();
+    const departments = new Map<string, SyncDepartment>();
     departments.set(input.departmentId, {
       id: input.departmentId,
       name: input.departmentId === '0' ? 'root' : null,
+      centerName: null,
     });
 
     if (!input.includeSubDepartments) {
       return Array.from(departments.values());
     }
 
+    const topLevelDepartments = await this.fetchAllDepartmentChildren({
+      departmentId: input.departmentId,
+      pageSize: input.pageSize,
+      fetchChild: false,
+    });
+    for (const item of topLevelDepartments) {
+      const id = item.open_department_id ?? item.department_id;
+      if (!id || item.status?.is_deleted) continue;
+      departments.set(id, {
+        id,
+        name: item.name ?? null,
+        centerName: item.name ?? null,
+      });
+    }
+
+    for (const topLevel of topLevelDepartments) {
+      const topLevelId = topLevel.open_department_id ?? topLevel.department_id;
+      if (!topLevelId || topLevel.status?.is_deleted) continue;
+      const descendants = await this.fetchAllDepartmentChildren({
+        departmentId: topLevelId,
+        pageSize: input.pageSize,
+        fetchChild: true,
+      });
+      for (const item of descendants) {
+        const id = item.open_department_id ?? item.department_id;
+        if (!id || item.status?.is_deleted) continue;
+        departments.set(id, {
+          id,
+          name: item.name ?? null,
+          centerName: topLevel.name ?? null,
+        });
+      }
+    }
+
+    return Array.from(departments.values());
+  }
+
+  private async fetchAllDepartmentChildren(input: {
+    departmentId: string;
+    pageSize: number;
+    fetchChild: boolean;
+  }) {
+    const items: FeishuDepartmentItem[] = [];
     let pageToken = '';
     do {
       const body = await this.fetchDepartmentChildrenPage({
         departmentId: input.departmentId,
         pageSize: input.pageSize,
         pageToken,
+        fetchChild: input.fetchChild,
       });
-
-      for (const item of body.data?.items ?? []) {
-        if (item.status?.is_deleted) {
-          continue;
-        }
-        const id = item.open_department_id ?? item.department_id;
-        if (id) {
-          departments.set(id, { id, name: item.name ?? null });
-        }
-      }
+      items.push(...(body.data?.items ?? []));
       pageToken = body.data?.has_more ? (body.data.page_token ?? '') : '';
     } while (pageToken);
-
-    return Array.from(departments.values());
+    return items;
   }
 
   private async fetchDepartmentChildrenPage(input: {
     departmentId: string;
     pageSize: number;
     pageToken: string;
+    fetchChild: boolean;
   }) {
     const url = new URL(
       `https://open.feishu.cn/open-apis/contact/v3/departments/${encodeURIComponent(input.departmentId)}/children`,
     );
     url.searchParams.set('department_id_type', 'open_department_id');
     url.searchParams.set('user_id_type', 'open_id');
-    url.searchParams.set('fetch_child', 'true');
+    url.searchParams.set('fetch_child', String(input.fetchChild));
     url.searchParams.set('page_size', String(input.pageSize));
     if (input.pageToken) {
       url.searchParams.set('page_token', input.pageToken);

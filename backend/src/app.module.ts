@@ -19,6 +19,7 @@ import { UsersModule } from './users/users.module';
 import { WeeklyReportsModule } from './weekly-reports/weekly-reports.module';
 import { WorklogsModule } from './worklogs/worklogs.module';
 import { WorkflowConfigsModule } from './workflow-configs/workflow-configs.module';
+import { WorkReportsModule } from './work-reports/work-reports.module';
 import { BusinessCalendarModule } from './common/business-calendar.module';
 import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
 
@@ -49,6 +50,7 @@ import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
     CustomersModule,
     UsersModule,
     WorkflowConfigsModule,
+    WorkReportsModule,
     ProjectsModule,
     RequirementsModule,
     TasksModule,

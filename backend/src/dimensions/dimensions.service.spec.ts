@@ -17,7 +17,7 @@ describe('DimensionsService', () => {
           dimension_code: 'banner_resize',
           dimension_name: 'Banner 拓展',
           estimated_hours: '1.50',
-          contribution_points: '2.00',
+          contribution_points: '0.00',
         },
       ]),
     };
@@ -36,7 +36,7 @@ describe('DimensionsService', () => {
       codes: ['banner_design', 'banner_resize'],
       names: ['Banner 新设计', 'Banner 拓展'],
       estimatedHours: '6.00',
-      contributionPoints: '10.00',
+      contributionPoints: '60.00',
     });
   });
 });

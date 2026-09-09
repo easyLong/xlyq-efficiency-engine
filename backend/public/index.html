@@ -216,6 +216,34 @@
       border-radius: 9px;
       padding: 7px 10px;
     }
+    #view-requirements .intake-tabs.single-option { grid-template-columns: 1fr; }
+    .work-report-intro {
+      display: grid;
+      gap: 3px;
+      padding: 11px 12px;
+      border: 1px solid #d8e5d6;
+      border-radius: 12px;
+      background: #f2f7ef;
+      color: #2d4934;
+    }
+    .work-report-intro span { color: #657265; font-size: 12px; line-height: 1.45; }
+    .work-report-recipient-hint {
+      padding: 9px 11px;
+      border-radius: 10px;
+      background: #f7f4e9;
+      color: #687366;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .work-report-recipient-hint.ready { color: #2f6b45; background: #edf5ea; }
+    .work-report-recipient-hint.missing { color: #9b3a2d; background: #fff0eb; }
+    .work-report-list-actions { display: flex; align-items: center; gap: 7px; }
+    .work-report-list-actions select { min-width: 112px; min-height: 34px; padding: 6px 8px; font-size: 12px; }
+    .work-report-list-actions .btn { min-height: 34px; padding: 6px 10px; border-radius: 10px; }
+    .work-report-entry { max-width: 440px; }
+    .work-report-entry summary { color: #263426; font-weight: 800; cursor: pointer; line-height: 1.35; }
+    .work-report-entry[open] summary { margin-bottom: 7px; }
+    .work-report-content { padding: 9px 11px; border-radius: 9px; background: #f5f7f2; color: #586458; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
     #view-requirements .requirement-metrics {
       grid-template-columns: repeat(5, minmax(84px, 1fr));
       margin-bottom: 0;
@@ -1005,8 +1033,100 @@
     }
     .employee-load-toolbar select { margin-top: 4px; min-height: 34px; padding: 7px 9px; font-size: 12px; }
     .employee-load-table { min-width: 980px; }
+    .employee-history-ranking-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+      color: #687366;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .employee-history-ranking-control select {
+      min-height: 32px;
+      min-width: 112px;
+      padding: 6px 8px;
+      border-radius: 9px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .employee-history-ranking-hint {
+      margin: -3px 0 10px;
+      color: #687366;
+      font-size: 12px;
+    }
+    .employee-rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      font-size: 18px;
+      line-height: 1;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .7), 0 3px 8px rgba(54, 62, 49, .12);
+    }
+    .employee-rank-badge.rank-1 { background: #fff1bf; }
+    .employee-rank-badge.rank-2 { background: #edf1f4; }
+    .employee-rank-badge.rank-3 { background: #f6dfcc; }
+    .employee-rank-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 30px;
+      color: #687366;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .employee-ranking-more {
+      margin-top: 10px;
+      border-top: 1px solid #e5eadf;
+    }
+    .employee-ranking-more summary {
+      padding: 10px 4px 2px;
+      color: #356d45;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      list-style-position: inside;
+    }
+    .employee-ranking-more[open] summary { padding-bottom: 8px; }
     .employee-load-table tbody tr { cursor: pointer; }
     .employee-load-table tbody tr:hover td { background: #f8f6ec; }
+    .employee-insights-panel { padding: 16px; }
+    .employee-insights-tabs {
+      display: inline-flex;
+      gap: 4px;
+      margin: 0 0 12px;
+      padding: 4px;
+      border: 1px solid #d8dfcf;
+      border-radius: 11px;
+      background: #f2f5ef;
+    }
+    .employee-insights-tabs button {
+      min-height: 32px;
+      padding: 6px 12px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #687366;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .employee-insights-tabs button.active {
+      background: #356d45;
+      color: #fff;
+      box-shadow: 0 5px 12px rgba(53, 109, 69, .18);
+    }
+    .employee-insights-view.hidden { display: none; }
+    .employee-insights-view > .dashboard-card { margin-top: 0; }
+    .employee-insights-view #employeeLoadPanel {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      box-shadow: none;
+    }
     .employee-cell { display: flex; gap: 9px; align-items: center; min-width: 150px; }
     .employee-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: #e6eee2; display: grid; place-items: center; color: #356d45; font-weight: 800; flex: 0 0 auto; }
     .table-person { display: flex; align-items: center; gap: 8px; min-width: 120px; }
@@ -1800,9 +1920,13 @@
           <div class="section-title">
             <div>
               <div class="kicker">New Requirement</div>
-              <h3>需求录入</h3>
+              <h3 id="requirementCreateTitle">需求录入</h3>
             </div>
-            <span class="tag">保存后自动生成待指派任务</span>
+            <span id="requirementCreateTag" class="tag">保存后自动生成待指派任务</span>
+          </div>
+          <div class="intake-tabs" role="tablist" aria-label="录入类型">
+            <button id="manualTabButton" type="button" class="active" onclick="switchIntakeMode('manual')">客户需求</button>
+            <button id="reportTabButton" type="button" onclick="switchIntakeMode('report')">内部管理</button>
           </div>
           <div class="grid">
             <input type="hidden" id="projectSelect" />
@@ -1866,6 +1990,32 @@
               </div>
             </div>
 
+            <div id="workReportIntakePanel" class="tab-panel hidden">
+              <div class="work-report-intro">
+                <strong>内部管理</strong>
+                <span>提交后直接抄送领导，不生成任务，也不进入派发、结算和员工负载。</span>
+              </div>
+              <div class="form-grid">
+                <label>业务大类
+                  <select id="workReportCategoryInput" onchange="renderWorkReportSecondaryOptions()"></select>
+                </label>
+                <label>二级分类
+                  <select id="workReportSecondaryInput"></select>
+                </label>
+              </div>
+              <label>汇报标题
+                <input id="workReportTitleInput" maxlength="128" placeholder="请概括本次工作进展" />
+              </label>
+              <label>汇报内容
+                <textarea id="workReportContentInput" maxlength="10000" placeholder="说明完成事项、当前进展、问题风险或需要协调的内容"></textarea>
+              </label>
+              <div id="workReportRecipientHint" class="work-report-recipient-hint">正在读取抄送领导...</div>
+              <div class="btns">
+                <button id="createWorkReportButton" class="btn primary" onclick="createWorkReport()">提交并抄送领导</button>
+                <button class="btn" onclick="clearWorkReportForm()">清空表单</button>
+              </div>
+            </div>
+
             <div id="aiIntakePanel" class="tab-panel hidden">
               <label>文件标题
                 <input id="aiRequirementTitle" placeholder="加载文件后自动带出，可手动修改" />
@@ -1895,6 +2045,7 @@
           <div id="requirementViewTabs" class="requirement-view-tabs" role="tablist" aria-label="需求视图">
             <button type="button" class="active" role="tab" aria-selected="true" onclick="setRequirementView('tasks')">任务需求列表</button>
             <button type="button" role="tab" aria-selected="false" onclick="setRequirementView('ai')">AI识别候选需求</button>
+            <button type="button" role="tab" aria-selected="false" onclick="setRequirementView('reports')">内部管理记录</button>
           </div>
           <div class="panel ai-preview-panel hidden" id="aiPreviewPanel">
             <div class="section-title">
@@ -1906,6 +2057,23 @@
             </div>
             <div class="panel-note" id="aiPreviewNote">自动读取AI识别到的预览候选，按基金分配给派发团队，需人工确认后进入真实需求库。</div>
             <div id="aiPreviewBoard"></div>
+          </div>
+          <div class="panel hidden" id="workReportListPanel">
+            <div class="section-title">
+              <div>
+                <div class="kicker">Internal Management</div>
+                <h3>内部管理记录</h3>
+              </div>
+              <div class="work-report-list-actions">
+                <select id="workReportScopeSelect" onchange="loadWorkReports(this.value)">
+                  <option value="all">全部可见</option>
+                  <option value="mine">我提交的</option>
+                  <option value="received">抄送我的</option>
+                </select>
+                <button class="btn" onclick="loadWorkReports()">刷新</button>
+              </div>
+            </div>
+            <div id="workReportList" class="table-wrap"></div>
           </div>
           <div id="requirementMetrics" class="summary-strip requirement-metrics"></div>
 
@@ -2129,23 +2297,75 @@
           <div id="dashboardDrillPath" class="dimension-drill-path"></div>
         </div>
         <div id="metrics" class="dashboard-metrics-grid"></div>
-        <section id="employeeLoadPanel" class="panel employee-load-panel hidden">
+        <section id="employeeInsightsPanel" class="panel employee-insights-panel">
           <div class="section-title">
             <div>
-              <div class="kicker">全局调度</div>
-              <h3>员工负载与可用度</h3>
-              <p>只统计当前未完成任务，帮助派发人选择合适的执行员工。</p>
+              <div class="kicker">员工分析</div>
+              <h3>员工负载与历史表现</h3>
+              <p>把实时调度和历史任务统计放在同一处，默认优先查看历史表现。</p>
             </div>
-            <span id="employeeLoadScopeTag" class="tag">全局实时负载</span>
+            <span class="tag">按上方时间范围联动</span>
           </div>
-          <div class="employee-load-toolbar">
-            <div class="toolbar-fields">
-              <label>业务类型<select id="employeeLoadCategory" onchange="renderEmployeeLoad()"><option value="all">全部类型</option></select></label>
-              <label>排序<select id="employeeLoadSort" onchange="renderEmployeeLoad()"><option value="recommended">推荐优先</option><option value="load">负载最低</option><option value="risk">风险最低</option></select></label>
+          <div class="employee-insights-tabs" role="tablist" aria-label="员工分析视图">
+            <button id="employeeInsightHistoryTab" type="button" class="active" role="tab" aria-selected="true" onclick="setEmployeeInsightView('history')">历史统计</button>
+            <button id="employeeInsightCenterTab" type="button" role="tab" aria-selected="false" onclick="setEmployeeInsightView('center')">中心效能排行</button>
+            <button id="employeeInsightLoadTab" type="button" role="tab" aria-selected="false" onclick="setEmployeeInsightView('load')">实时负载</button>
+          </div>
+          <div id="employeeInsightHistoryView" class="employee-insights-view">
+            <div class="panel dashboard-card">
+              <div class="section-title">
+                <div>
+                  <div class="kicker">历史表现</div>
+                  <h3>员工历史任务统计</h3>
+                </div>
+                <div class="employee-history-ranking-control">
+                  <span>排名维度</span>
+                  <select id="employeeHistoryMetric" onchange="setEmployeeHistoryMetric(this.value)">
+                    <option value="completed">已完成数量</option>
+                    <option value="assigned">执行任务</option>
+                    <option value="hours">预估工时</option>
+                    <option value="points">积分</option>
+                  </select>
+                </div>
+              </div>
+              <p id="employeeHistoryMetricHint" class="employee-history-ranking-hint">默认按已完成数量排名；仅受上方时间范围影响。</p>
+              <div id="employeeTopBox" class="table-wrap"></div>
             </div>
-            <span class="muted">点击员工可查看当前任务和近期开工情况</span>
           </div>
-          <div id="employeeLoadBox" class="table-wrap"></div>
+          <div id="employeeInsightCenterView" class="employee-insights-view hidden">
+            <div class="panel dashboard-card">
+              <div class="section-title">
+                <div>
+                  <div class="kicker">组织概览</div>
+                  <h3>中心效能排行</h3>
+                </div>
+                <span class="tag">按执行量统计</span>
+              </div>
+              <p class="employee-history-ranking-hint">按飞书一级组织单元汇总任务，完成率 = 完成量 ÷ 执行量。</p>
+              <div id="employeeCenterOverviewBox" class="table-wrap"></div>
+            </div>
+          </div>
+          <div id="employeeInsightLoadView" class="employee-insights-view hidden">
+            <section id="employeeLoadPanel" class="employee-load-panel hidden">
+              <div class="section-title">
+                <div>
+                  <div class="kicker">全局调度</div>
+                  <h3>员工负载与可用度</h3>
+                  <p>只统计当前未完成任务，帮助派发人选择合适的执行员工。</p>
+                </div>
+                <span id="employeeLoadScopeTag" class="tag">全局实时负载</span>
+              </div>
+              <div class="employee-load-toolbar">
+                <div class="toolbar-fields">
+                  <label>业务类型<select id="employeeLoadCategory" onchange="renderEmployeeLoad()"><option value="all">全部类型</option></select></label>
+                  <label>排序<select id="employeeLoadSort" onchange="renderEmployeeLoad()"><option value="recommended">推荐优先</option><option value="load">负载最低</option><option value="highest_load">负载最高</option><option value="risk">风险最低</option></select></label>
+                </div>
+                <span class="muted">点击员工可查看当前任务和近期开工情况</span>
+              </div>
+              <div id="employeeLoadBox" class="table-wrap"></div>
+            </section>
+            <div id="employeeLoadUnavailable" class="empty-list hidden">当前账号暂无员工负载查看权限</div>
+          </div>
         </section>
         <div class="dashboard-board-grid">
           <div id="taskStatusOverview" class="panel dashboard-focus-card"></div>
@@ -2193,25 +2413,7 @@
           </div>
           <div id="keyTaskBoard" class="table-wrap"></div>
         </div>
-        <div class="dashboard-section-heading">
-          <div>
-            <div class="kicker">独立统计</div>
-            <h3>历史工作量统计</h3>
-            <p>不跟随饼图下钻，只按上方起止时间回顾派发人和执行员工的任务量。</p>
-          </div>
-        </div>
-        <div class="dashboard-board-grid">
-          <div class="panel dashboard-card">
-            <div class="section-title">
-              <div>
-                <div class="kicker">历史表现</div>
-                <h3>员工历史任务统计</h3>
-              </div>
-              <span class="tag">仅受起止时间影响</span>
-            </div>
-            <div id="employeeTopBox" class="table-wrap"></div>
-          </div>
-          <div class="panel dashboard-card">
+        <div class="panel dashboard-card dashboard-owner-panel">
             <div class="section-title">
               <div>
                 <div class="kicker">派发人维度</div>
@@ -2220,7 +2422,6 @@
               <span class="tag">仅受起止时间影响</span>
             </div>
             <div id="ownerTaskBoard" class="table-wrap"></div>
-          </div>
         </div>
       </section>
 
@@ -2287,7 +2488,7 @@
             <div>
               <div class="kicker">Personnel Settings</div>
               <h3>任务人员配置</h3>
-              <p>派发和二审按基金配置，一审按业务大类配置；每个范围均可选择多名员工。</p>
+              <p>派发和二审按基金配置，一审按业务大类配置；内部管理接收人统一配置，可选择多名领导。</p>
             </div>
             <button class="btn" onclick="loadWorkflowConfiguration(true)">刷新</button>
           </div>
@@ -2295,6 +2496,7 @@
             <button data-workflow-role="dispatcher" class="active" onclick="setWorkflowConfigRole('dispatcher')">派发人员</button>
             <button data-workflow-role="product_reviewer" onclick="setWorkflowConfigRole('product_reviewer')">一审人员</button>
             <button data-workflow-role="customer_reviewer" onclick="setWorkflowConfigRole('customer_reviewer')">二审人员</button>
+            <button data-workflow-role="report_recipient" onclick="setWorkflowConfigRole('report_recipient')">汇报接收人</button>
           </div>
           <div class="workflow-config-layout">
             <aside class="workflow-scope-pane">
@@ -2318,7 +2520,6 @@
               </div>
               <div id="workflowMemberList" class="workflow-member-list"></div>
             </div>
-          </div>
         </div>
         <div class="panel">
           <div class="section-title">
@@ -2437,6 +2638,10 @@
       workflowConfigMemberSearch: "",
       workflowConfigSelectedUserIds: [],
       workflowConfigSaving: false,
+      workReportConfig: { categories: [], recipients: [] },
+      workReports: [],
+      workReportScope: "all",
+      workReportBusy: false,
       businessCalendar: [],
       businessCalendarMap: new Map(),
       businessWorkdayCache: new Map(),
@@ -2512,6 +2717,9 @@
       employeeLoad: null,
       employeeLoadCategory: "all",
       employeeLoadSort: "recommended",
+      employeeHistoryMetric: "completed",
+      employeeHistoryTasks: [],
+      employeeInsightView: "history",
       employeeDetail: null,
       employeeDetailBusy: false,
       assignmentCandidateTaskId: null,
@@ -2569,17 +2777,26 @@
     }
     function applyRoleVisibility() {
       const canCreateRequirement = can("requirement.create");
+      const canCreateWorkReport = can("work_report.create");
       document.querySelectorAll("[data-view]").forEach(element => {
         element.classList.toggle("hidden", !canView(element.dataset.view));
       });
-      qs("requirementCreatePanel")?.classList.toggle("hidden", !canCreateRequirement);
-      qs("view-requirements")?.classList.toggle("history-only", !canCreateRequirement);
-      qs("manualIntakePanel")?.classList.toggle("hidden", !canCreateRequirement);
+      qs("requirementCreatePanel")?.classList.toggle("hidden", !canCreateRequirement && !canCreateWorkReport);
+      qs("view-requirements")?.classList.toggle("history-only", !canCreateRequirement && !canCreateWorkReport);
+      qs("manualTabButton")?.classList.toggle("hidden", !canCreateRequirement);
+      qs("reportTabButton")?.classList.toggle("hidden", !canCreateWorkReport);
+      qs("manualTabButton")?.parentElement?.classList.toggle(
+        "single-option",
+        !canCreateRequirement || !canCreateWorkReport,
+      );
+      if (!canCreateRequirement && canCreateWorkReport) state.intakeMode = "report";
+      switchIntakeMode(state.intakeMode);
       const canViewAiPreview = can("ai_preview.view_all") || can("ai_preview.view_owned");
-      if (!canViewAiPreview) state.requirementView = "tasks";
+      if (!canViewAiPreview && state.requirementView === "ai") state.requirementView = "tasks";
       qs("aiPreviewPanel")?.classList.toggle("hidden", !canViewAiPreview || state.requirementView !== "ai");
-      qs("taskRequirementPanel")?.classList.toggle("hidden", state.requirementView === "ai");
-      qs("requirementMetrics")?.classList.toggle("hidden", state.requirementView === "ai");
+      qs("workReportListPanel")?.classList.toggle("hidden", state.requirementView !== "reports");
+      qs("taskRequirementPanel")?.classList.toggle("hidden", state.requirementView !== "tasks");
+      qs("requirementMetrics")?.classList.toggle("hidden", state.requirementView !== "tasks");
       renderRequirementViewTabs();
       if (isViewActive("requirements")) {
         qs("pageSub").textContent = requirementPageSubtitle();
@@ -2589,6 +2806,9 @@
       }
     }
     function requirementPageSubtitle() {
+      if (state.requirementView === "reports") {
+          return "提交内部管理进展并自动抄送领导；内部管理不生成任务，也不进入结算与员工负载。";
+      }
       return can("requirement.create")
         ? "录入客户需求后自动生成任务，并在同一页完成员工指派。"
         : "查看并处理与当前账号职责相关的任务。";
@@ -2849,6 +3069,8 @@
       state.businessCategoryRelations = appData.businessCategoryRelations || [];
       state.categoryTree = appData.categoryTree || [];
       state.workflowConfig = appData.workflowConfig || state.workflowConfig;
+      state.workReportConfig = appData.workReportConfig || { categories: [], recipients: [] };
+      state.workReports = appData.workReports || [];
       state.businessCalendar = appData.businessCalendar || [];
       state.businessCalendarMap = new Map(
         state.businessCalendar
@@ -2912,6 +3134,8 @@
       qs("aiRequirementTitle").value ||= `AI需求文件-${stamp}`;
       renderAiPreviewBoard();
       renderRequirementBoard();
+      renderWorkReportForm();
+      renderWorkReportList();
       if (state.workflowConfig) renderWorkflowConfiguration();
       renderClassificationConfig();
       if (can("quote.view_all")) {
@@ -2995,7 +3219,8 @@
     function renderRequirementViewTabs() {
       const container = qs("requirementViewTabs");
       if (!container) return;
-      container.classList.toggle("hidden", !canViewAiPreview());
+      const canViewReports = can("work_report.view_own") || can("work_report.create");
+      container.classList.toggle("hidden", !canViewAiPreview() && !canViewReports);
       const aiButton = container.querySelector("button[onclick*=\"'ai'\"]");
       if (aiButton) {
         aiButton.disabled = !canViewAiPreview();
@@ -3008,15 +3233,29 @@
         taskButton.setAttribute("aria-selected", String(state.requirementView === "tasks"));
       }
       if (aiButton) aiButton.classList.toggle("active", state.requirementView === "ai");
+      const reportButton = container.querySelector("button[onclick*=\"'reports'\"]");
+      if (reportButton) {
+        reportButton.classList.toggle("hidden", !canViewReports);
+        reportButton.classList.toggle("active", state.requirementView === "reports");
+        reportButton.setAttribute("aria-selected", String(state.requirementView === "reports"));
+      }
     }
     function setRequirementView(view) {
-      const nextView = view === "ai" && canViewAiPreview() ? "ai" : "tasks";
+      const canViewReports = can("work_report.view_own") || can("work_report.create");
+      const nextView = view === "ai" && canViewAiPreview()
+        ? "ai"
+        : view === "reports" && canViewReports
+          ? "reports"
+          : "tasks";
       state.requirementView = nextView;
       qs("aiPreviewPanel")?.classList.toggle("hidden", nextView !== "ai");
-      qs("taskRequirementPanel")?.classList.toggle("hidden", nextView === "ai");
-      qs("requirementMetrics")?.classList.toggle("hidden", nextView === "ai");
+      qs("workReportListPanel")?.classList.toggle("hidden", nextView !== "reports");
+      qs("taskRequirementPanel")?.classList.toggle("hidden", nextView !== "tasks");
+      qs("requirementMetrics")?.classList.toggle("hidden", nextView !== "tasks");
       renderRequirementViewTabs();
       if (nextView === "ai") renderAiPreviewBoard();
+      if (nextView === "reports") renderWorkReportList();
+      if (isViewActive("requirements")) qs("pageSub").textContent = requirementPageSubtitle();
     }
     function requirementContactName(requirement, context = contactContextForRequirement(requirement)) {
       return requirement?.source_contact_name || context?.contact_name || "";
@@ -3438,9 +3677,17 @@
           scopeLabel: "基金",
           description: "确认交付物是否符合基金客户需求",
         },
+        report_recipient: {
+          label: "汇报接收人",
+          scopeLabel: "接收范围",
+          description: "接收所有员工提交的内部管理内容，并同步收到站内及飞书通知",
+        },
       }[role] || null;
     }
     function workflowConfigScopes() {
+      if (state.workflowConfigRole === "report_recipient") {
+        return [{ code: "all_reports", name: "全部内部管理" }];
+      }
       if (state.workflowConfigRole === "product_reviewer") {
         const configured = state.workflowConfig?.businessCategories || [];
         const source = configured.length
@@ -3461,6 +3708,11 @@
     }
     function workflowConfiguredMembers(scopeCode, role = state.workflowConfigRole) {
       if (!state.workflowConfig || !scopeCode) return [];
+      if (role === "report_recipient") {
+        return (state.workflowConfig.globalMembers || []).filter(row =>
+          row.roleCode === role && row.status !== "inactive"
+        );
+      }
       if (role === "product_reviewer") {
         return (state.workflowConfig.businessCategoryReviewers || []).filter(row =>
           row.businessCategoryCode === scopeCode && row.status !== "inactive"
@@ -3600,7 +3852,9 @@
         ? `/workflow-config/customer-dispatchers/${encodeURIComponent(scope.code)}`
         : role === "product_reviewer"
           ? `/workflow-config/product-reviewers/${encodeURIComponent(scope.code)}`
-          : `/workflow-config/customer-reviewers/${encodeURIComponent(scope.code)}`;
+          : role === "report_recipient"
+            ? "/workflow-config/report-recipients"
+            : `/workflow-config/customer-reviewers/${encodeURIComponent(scope.code)}`;
       state.workflowConfigSaving = true;
       renderWorkflowConfiguration();
       try {
@@ -3611,6 +3865,10 @@
         syncWorkflowSelectedMembers();
         renderWorkflowConfiguration();
         toast(`${scope.name}的${workflowRoleDefinition(role).label}已保存`);
+        if (role === "report_recipient") {
+          state.workReportConfig = await request("/work-reports/config");
+          renderWorkReportForm();
+        }
         state.users = unwrap(await request("/users"));
       } catch (error) {
         toast(error.message || "配置保存失败");
@@ -3667,6 +3925,22 @@
       applyRoleVisibility();
     }
     async function initializeAppAfterLogin() {
+      try {
+        const currentUser = await request("/users/me");
+        if (currentUser?.id) {
+          state.user = currentUser;
+          if (!state.taskSessionActive) {
+            window.XlyqAppShell.session.write({ user: state.user, accessToken: state.accessToken });
+          }
+          qs("currentUser").textContent = state.user.display_name || state.user.username;
+          qs("currentUserMeta").textContent = state.taskSessionActive
+            ? `员工临时视图 · ${userMetaLabel(state.user)}`
+            : userMetaLabel(state.user);
+          applyRoleVisibility();
+        }
+      } catch {
+        // Keep the valid session profile if refreshing optional role metadata fails.
+      }
       await loadAppData();
       try {
         renderSteps();
@@ -3685,6 +3959,7 @@
     }
     async function applyFeishuLinkTarget(target) {
       switchView(target?.view || "requirements");
+      if (target?.requirementView === "reports") setRequirementView("reports");
       if (target?.candidateId) setRequirementView("ai");
       state.aiPreviewScope = "mine";
       state.aiPreviewOwnerId = "all";
@@ -3709,7 +3984,10 @@
       const fragmentParams = new URLSearchParams(location.hash.replace(/^#/, ""));
       const candidateId = fragmentParams.get("candidateId") || "";
       const view = fragmentParams.get("view") || "requirements";
-      return candidateId || fragmentParams.has("view") ? { view, candidateId } : null;
+      const requirementView = fragmentParams.get("requirementView") || "";
+      return candidateId || fragmentParams.has("view") || requirementView
+        ? { view, candidateId, requirementView }
+        : null;
     }
     function workflowHandoffToken() {
       return new URLSearchParams(location.hash.replace(/^#/, "")).get("handoff") || "";
@@ -4275,12 +4553,135 @@
       return `https://www.feishu.cn/drive/folder/${key}`;
     }
     function switchIntakeMode(mode) {
-      mode = "manual";
-      state.intakeMode = mode;
-      qs("manualTabButton")?.classList.toggle("active", true);
-      qs("aiTabButton")?.classList.toggle("active", false);
-      qs("manualIntakePanel")?.classList.toggle("hidden", false);
+      const canCreateRequirement = can("requirement.create");
+      const canCreateWorkReport = can("work_report.create");
+      const nextMode = mode === "report" && canCreateWorkReport
+        ? "report"
+        : canCreateRequirement
+          ? "manual"
+          : "report";
+      state.intakeMode = nextMode;
+      qs("manualTabButton")?.classList.toggle("active", nextMode === "manual");
+      qs("reportTabButton")?.classList.toggle("active", nextMode === "report");
+      qs("manualIntakePanel")?.classList.toggle("hidden", nextMode !== "manual");
+      qs("workReportIntakePanel")?.classList.toggle("hidden", nextMode !== "report");
       qs("aiIntakePanel")?.classList.toggle("hidden", true);
+      if (qs("requirementCreateTitle")) qs("requirementCreateTitle").textContent = nextMode === "report" ? "内部管理" : "需求录入";
+      if (qs("requirementCreateTag")) qs("requirementCreateTag").textContent = nextMode === "report" ? "提交后自动抄送领导" : "保存后自动生成待指派任务";
+      if (nextMode === "report") renderWorkReportForm();
+    }
+    function workReportCategories() {
+      const configured = state.workReportConfig?.categories || [];
+      return configured.length ? configured : [
+        { code: "customer_operation", name: "客户经营", secondaries: ["客户管理", "需求与交付"] },
+        { code: "internal_management", name: "内部管理", secondaries: ["日常管理", "内部协同", "流程建设"] },
+      ];
+    }
+    function renderWorkReportForm() {
+      const categorySelect = qs("workReportCategoryInput");
+      if (!categorySelect) return;
+      const selected = categorySelect.value || workReportCategories()[0]?.code || "";
+      categorySelect.innerHTML = workReportCategories().map(category =>
+        `<option value="${escapeAttr(category.code)}">${safeText(category.name)}</option>`
+      ).join("");
+      categorySelect.value = workReportCategories().some(category => category.code === selected)
+        ? selected
+        : workReportCategories()[0]?.code || "";
+      renderWorkReportSecondaryOptions();
+      const recipients = state.workReportConfig?.recipients || [];
+      const hint = qs("workReportRecipientHint");
+      if (hint) {
+        hint.classList.toggle("ready", recipients.length > 0);
+        hint.classList.toggle("missing", recipients.length === 0);
+        hint.textContent = recipients.length
+          ? `提交后自动抄送：${recipients.map(item => item.displayName || item.display_name || "未命名").join("、")}`
+          : "尚未配置内部管理接收人，请联系管理员到“人员配置”中设置。";
+      }
+      const button = qs("createWorkReportButton");
+      if (button) button.disabled = state.workReportBusy || recipients.length === 0;
+    }
+    function renderWorkReportSecondaryOptions() {
+      const categoryCode = qs("workReportCategoryInput")?.value;
+      const category = workReportCategories().find(item => item.code === categoryCode);
+      const select = qs("workReportSecondaryInput");
+      if (!select) return;
+      const selected = select.value;
+      select.innerHTML = (category?.secondaries || []).map(name => `<option value="${escapeAttr(name)}">${safeText(name)}</option>`).join("");
+      if ([...(category?.secondaries || [])].includes(selected)) select.value = selected;
+    }
+    function clearWorkReportForm(showToast = true) {
+      if (qs("workReportTitleInput")) qs("workReportTitleInput").value = "";
+      if (qs("workReportContentInput")) qs("workReportContentInput").value = "";
+      if (showToast) toast("内部管理表单已清空");
+    }
+    async function createWorkReport() {
+      if (state.workReportBusy) return;
+      const title = qs("workReportTitleInput")?.value.trim() || "";
+      const content = qs("workReportContentInput")?.value.trim() || "";
+      if (!title) return toast("请填写汇报标题");
+      if (!content) return toast("请填写汇报内容");
+      state.workReportBusy = true;
+      const button = qs("createWorkReportButton");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "正在提交...";
+      }
+      try {
+        const report = await request("/work-reports", {
+          method: "POST",
+          body: {
+            businessCategory: qs("workReportCategoryInput")?.value,
+            secondaryCategory: qs("workReportSecondaryInput")?.value,
+            title,
+            content,
+          },
+        });
+        state.workReports = [report, ...state.workReports.filter(item => item.id !== report.id)];
+        clearWorkReportForm(false);
+        setRequirementView("reports");
+      toast("内部管理已提交并抄送领导");
+      } catch (error) {
+        toast(error.message || "内部管理提交失败");
+      } finally {
+        state.workReportBusy = false;
+        if (button) button.textContent = "提交并抄送领导";
+        renderWorkReportForm();
+      }
+    }
+    async function loadWorkReports(scope) {
+      state.workReportScope = scope || qs("workReportScopeSelect")?.value || state.workReportScope || "all";
+      const box = qs("workReportList");
+      if (box) box.innerHTML = `<div class="empty-list">正在加载内部管理...</div>`;
+      try {
+        state.workReports = unwrap(await request(`/work-reports?scope=${encodeURIComponent(state.workReportScope)}`));
+        renderWorkReportList();
+      } catch (error) {
+        if (box) box.innerHTML = `<div class="empty-list">${safeText(error.message || "内部管理加载失败")}</div>`;
+      }
+    }
+    function renderWorkReportList() {
+      const box = qs("workReportList");
+      if (!box) return;
+      const select = qs("workReportScopeSelect");
+      if (select) select.value = state.workReportScope || "all";
+      if (!state.workReports.length) {
+        box.innerHTML = `<div class="empty-list">当前范围暂无内部管理内容。</div>`;
+        return;
+      }
+      box.innerHTML = `
+        <table>
+          <thead><tr><th>提交时间</th><th>分类</th><th>汇报内容</th><th>汇报人</th><th>抄送领导</th><th>状态</th></tr></thead>
+          <tbody>${state.workReports.map(report => `
+            <tr>
+              <td>${safeText(report.submittedAt ? new Date(report.submittedAt).toLocaleString("zh-CN") : "-")}</td>
+              <td><div class="row-title">${safeText(report.businessCategoryName || report.businessCategory)}</div><div class="row-sub">${safeText(report.secondaryCategory)}</div></td>
+              <td><details class="work-report-entry"><summary>${safeText(report.title)}</summary><div class="work-report-content">${safeText(report.content)}</div></details><div class="row-sub">${safeText(report.reportNo || "")}</div></td>
+              <td>${safeText(report.reporterName || "-")}</td>
+              <td>${safeText(report.recipientNames || "-")}</td>
+              <td><span class="tag">${report.status === "submitted" ? "已提交" : safeText(report.status)}</span></td>
+            </tr>
+          `).join("")}</tbody>
+        </table>`;
     }
     function renderCopySourceNote() {
       const note = qs("copySourceNote");
@@ -7904,13 +8305,14 @@
           renderEmployeeLoad();
         } else {
           state.employeeLoad = null;
-          qs("employeeLoadPanel")?.classList.add("hidden");
+          renderEmployeeLoad();
         }
         if (requestSeq !== state.analyticsRequestSeq) return;
         const customerCodes = new Set(analyticsCustomers.map(customer => customer.customer_code));
         const employeeTopTasks = Object.entries(employeeBoard)
           .flatMap(([status, tasks]) => (tasks || []).map(t => ({ status, ...t })))
           .filter(task => dashboardDateMatches(requirementForTask(task), task));
+        state.employeeHistoryTasks = employeeTopTasks;
         const rows = Object.entries(board)
           .flatMap(([status, tasks]) => (tasks || []).map(t => ({ status, ...t })))
           .filter(task => {
@@ -7964,6 +8366,7 @@
         renderUrgencyBoard(analyticsContext);
         renderTaskFunnelBoard(analyticsContext);
         renderEmployeeTop(employeeTopTasks);
+        renderEmployeeCenterOverview(employeeTopTasks);
         renderOwnerTaskBoard(employeeTopTasks);
         renderKeyTaskBoard(analyticsContext);
       } catch (error) {
@@ -8537,7 +8940,7 @@
         const factor = task.status === "pending_review"
           ? 0.2
           : task.status === "in_progress"
-            ? Math.max(0.4, 1 - Number(task.progressPercent || 30) / 100)
+            ? Math.max(0.4, 1 - Number(task.progressPercent ?? 30) / 100)
             : task.status === "blocked"
               ? 0.75
               : task.status === "returned"
@@ -8585,20 +8988,18 @@
       const employees = (state.employeeLoad?.employees || []).map(employeeLoadMetrics);
       const category = qs("employeeLoadCategory")?.value || "all";
       const sort = qs("employeeLoadSort")?.value || "recommended";
-      const filtered = employees.filter(employee => {
-        if (category === "all") return true;
-        return Boolean(employee.categoryCounts?.[category]);
-      });
+      const filtered = employees.filter(employee => category === "all" || Boolean(employee.categoryCounts?.[category]));
       return filtered.sort((left, right) => {
-        const leftMatch = category === "all" ? 0 : Number(left.categoryCounts?.[category] || 0);
-        const rightMatch = category === "all" ? 0 : Number(right.categoryCounts?.[category] || 0);
         if (sort === "risk") {
           return left.overdueCount - right.overdueCount || left.dueSoonCount - right.dueSoonCount || left.remainingHours - right.remainingHours;
         }
         if (sort === "load") {
           return left.remainingHours - right.remainingHours || left.activeTaskCount - right.activeTaskCount;
         }
-        return rightMatch - leftMatch || left.overdueCount - right.overdueCount || left.remainingHours - right.remainingHours || left.activeTaskCount - right.activeTaskCount;
+        if (sort === "highest_load") {
+          return right.remainingHours - left.remainingHours || right.activeTaskCount - left.activeTaskCount;
+        }
+        return left.overdueCount - right.overdueCount || left.dueSoonCount - right.dueSoonCount || left.remainingHours - right.remainingHours || left.activeTaskCount - right.activeTaskCount;
       });
     }
     function employeeAvatar(employee) {
@@ -8621,12 +9022,15 @@
       if (!panel || !box) return;
       if (!can("dashboard.employee_detail") || !state.employeeLoad) {
         panel.classList.add("hidden");
+        qs("employeeLoadUnavailable")?.classList.remove("hidden");
+        setEmployeeInsightView("history");
         return;
       }
       panel.classList.remove("hidden");
+      qs("employeeLoadUnavailable")?.classList.add("hidden");
+      renderEmployeeInsightTabs();
       employeeLoadCategoryOptions();
       const rows = employeeLoadRows();
-      const category = qs("employeeLoadCategory")?.value || "all";
       qs("employeeLoadScopeTag").textContent = can("dashboard.view_global") ? "全局实时负载" : "当前范围负载";
       if (!rows.length) {
         box.innerHTML = `<div class="empty-list">暂无可调度员工数据</div>`;
@@ -8634,12 +9038,11 @@
       }
       box.innerHTML = `
         <table class="employee-load-table">
-          <thead><tr><th>员工</th><th>业务匹配</th><th>执行中</th><th>预计剩余工时</th><th>3个工作日内到期</th><th>延期</th><th>待审核</th><th>负载</th><th>操作</th></tr></thead>
+          <thead><tr><th>员工</th><th>执行中</th><th>预计剩余工时</th><th>3个工作日内到期</th><th>延期</th><th>待审核</th><th>负载</th><th>操作</th></tr></thead>
           <tbody>
             ${rows.map((employee, index) => `
               <tr onclick="openEmployeeDetail('${escapeAttr(employee.userId)}')">
                 <td><div class="employee-cell">${employeeAvatar(employee)}<div><strong>${safeText(employee.displayName)}</strong><small>${employee.canReceiveFeishu ? "可接收飞书通知" : "未关联飞书账号"}</small></div></div></td>
-                <td>${category === "all" ? (Object.keys(employee.categoryCounts || {}).slice(0, 2).map(projectTypeLabel).join("、") || "待积累") : `${Number(employee.categoryCounts?.[category] || 0)} 项`}</td>
                 <td>${employee.activeTaskCount}</td>
                 <td>${employee.remainingHours} 小时</td>
                 <td>${employee.dueSoonCount}</td>
@@ -8652,6 +9055,37 @@
           </tbody>
         </table>
       `;
+    }
+    function renderEmployeeInsightTabs() {
+      const canViewLoad = can("dashboard.employee_detail") && Boolean(state.employeeLoad);
+      const historyTab = qs("employeeInsightHistoryTab");
+      const centerTab = qs("employeeInsightCenterTab");
+      const loadTab = qs("employeeInsightLoadTab");
+      if (historyTab) {
+        historyTab.classList.toggle("active", state.employeeInsightView === "history");
+        historyTab.setAttribute("aria-selected", String(state.employeeInsightView === "history"));
+      }
+      if (centerTab) {
+        centerTab.classList.toggle("active", state.employeeInsightView === "center");
+        centerTab.setAttribute("aria-selected", String(state.employeeInsightView === "center"));
+      }
+      if (loadTab) {
+        loadTab.disabled = !canViewLoad;
+        loadTab.classList.toggle("active", state.employeeInsightView === "load");
+        loadTab.setAttribute("aria-selected", String(state.employeeInsightView === "load"));
+      }
+    }
+    function setEmployeeInsightView(view) {
+      const canViewLoad = can("dashboard.employee_detail") && Boolean(state.employeeLoad);
+      state.employeeInsightView = view === "load" && canViewLoad
+        ? "load"
+        : view === "center"
+          ? "center"
+          : "history";
+      qs("employeeInsightHistoryView")?.classList.toggle("hidden", state.employeeInsightView !== "history");
+      qs("employeeInsightCenterView")?.classList.toggle("hidden", state.employeeInsightView !== "center");
+      qs("employeeInsightLoadView")?.classList.toggle("hidden", state.employeeInsightView !== "load");
+      renderEmployeeInsightTabs();
     }
     async function openEmployeeDetail(userId) {
       if (!userId) return;
@@ -8714,7 +9148,7 @@
       if (state.assignmentCandidates) {
         const candidates = state.assignmentCandidates.candidates || [];
         body.innerHTML = `
-          <div class="match-box">当前需求类型：${safeText(projectTypeLabel(state.assignmentCandidates.targetCategory || ""))}。推荐结果优先考虑类型匹配，再考虑当前负载。</div>
+          <div class="match-box">推荐结果仅根据当前任务量、待审核任务和预计剩余工时排序，不再使用历史业务类型匹配。</div>
           <div class="employee-detail-section"><h4>推荐名单</h4>
             <div class="candidate-list">
               ${candidates.slice(0, 8).map(candidate => `
@@ -8773,7 +9207,30 @@
     function handleEmployeeDetailBackdropClick(event) {
       if (event.target === qs("employeeDetailBackdrop")) closeEmployeeDetail();
     }
+    function employeeHistoryMetricSpec(metric = state.employeeHistoryMetric) {
+      const specs = {
+        completed: { label: "已完成数量", get: row => row.completed, format: value => String(value) },
+        assigned: { label: "执行任务", get: row => row.assigned, format: value => String(value) },
+        hours: { label: "预估工时", get: row => row.hours, format: value => `${Number(value || 0).toFixed(2)}h` },
+        points: { label: "积分", get: row => row.points, format: value => Number(value || 0).toFixed(2) },
+      };
+      return specs[metric] || specs.completed;
+    }
+    function setEmployeeHistoryMetric(metric) {
+      const specs = ["completed", "assigned", "hours", "points"];
+      state.employeeHistoryMetric = specs.includes(metric) ? metric : "completed";
+      renderEmployeeTop(state.employeeHistoryTasks || []);
+    }
+    function employeeRankCell(index) {
+      const rank = index + 1;
+      const icons = { 1: "🏆", 2: "🥈", 3: "🥉" };
+      return rank <= 3
+        ? `<span class="employee-rank-badge rank-${rank}" title="第${rank}名" aria-label="第${rank}名">${icons[rank]}</span>`
+        : `<span class="employee-rank-number">${rank}</span>`;
+    }
     function renderEmployeeTop(tasks) {
+      state.employeeHistoryTasks = tasks || [];
+      const metric = employeeHistoryMetricSpec();
       const groups = new Map();
       for (const task of tasks) {
         if (!task.assignee_user_id) continue;
@@ -8783,22 +9240,93 @@
           completed: 0,
           assigned: 0,
           overdue: 0,
-          assets: 0,
+          hours: 0,
+          points: 0,
         };
         current.assigned += 1;
-        current.assets += Number(task.asset_count || task.assetCount || 0);
-        if (task.status === "completed") current.completed += 1;
+        current.hours += Number(task.estimated_hours ?? task.estimatedHours ?? 0) || 0;
+        current.points += Number(task.contribution_points ?? task.contributionPoints ?? 0) || 0;
+        if (isTaskCompleted(task)) current.completed += 1;
         if (isTaskOverdue(task)) current.overdue += 1;
         groups.set(task.assignee_user_id, current);
       }
-      const rows = [...groups.values()].sort((a, b) => b.assigned - a.assigned || b.completed - a.completed || b.assets - a.assets).slice(0, 10);
-      renderSimpleTable("employeeTopBox", rows, ["员工", "执行任务", "已完成", "延期", "资产数"], row => [
+      const rows = [...groups.values()]
+        .sort((a, b) => metric.get(b) - metric.get(a) || b.completed - a.completed || b.assigned - a.assigned);
+      const hint = qs("employeeHistoryMetricHint");
+      if (hint) hint.textContent = `按${metric.label}从高到低排名，共 ${rows.length} 名员工；仅受上方时间范围影响。`;
+      const metricSelect = qs("employeeHistoryMetric");
+      if (metricSelect) metricSelect.value = state.employeeHistoryMetric;
+      const headers = ["排名", "员工", metric.label, "执行任务", "已完成", "延期", "预估工时", "积分"];
+      const toCells = (row, index) => [
+        employeeRankCell(index),
         personCellHtml(row.userId, row.name),
+        `<strong>${metric.format(metric.get(row))}</strong>`,
         row.assigned,
         row.completed,
         row.overdue,
-        row.assets,
-      ], "暂无员工任务数据");
+        `${row.hours.toFixed(2)}h`,
+        row.points.toFixed(2),
+      ];
+      const topRows = rows.slice(0, 10);
+      const moreRows = rows.slice(10);
+      renderSimpleTable("employeeTopBox", topRows, headers, toCells, "暂无员工任务数据");
+      if (moreRows.length) {
+        const box = qs("employeeTopBox");
+        box?.insertAdjacentHTML(
+          "beforeend",
+          `<details class="employee-ranking-more"><summary>展开其余 ${moreRows.length} 名员工</summary><div id="employeeTopMoreBox" class="table-wrap"></div></details>`,
+        );
+        renderSimpleTable("employeeTopMoreBox", moreRows, headers, toCells, "暂无更多员工任务数据", 10);
+      }
+    }
+    function employeeCenterLabel(value) {
+      const center = String(value || "").trim();
+      if (!center || center === "未归属中心") return "";
+      const aliases = {
+        "业务团队｜运营": "业务运营",
+        "业务团队|运营": "业务运营",
+        "业务团队｜内容": "业务内容",
+        "业务团队|内容": "业务内容",
+      };
+      return aliases[center] || center;
+    }
+    function renderEmployeeCenterOverview(tasks) {
+      const users = (state.users || []).filter(user => user.status !== "inactive");
+      const hasCenterMapping = users.some(user => employeeCenterLabel(user.center_name || user.centerName));
+      const headers = ["\u6392\u540d", "\u4e2d\u5fc3", "\u6267\u884c\u91cf", "\u5b8c\u6210\u91cf", "\u5b8c\u6210\u7387"];
+      const toCells = (row, index) => [
+        employeeRankCell(index),
+        safeText(row.center),
+        row.execution,
+        row.completed,
+        `${row.execution ? ((row.completed / row.execution) * 100).toFixed(1) : "0.0"}%`,
+      ];
+      if (!hasCenterMapping) {
+        renderSimpleTable(
+          "employeeCenterOverviewBox",
+          [],
+          headers,
+          toCells,
+          "\u6682\u65e0\u4e2d\u5fc3\u5f52\u5c5e\u6570\u636e\uff0c\u8bf7\u5148\u6267\u884c\u98de\u4e66\u901a\u8baf\u5f55\u540c\u6b65",
+        );
+        return;
+      }
+      const userById = getLookupMaps().userById;
+      const groups = new Map();
+      for (const task of tasks || []) {
+        if (!task.assignee_user_id) continue;
+        const user = userById.get(task.assignee_user_id);
+        const center = employeeCenterLabel(user?.center_name || user?.centerName);
+        if (!center) continue;
+        const current = groups.get(center) || { center, execution: 0, completed: 0 };
+        current.execution += 1;
+        if (isTaskCompleted(task)) current.completed += 1;
+        groups.set(center, current);
+      }
+      const rows = [...groups.values()]
+        .filter(row => row.execution > 0)
+        .sort((a, b) => b.execution - a.execution || b.completed - a.completed || a.center.localeCompare(b.center));
+      renderSimpleTable("employeeCenterOverviewBox", rows, headers, toCells, "\u6682\u65e0\u4e2d\u5fc3\u4efb\u52a1\u6570\u636e");
     }
     function renderOwnerTaskBoard(tasks) {
       const groups = new Map();
@@ -8831,7 +9359,7 @@
         row.overdue,
       ], "暂无派发人任务数据");
     }
-    function renderSimpleTable(elementId, rows, headers, toCells, emptyText) {
+    function renderSimpleTable(elementId, rows, headers, toCells, emptyText, rowIndexOffset = 0) {
       const box = qs(elementId);
       if (!box) return;
       if (!rows.length) {
@@ -8842,7 +9370,7 @@
         <table>
           <thead><tr>${headers.map(header => `<th>${header}</th>`).join("")}</tr></thead>
           <tbody>
-            ${rows.map(row => `<tr>${toCells(row).map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}
+            ${rows.map((row, index) => `<tr>${toCells(row, index + rowIndexOffset).map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}
           </tbody>
         </table>
       `;

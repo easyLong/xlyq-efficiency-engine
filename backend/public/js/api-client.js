@@ -67,6 +67,8 @@
         categoryTree,
         businessCalendar,
         workflowConfig,
+        workReportConfig,
+        workReports,
         health,
       ] = await Promise.all([
         request("/projects"),
@@ -85,6 +87,8 @@
           `/business-calendar/range?start=${dateKey(businessCalendarStart)}&end=${dateKey(businessCalendarEnd)}`,
         ).catch(() => []),
         workflowConfigVisible ? request("/workflow-config").catch(() => null) : Promise.resolve(null),
+        request("/work-reports/config").catch(() => ({ categories: [], recipients: [] })),
+        request("/work-reports?scope=all").catch(() => []),
         request("/health"),
       ]);
 
@@ -104,6 +108,8 @@
         categoryTree: unwrap(categoryTree),
         businessCalendar: unwrap(businessCalendar),
         workflowConfig,
+        workReportConfig,
+        workReports: unwrap(workReports),
         health,
       };
     }

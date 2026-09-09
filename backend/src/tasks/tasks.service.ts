@@ -22,6 +22,7 @@ import {
   buildAppPublicUrl,
   rebaseAppPublicUrl,
 } from '../common/app-public-url';
+import { contributionPointsFromHours } from '../common/efficiency-metrics';
 import { ensureIndex } from '../common/schema-maintenance';
 import { ensureWorkflowConfigTables } from '../common/workflow-config-schema';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
@@ -366,26 +367,16 @@ export class TasksService implements OnModuleInit {
   async assignmentCandidates(taskId: string, actingUserId: string | null) {
     const task = await this.findOne(taskId);
     await this.assertCanAssignTask(task, actingUserId);
-    const targetFacts = await this.taskReviewFacts(task);
-    const targetCategory = normalizeAccessBusinessCategory(
-      targetFacts.businessCategory,
-    );
     const load = await this.employeeLoad(actingUserId);
     const candidates = load.employees
       .filter((employee) => employee.canReceiveFeishu)
       .map((employee) => {
-        const categoryMatch = targetCategory
-          ? employee.categoryCounts[targetCategory] ?? 0
-          : 0;
         const score =
-          categoryMatch * 100 -
-          employee.activeTaskCount * 10 -
+          -employee.activeTaskCount * 10 -
           employee.pendingReviewCount * 2 -
           employee.remainingHours;
-        const reason = categoryMatch
-          ? `${targetCategory}类型有${categoryMatch}项历史任务，当前执行${employee.activeTaskCount}项`
-          : `当前执行${employee.activeTaskCount}项，预计剩余${employee.remainingHours}小时`;
-        return { ...employee, categoryMatch, score, reason };
+        const reason = `当前执行${employee.activeTaskCount}项，待审核${employee.pendingReviewCount}项，预计剩余${employee.remainingHours}小时`;
+        return { ...employee, score, reason };
       })
       .sort(
         (left, right) =>
@@ -396,7 +387,6 @@ export class TasksService implements OnModuleInit {
 
     return {
       taskId,
-      targetCategory: targetCategory || null,
       candidates,
     };
   }
@@ -524,44 +514,47 @@ export class TasksService implements OnModuleInit {
   }
 
   private aggregateEmployeeLoad(rows: EmployeeLoadSqlRow[]) {
-    const employees = new Map<string, {
-      userId: string;
-      displayName: string;
-      username: string;
-      avatarUrl: string | null;
-      feishuOpenId: string | null;
-      canReceiveFeishu: boolean;
-      activeTaskCount: number;
-      pendingReviewCount: number;
-      remainingHours: number;
-      categoryCounts: Record<string, number>;
-      tasks: Array<Record<string, unknown>>;
-    }>();
+    const employees = new Map<
+      string,
+      {
+        userId: string;
+        displayName: string;
+        username: string;
+        avatarUrl: string | null;
+        feishuOpenId: string | null;
+        canReceiveFeishu: boolean;
+        activeTaskCount: number;
+        pendingReviewCount: number;
+        remainingHours: number;
+        categoryCounts: Record<string, number>;
+        tasks: Array<Record<string, unknown>>;
+      }
+    >();
 
     for (const row of rows) {
-      const employee =
-        employees.get(row.userId) ?? {
-          userId: row.userId,
-          displayName: row.displayName || row.username,
-          username: row.username,
-          avatarUrl: row.avatarUrl,
-          feishuOpenId: row.feishuOpenId,
-          canReceiveFeishu: Boolean(row.feishuOpenId),
-          activeTaskCount: 0,
-          pendingReviewCount: 0,
-          remainingHours: 0,
-          categoryCounts: {},
-          tasks: [],
-        };
+      const employee = employees.get(row.userId) ?? {
+        userId: row.userId,
+        displayName: row.displayName || row.username,
+        username: row.username,
+        avatarUrl: row.avatarUrl,
+        feishuOpenId: row.feishuOpenId,
+        canReceiveFeishu: Boolean(row.feishuOpenId),
+        activeTaskCount: 0,
+        pendingReviewCount: 0,
+        remainingHours: 0,
+        categoryCounts: {},
+        tasks: [],
+      };
 
       if (row.taskId) {
         const status = String(row.taskStatus ?? '');
         const category = normalizeAccessBusinessCategory(row.businessCategory);
         const isOpen = Number(row.taskIsOpen ?? 0) === 1;
         const estimatedHours = Number(row.estimatedHours);
-        const baseHours = Number.isFinite(estimatedHours) && estimatedHours > 0
-          ? estimatedHours
-          : 6;
+        const baseHours =
+          Number.isFinite(estimatedHours) && estimatedHours > 0
+            ? estimatedHours
+            : 6;
         const remainingFactor =
           status === TaskStatus.PendingReview
             ? 0.2
@@ -601,7 +594,7 @@ export class TasksService implements OnModuleInit {
           blockedReason: row.blockedReason,
           customerName: row.customerName,
           businessPlatform: row.businessPlatform,
-          businessCategory: category || row.businessCategory,
+          businessCategory: row.businessCategory,
           dispatcherUserId: row.dispatcherUserId,
         });
       }
@@ -832,6 +825,7 @@ export class TasksService implements OnModuleInit {
   }
 
   async create(dto: CreateTaskDto, createdByUserId: string | null = null) {
+    const estimatedHours = dto.estimatedHours ?? null;
     const task = this.tasksRepository.create({
       id: randomUUID(),
       project_id: dto.projectId,
@@ -849,9 +843,9 @@ export class TasksService implements OnModuleInit {
       priority: this.normalizePriority(dto.priority),
       urgency_level: dto.urgencyLevel ?? null,
       assignee_user_id: null,
-      estimated_hours: dto.estimatedHours ?? null,
+      estimated_hours: estimatedHours,
       price_amount: dto.priceAmount ?? '0.00',
-      contribution_points: dto.contributionPoints ?? '0.00',
+      contribution_points: contributionPointsFromHours(estimatedHours),
       planned_start_at: dto.plannedStartAt
         ? new Date(dto.plannedStartAt)
         : null,
@@ -927,6 +921,7 @@ export class TasksService implements OnModuleInit {
     if (actingUserId !== undefined) {
       await this.assertCanAssignTask(task, actingUserId);
     }
+    const estimatedHours = dto.estimatedHours ?? task.estimated_hours;
     Object.assign(task, {
       task_name: dto.taskName ?? task.task_name,
       description: dto.description ?? task.description,
@@ -941,9 +936,9 @@ export class TasksService implements OnModuleInit {
       planned_end_at: dto.plannedEndAt
         ? new Date(dto.plannedEndAt)
         : task.planned_end_at,
-      estimated_hours: dto.estimatedHours ?? task.estimated_hours,
+      estimated_hours: estimatedHours,
       price_amount: dto.priceAmount ?? task.price_amount,
-      contribution_points: dto.contributionPoints ?? task.contribution_points,
+      contribution_points: contributionPointsFromHours(estimatedHours),
     });
     return this.tasksRepository.save(task);
   }
@@ -1050,10 +1045,7 @@ export class TasksService implements OnModuleInit {
     };
   }
 
-  async aiAssignmentSuggestion(
-    id: string,
-    actingUserId: string | null = null,
-  ) {
+  async aiAssignmentSuggestion(id: string, actingUserId: string | null = null) {
     const result = await this.assignmentCandidates(id, actingUserId);
     const suggestion = result.candidates[0] ?? null;
     const task = await this.findOne(id);
@@ -4404,9 +4396,8 @@ export class TasksService implements OnModuleInit {
     const isAssignee = task.assignee_user_id === currentUser.id;
     const facts = await this.taskReviewFacts(task);
     const customerCode = String(facts.customerCode ?? '').trim();
-    const canDispatchCustomer = profile.dispatchCustomerCodes.includes(
-      customerCode,
-    );
+    const canDispatchCustomer =
+      profile.dispatchCustomerCodes.includes(customerCode);
     const canProductReview = await this.canProductReviewTask(
       task,
       currentUser.id,

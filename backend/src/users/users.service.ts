@@ -375,6 +375,11 @@ export class UsersService implements OnModuleInit {
     );
     await this.ensureColumn(
       'users',
+      'center_name',
+      'VARCHAR(128) NULL AFTER feishu_open_id',
+    );
+    await this.ensureColumn(
+      'users',
       'password_updated_at',
       'DATETIME NULL AFTER password_hash',
     );

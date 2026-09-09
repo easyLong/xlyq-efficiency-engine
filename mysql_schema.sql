@@ -69,6 +69,7 @@ CREATE TABLE `users` (
   `status` VARCHAR(32) NOT NULL,
   `source` VARCHAR(32) NOT NULL,
   `feishu_open_id` VARCHAR(128) NULL,
+  `center_name` VARCHAR(128) NULL,
   `password_hash` VARCHAR(255) NULL,
   `password_updated_at` DATETIME NULL,
   `last_login_at` DATETIME NULL,
@@ -889,5 +890,58 @@ CREATE TABLE `audit_logs` (
   KEY `idx_audit_logs_created_at` (`created_at`),
   CONSTRAINT `fk_audit_logs_operator_user` FOREIGN KEY (`operator_user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='审计日志表';
+
+CREATE TABLE `global_workflow_members` (
+  `id` CHAR(36) NOT NULL,
+  `role_code` VARCHAR(32) NOT NULL,
+  `user_id` CHAR(36) NOT NULL,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'active',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_global_workflow_member` (`role_code`, `user_id`),
+  KEY `idx_global_workflow_role` (`role_code`, `status`),
+  KEY `idx_global_workflow_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='全局流程人员配置';
+
+CREATE TABLE `work_reports` (
+  `id` CHAR(36) NOT NULL,
+  `report_no` VARCHAR(32) NOT NULL,
+  `business_category_code` VARCHAR(64) NOT NULL,
+  `business_category_name` VARCHAR(64) NOT NULL,
+  `secondary_category` VARCHAR(64) NOT NULL,
+  `title` VARCHAR(128) NOT NULL,
+  `content` TEXT NOT NULL,
+  `reporter_user_id` CHAR(36) NOT NULL,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'submitted',
+  `submitted_at` DATETIME NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_work_reports_no` (`report_no`),
+  KEY `idx_work_reports_reporter` (`reporter_user_id`, `submitted_at`),
+  KEY `idx_work_reports_category` (`business_category_code`, `secondary_category`),
+  KEY `idx_work_reports_status` (`status`, `submitted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='员工内部管理';
+
+CREATE TABLE `work_report_recipients` (
+  `id` CHAR(36) NOT NULL,
+  `report_id` CHAR(36) NOT NULL,
+  `recipient_user_id` CHAR(36) NOT NULL,
+  `recipient_type` VARCHAR(16) NOT NULL DEFAULT 'cc',
+  `delivery_status` VARCHAR(32) NOT NULL DEFAULT 'pending',
+  `notification_id` CHAR(36) NULL,
+  `delivered_at` DATETIME NULL,
+  `read_at` DATETIME NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_work_report_recipient` (`report_id`, `recipient_user_id`),
+  KEY `idx_work_report_recipient_user` (`recipient_user_id`, `created_at`),
+  KEY `idx_work_report_recipient_report` (`report_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='内部管理抄送接收人';
 
 SET FOREIGN_KEY_CHECKS = 1;

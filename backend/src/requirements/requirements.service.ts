@@ -18,6 +18,7 @@ import {
 } from '../common/access-control';
 import { buildAppPublicUrl } from '../common/app-public-url';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
+import { contributionPointsFromHours } from '../common/efficiency-metrics';
 import { ensureIndex } from '../common/schema-maintenance';
 import { ensureWorkflowConfigTables } from '../common/workflow-config-schema';
 import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
@@ -1309,7 +1310,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
             classification?.names.join('、') ?? dto.tertiaryCategory ?? null,
           tertiaryCategoryCodes: classification?.codes ?? [],
           estimatedHours: classification?.estimatedHours ?? dto.estimatedHours,
-          contributionPoints: classification?.contributionPoints ?? '0.00',
+          contributionPoints: contributionPointsFromHours(
+            classification?.estimatedHours ?? dto.estimatedHours ?? '6',
+          ),
           sourceType: dto.sourceCandidateId ? 'ai_preview_confirmed' : 'manual',
           dispatcherUserId: currentUser?.id ?? null,
           createdByUserId: currentUser?.id ?? null,
@@ -1663,7 +1666,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       item.urgency_level = urgencyLevel ?? item.urgency_level;
       if (shouldSyncClassification) {
         item.estimated_hours = classification?.estimatedHours ?? '0.00';
-        item.contribution_points = classification?.contributionPoints ?? '0.00';
+        item.contribution_points = contributionPointsFromHours(
+          item.estimated_hours,
+        );
       }
       await this.requirementItemsRepository.save(item);
     }
@@ -1684,8 +1689,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         task.price_amount = dto.priceAmount ?? task.price_amount;
         if (shouldSyncClassification) {
           task.estimated_hours = classification?.estimatedHours ?? '0.00';
-          task.contribution_points =
-            classification?.contributionPoints ?? '0.00';
+          task.contribution_points = contributionPointsFromHours(
+            task.estimated_hours,
+          );
         }
         await this.tasksRepository.save(task);
       }
@@ -1988,7 +1994,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         priority,
         urgency_level: urgencyLevel,
         estimated_hours: input.estimatedHours ?? '6',
-        contribution_points: input.contributionPoints ?? '0.00',
+        contribution_points: contributionPointsFromHours(
+          input.estimatedHours ?? '6',
+        ),
         status: 'confirmed',
         quote_scope_status: 'not_started',
       }),
@@ -2014,7 +2022,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         assignee_user_id: null,
         estimated_hours: item.estimated_hours ?? null,
         price_amount: input.priceAmount ?? '0.00',
-        contribution_points: item.contribution_points ?? '0.00',
+        contribution_points: contributionPointsFromHours(item.estimated_hours),
         planned_start_at: input.plannedStartAt
           ? new Date(input.plannedStartAt)
           : null,
@@ -3247,6 +3255,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'contribution_points',
       'contribution_points DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER price_amount',
     );
+    await this.normalizeMissingContributionPoints();
     await ensureIndex(
       this.dataSource,
       'requirements',
@@ -3283,6 +3292,23 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'idx_requirement_items_item_no',
       ['item_no'],
     );
+  }
+
+  private async normalizeMissingContributionPoints() {
+    await this.dataSource.query(`
+      UPDATE requirement_items
+      SET contribution_points = ROUND(estimated_hours * 10, 2)
+      WHERE estimated_hours IS NOT NULL
+        AND estimated_hours > 0
+        AND (contribution_points IS NULL OR contribution_points = 0)
+    `);
+    await this.dataSource.query(`
+      UPDATE tasks
+      SET contribution_points = ROUND(estimated_hours * 10, 2)
+      WHERE estimated_hours IS NOT NULL
+        AND estimated_hours > 0
+        AND (contribution_points IS NULL OR contribution_points = 0)
+    `);
   }
 
   private async ensureBusinessCategoryOwnerConfigTable() {

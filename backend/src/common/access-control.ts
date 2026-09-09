@@ -57,6 +57,8 @@ const reviewerPermissions = [
 const memberPermissions = [
   'page.requirements',
   'page.messages',
+  'work_report.create',
+  'work_report.view_own',
   'task.view_assigned',
   'task.submit_assigned',
 ];

@@ -19,6 +19,9 @@ describe('WorkflowConfigsService', () => {
         if (sql.includes('FROM business_category_review_members member')) {
           return [];
         }
+        if (sql.includes('FROM global_workflow_members member')) {
+          return [];
+        }
         return { affectedRows: 1 };
       }),
       transaction: jest.fn(
@@ -86,5 +89,26 @@ describe('WorkflowConfigsService', () => {
         sql.includes('UPDATE tasks task'),
       ),
     ).toBe(false);
+  });
+
+  it('replaces the global work report recipients', async () => {
+    const { service, manager } = createFixture();
+
+    await service.replaceReportRecipients(['leader-1', 'leader-2', 'leader-1']);
+
+    expect(manager.query).toHaveBeenCalledTimes(3);
+    expect(manager.query.mock.calls[0][0]).toContain(
+      'UPDATE global_workflow_members',
+    );
+    expect(manager.query.mock.calls[1][1]).toEqual([
+      expect.any(String),
+      'report_recipient',
+      'leader-1',
+    ]);
+    expect(manager.query.mock.calls[2][1]).toEqual([
+      expect.any(String),
+      'report_recipient',
+      'leader-2',
+    ]);
   });
 });

@@ -10,6 +10,22 @@ export type WorkflowReviewType = (typeof WORKFLOW_REVIEW_TYPES)[number];
 
 export async function ensureWorkflowConfigTables(dataSource: DataSource) {
   await dataSource.query(`
+    CREATE TABLE IF NOT EXISTS global_workflow_members (
+      id CHAR(36) NOT NULL,
+      role_code VARCHAR(32) NOT NULL,
+      user_id CHAR(36) NOT NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'active',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      deleted_at DATETIME NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uk_global_workflow_member (role_code, user_id),
+      KEY idx_global_workflow_role (role_code, status),
+      KEY idx_global_workflow_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await dataSource.query(`
     CREATE TABLE IF NOT EXISTS customer_workflow_members (
       id CHAR(36) NOT NULL,
       customer_code VARCHAR(64) NOT NULL,

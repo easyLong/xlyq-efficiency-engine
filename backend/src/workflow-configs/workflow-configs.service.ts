@@ -28,11 +28,13 @@ export class WorkflowConfigsService implements OnModuleInit {
   async onModuleInit() {
     await ensureWorkflowConfigTables(this.dataSource);
     await this.migrateLegacyMappings();
+    await this.seedDefaultReportRecipients();
   }
 
   async findAll() {
-    const [customerMembers, businessCategoryReviewers] = await Promise.all([
-      this.dataSource.query(`
+    const [customerMembers, businessCategoryReviewers, globalMembers] =
+      await Promise.all([
+        this.dataSource.query(`
         SELECT
           member.id,
           member.customer_code AS customerCode,
@@ -54,7 +56,7 @@ export class WorkflowConfigsService implements OnModuleInit {
           AND member.status = 'active'
         ORDER BY customer.customer_name, member.role_code, user.display_name
       `),
-      this.dataSource.query(`
+        this.dataSource.query(`
         SELECT
           member.id,
           member.business_category_code AS businessCategoryCode,
@@ -71,11 +73,29 @@ export class WorkflowConfigsService implements OnModuleInit {
           AND member.status = 'active'
         ORDER BY FIELD(member.business_category_code, 'design', 'copywriting', 'operation', 'community'), user.display_name
       `),
-    ]);
+        this.dataSource.query(`
+        SELECT
+          member.id,
+          member.role_code AS roleCode,
+          member.user_id AS userId,
+          user.display_name AS userName,
+          user.username,
+          member.status,
+          member.updated_at AS updatedAt
+        FROM global_workflow_members member
+        JOIN users user
+          ON user.id = member.user_id
+         AND user.deleted_at IS NULL
+        WHERE member.deleted_at IS NULL
+          AND member.status = 'active'
+        ORDER BY member.role_code, user.display_name
+      `),
+      ]);
 
     return {
       customerMembers,
       businessCategoryReviewers,
+      globalMembers,
       businessCategories: businessCategories.map((item) => ({ ...item })),
     };
   }
@@ -98,6 +118,67 @@ export class WorkflowConfigsService implements OnModuleInit {
       'customer_reviewer',
       userIds,
     );
+  }
+
+  async replaceReportRecipients(userIds: string[]) {
+    return this.replaceGlobalMembers('report_recipient', userIds);
+  }
+
+  async replaceGlobalMembers(roleCode: string, userIds: string[]) {
+    const normalizedRole = String(roleCode ?? '').trim();
+    if (normalizedRole !== 'report_recipient') {
+      throw new BadRequestException('无效的全局流程角色');
+    }
+    const normalizedUserIds = await this.validateActiveUserIds(userIds);
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        `UPDATE global_workflow_members
+         SET status = 'inactive', deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
+         WHERE role_code = ?`,
+        [normalizedRole],
+      );
+      for (const userId of normalizedUserIds) {
+        await manager.query(
+          `INSERT INTO global_workflow_members (id, role_code, user_id, status)
+           VALUES (?, ?, ?, 'active')
+           ON DUPLICATE KEY UPDATE status = 'active', deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`,
+          [randomUUID(), normalizedRole, userId],
+        );
+      }
+    });
+    return this.findAll();
+  }
+
+  async findGlobalMemberIds(roleCode: string): Promise<string[]> {
+    const rows: Array<{ userId: string }> = await this.dataSource.query(
+      `SELECT member.user_id AS userId
+       FROM global_workflow_members member
+       JOIN users user ON user.id = member.user_id
+        AND user.status = 'active' AND user.deleted_at IS NULL
+       WHERE member.role_code = ? AND member.status = 'active' AND member.deleted_at IS NULL
+       ORDER BY member.created_at, member.user_id`,
+      [roleCode],
+    );
+    return [...new Set(rows.map((row) => row.userId).filter(Boolean))];
+  }
+
+  private async seedDefaultReportRecipients() {
+    const existing: Array<{ total: number }> = await this.dataSource.query(
+      `SELECT COUNT(*) AS total FROM global_workflow_members WHERE role_code = 'report_recipient'`,
+    );
+    if (Number(existing[0]?.total ?? 0) > 0) return;
+    const admins: Array<{ userId: string }> = await this.dataSource.query(
+      `SELECT DISTINCT user_role.user_id AS userId
+       FROM user_roles user_role
+       JOIN roles role ON role.id = user_role.role_id AND role.role_code = 'admin'
+       JOIN users user ON user.id = user_role.user_id AND user.status = 'active' AND user.deleted_at IS NULL`,
+    );
+    for (const admin of admins) {
+      await this.dataSource.query(
+        `INSERT IGNORE INTO global_workflow_members (id, role_code, user_id, status) VALUES (?, 'report_recipient', ?, 'active')`,
+        [randomUUID(), admin.userId],
+      );
+    }
   }
 
   async replaceCustomerMembers(
