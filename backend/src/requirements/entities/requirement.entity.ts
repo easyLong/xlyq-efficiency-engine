@@ -42,6 +42,9 @@ export class RequirementEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'text', nullable: true })
   tertiary_category_codes_json!: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  tertiary_category_quantities_json!: string | null;
+
   @Column({ type: 'varchar', length: 32 })
   status!: string;
 

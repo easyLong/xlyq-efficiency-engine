@@ -3,6 +3,7 @@ import {
   IsArray,
   IsNotEmpty,
   Matches,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -90,6 +91,10 @@ export class CreateRequirementWithTaskDto {
   @ArrayMaxSize(50)
   @IsString({ each: true })
   tertiaryCategoryCodes?: string[];
+
+  @IsOptional()
+  @IsObject()
+  tertiaryCategoryQuantities?: Record<string, unknown>;
 
   @IsOptional()
   @IsString()

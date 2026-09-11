@@ -1290,6 +1290,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           dto.businessCategory,
           dto.secondaryCategory,
           dto.tertiaryCategoryCodes,
+          dto.tertiaryCategoryQuantities,
         )
       : null;
 
@@ -1309,10 +1310,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           tertiaryCategory:
             classification?.names.join('、') ?? dto.tertiaryCategory ?? null,
           tertiaryCategoryCodes: classification?.codes ?? [],
+          tertiaryCategoryQuantities: classification?.quantities ?? {},
           estimatedHours: classification?.estimatedHours ?? dto.estimatedHours,
-          contributionPoints: contributionPointsFromHours(
-            classification?.estimatedHours ?? dto.estimatedHours ?? '6',
-          ),
+          contributionPoints:
+            classification?.contributionPoints ??
+            contributionPointsFromHours(dto.estimatedHours ?? '6'),
           sourceType: dto.sourceCandidateId ? 'ai_preview_confirmed' : 'manual',
           dispatcherUserId: currentUser?.id ?? null,
           createdByUserId: currentUser?.id ?? null,
@@ -1598,6 +1600,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
             targetBusinessCategory,
             targetSecondaryCategory,
             dto.tertiaryCategoryCodes,
+            dto.tertiaryCategoryQuantities,
           )
         : null;
 
@@ -1634,6 +1637,10 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         dto.tertiaryCategoryCodes !== undefined
           ? JSON.stringify(classification?.codes ?? [])
           : requirement.tertiary_category_codes_json,
+      tertiary_category_quantities_json:
+        dto.tertiaryCategoryCodes !== undefined
+          ? JSON.stringify(classification?.quantities ?? {})
+          : requirement.tertiary_category_quantities_json,
       raw_content: dto.rawContent ?? requirement.raw_content,
       summary: dto.summary ?? requirement.summary,
     });
@@ -1666,9 +1673,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       item.urgency_level = urgencyLevel ?? item.urgency_level;
       if (shouldSyncClassification) {
         item.estimated_hours = classification?.estimatedHours ?? '0.00';
-        item.contribution_points = contributionPointsFromHours(
-          item.estimated_hours,
-        );
+        item.contribution_points =
+          classification?.contributionPoints ??
+          contributionPointsFromHours(item.estimated_hours);
       }
       await this.requirementItemsRepository.save(item);
     }
@@ -1689,9 +1696,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         task.price_amount = dto.priceAmount ?? task.price_amount;
         if (shouldSyncClassification) {
           task.estimated_hours = classification?.estimatedHours ?? '0.00';
-          task.contribution_points = contributionPointsFromHours(
-            task.estimated_hours,
-          );
+          task.contribution_points =
+            classification?.contributionPoints ??
+            contributionPointsFromHours(task.estimated_hours);
         }
         await this.tasksRepository.save(task);
       }
@@ -1924,6 +1931,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       secondaryCategory?: string | null;
       tertiaryCategory?: string | null;
       tertiaryCategoryCodes?: string[];
+      tertiaryCategoryQuantities?: Record<string, number>;
       contributionPoints?: string;
       sourceType: string;
       sourceContactName?: string | null;
@@ -1972,6 +1980,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         tertiary_category_codes_json: JSON.stringify(
           input.tertiaryCategoryCodes ?? [],
         ),
+        tertiary_category_quantities_json: JSON.stringify(
+          input.tertiaryCategoryQuantities ?? {},
+        ),
         status: 'draft',
         priority,
         urgency_level: urgencyLevel,
@@ -1994,9 +2005,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         priority,
         urgency_level: urgencyLevel,
         estimated_hours: input.estimatedHours ?? '6',
-        contribution_points: contributionPointsFromHours(
-          input.estimatedHours ?? '6',
-        ),
+        contribution_points:
+          input.contributionPoints ??
+          contributionPointsFromHours(input.estimatedHours ?? '6'),
         status: 'confirmed',
         quote_scope_status: 'not_started',
       }),
@@ -2022,7 +2033,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         assignee_user_id: null,
         estimated_hours: item.estimated_hours ?? null,
         price_amount: input.priceAmount ?? '0.00',
-        contribution_points: contributionPointsFromHours(item.estimated_hours),
+        contribution_points:
+          input.contributionPoints ??
+          contributionPointsFromHours(item.estimated_hours),
         planned_start_at: input.plannedStartAt
           ? new Date(input.plannedStartAt)
           : null,
@@ -3239,6 +3252,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'requirements',
       'tertiary_category_codes_json',
       'tertiary_category_codes_json TEXT NULL AFTER tertiary_category',
+    );
+    await this.addColumnIfMissing(
+      'requirements',
+      'tertiary_category_quantities_json',
+      'tertiary_category_quantities_json TEXT NULL AFTER tertiary_category_codes_json',
     );
     await this.addColumnIfMissing(
       'requirement_items',

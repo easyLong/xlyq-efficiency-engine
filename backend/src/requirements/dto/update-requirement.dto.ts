@@ -1,6 +1,7 @@
 import {
   ArrayMaxSize,
   IsArray,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -75,4 +76,8 @@ export class UpdateRequirementDto {
   @ArrayMaxSize(50)
   @IsString({ each: true })
   tertiaryCategoryCodes?: string[];
+
+  @IsOptional()
+  @IsObject()
+  tertiaryCategoryQuantities?: Record<string, unknown>;
 }

@@ -34,9 +34,23 @@ describe('DimensionsService', () => {
       ]),
     ).resolves.toEqual({
       codes: ['banner_design', 'banner_resize'],
+      quantities: { banner_design: 1, banner_resize: 1 },
       names: ['Banner 新设计', 'Banner 拓展'],
       estimatedHours: '6.00',
-      contributionPoints: '60.00',
+        contributionPoints: '60.00',
+      });
+
+    await expect(
+      service.resolveTertiarySelection(
+        'operation',
+        '内容发布',
+        ['banner_design', 'banner_resize'],
+        { banner_design: 3, banner_resize: 2 },
+      ),
+    ).resolves.toMatchObject({
+      quantities: { banner_design: 3, banner_resize: 2 },
+      estimatedHours: '16.50',
+      contributionPoints: '165.00',
     });
   });
 });

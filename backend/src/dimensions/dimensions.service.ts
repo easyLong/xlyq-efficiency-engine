@@ -231,12 +231,13 @@ export class DimensionsService implements OnModuleInit {
     businessCategory: string | null | undefined,
     secondaryCategory: string | null | undefined,
     codes: string[],
+    quantities: Record<string, unknown> = {},
   ) {
     const uniqueCodes = [
       ...new Set(codes.map((item) => String(item).trim()).filter(Boolean)),
     ];
     if (!uniqueCodes.length) return null;
-    const categoryCode = String(businessCategory ?? '').trim();
+    const categoryCode = this.slug(String(businessCategory ?? '').trim());
     const secondaryNameOrCode = String(secondaryCategory ?? '').trim();
     const secondary = await this.dimensionsRepository.findOne({
       where: [
@@ -272,14 +273,33 @@ export class DimensionsService implements OnModuleInit {
     }
     const byCode = new Map(rows.map((row) => [row.dimension_code, row]));
     const ordered = uniqueCodes.map((code) => byCode.get(code)!);
-    const total = (field: 'estimated_hours' | 'contribution_points') =>
-      ordered
-        .reduce((sum, item) => sum + Number(item[field] ?? 0), 0)
-        .toFixed(2);
-    const estimatedHours = total('estimated_hours');
+    const isOperation = categoryCode === 'operation';
+    const normalizedQuantities = Object.fromEntries(
+      ordered.map((item) => {
+        const rawQuantity = quantities?.[item.dimension_code];
+        const quantity =
+          rawQuantity === undefined || rawQuantity === null || rawQuantity === ''
+            ? 1
+            : Number(rawQuantity);
+        if (isOperation && (!Number.isInteger(quantity) || quantity < 1)) {
+          throw new BadRequestException('运营三级分类数量必须是大于等于1的整数');
+        }
+        return [item.dimension_code, isOperation ? quantity : 1];
+      }),
+    ) as Record<string, number>;
+    const estimatedHours = ordered
+      .reduce(
+        (sum, item) =>
+          sum +
+          Number(item.estimated_hours ?? 0) *
+            normalizedQuantities[item.dimension_code],
+        0,
+      )
+      .toFixed(2);
     return {
       codes: uniqueCodes,
       names: ordered.map((item) => item.dimension_name),
+      quantities: normalizedQuantities,
       estimatedHours,
       contributionPoints: contributionPointsFromHours(estimatedHours),
     };

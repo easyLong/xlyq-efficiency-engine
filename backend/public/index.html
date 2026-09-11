@@ -201,6 +201,49 @@
     .tertiary-picker-option input[type="checkbox"] { width: 15px; height: 15px; margin: 0; flex: 0 0 15px; accent-color: #356d45; }
     .tertiary-picker-option-body { flex: 1; min-width: 0; overflow: hidden; }
     .tertiary-picker-option-name { display: block; overflow: hidden; text-overflow: clip; white-space: nowrap; font-size: 13px; }
+    .tertiary-picker-option-with-quantity .tertiary-picker-option-body {
+      flex: 0 1 auto;
+      width: max-content;
+      max-width: calc(100% - 90px);
+    }
+    .tertiary-picker-option-with-quantity .tertiary-quantity-input {
+      width: 48px;
+      min-width: 48px;
+    }
+    .tertiary-picker-option-with-quantity { gap: 7px; }
+    .tertiary-quantity-input {
+      width: 58px;
+      min-width: 58px;
+      height: 26px;
+      padding: 2px 6px;
+      border: 1px solid #cfdacb;
+      border-radius: 6px;
+      background: #fff;
+      color: #263426;
+      text-align: center;
+      font-size: 12px;
+    }
+    .tertiary-quantity-input:disabled { opacity: .35; background: #f2f5f0; }
+    .tertiary-picker-quantity-hint {
+      padding: 5px 6px 3px;
+      color: #6b7c6a;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+    .tertiary-picker-quantity-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 6px 1px;
+      color: #8a9686;
+      font-size: 11px;
+    }
+    .tertiary-picker-quantity-header span:first-child {
+      flex: 0 1 auto;
+      width: max-content;
+      max-width: calc(100% - 58px);
+    }
+    .tertiary-picker-quantity-header span:last-child { width: 48px; text-align: center; }
     .tertiary-picker-store { display: none !important; }
     .edit-panel .tertiary-picker { background: #fff; }
     .classification-field { display: grid; gap: 7px; color: #687366; font-size: 13px; margin-bottom: 10px; }
@@ -5752,6 +5795,7 @@
         requirement.secondary_category || "",
         parseTertiaryCategoryCodes(requirement),
         String(requirement.tertiary_category || "").split(/[、,，]/).map(item => item.trim()).filter(Boolean),
+        parseTertiaryCategoryQuantities(requirement),
       );
       if (qs("requirementTitle")) qs("requirementTitle").value = requirement.title || row.item?.item_title || task?.task_name || "";
       if (qs("requirementContent")) qs("requirementContent").value = requirement.raw_content || requirement.summary || row.item?.item_description || "";
@@ -6199,6 +6243,7 @@
                       requirement.secondary_category || "",
                       parseTertiaryCategoryCodes(requirement),
                       String(requirement.tertiary_category || "").split(/[、,，]/).map(item => item.trim()).filter(Boolean),
+                      parseTertiaryCategoryQuantities(requirement),
                       `edit-tertiary-category-${requirement.id}`,
                     )}
                   </div>
@@ -6278,7 +6323,10 @@
       const secondary = qs(`edit-secondary-category-${requirementId}`)?.value || "";
       const select = qs(`edit-tertiary-category-${requirementId}`);
       if (!select) return;
-      renderTertiaryPicker(`edit-tertiary-category-${requirementId}`, `edit-tertiary-options-${requirementId}`, category, secondary);
+      const selectedCodes = selectedTertiaryCategoryCodes(select);
+      const selectedNames = [...(select.selectedOptions || [])].map(option => option.textContent.trim()).filter(Boolean);
+      const selectedQuantities = selectedTertiaryCategoryQuantities(select);
+      renderTertiaryPicker(`edit-tertiary-category-${requirementId}`, `edit-tertiary-options-${requirementId}`, category, secondary, selectedCodes, selectedNames, selectedQuantities);
       updateEditClassificationSummary(requirementId);
     }
     function updateEditClassificationSummary(requirementId) {
@@ -6496,7 +6544,9 @@
       const priceAmount = Number(priceAmountInput);
       const businessPlatform = normalizeBusinessPlatform(qs(`edit-business-platform-${requirementId}`)?.value);
       const secondaryCategory = qs(`edit-secondary-category-${requirementId}`)?.value || "";
-      const tertiaryCategoryCodes = selectedTertiaryCategoryCodes(qs(`edit-tertiary-category-${requirementId}`));
+      const tertiaryCategorySelect = qs(`edit-tertiary-category-${requirementId}`);
+      const tertiaryCategoryCodes = selectedTertiaryCategoryCodes(tertiaryCategorySelect);
+      const tertiaryCategoryQuantities = selectedTertiaryCategoryQuantities(tertiaryCategorySelect);
       const customerId = qs(`edit-customer-${requirementId}`)?.value;
       const projectType = qs(`edit-project-type-${requirementId}`)?.value;
       if (!title) return toast("需求标题不能为空");
@@ -6514,7 +6564,7 @@
 
         const result = await request(`/requirements/${requirementId}`, {
           method: "PATCH",
-          body: { title, rawContent, priority, urgencyLevel, priceAmount: priceAmount.toFixed(2), customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, businessCategory: projectType, secondaryCategory, tertiaryCategoryCodes },
+          body: { title, rawContent, priority, urgencyLevel, priceAmount: priceAmount.toFixed(2), customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, businessCategory: projectType, secondaryCategory, tertiaryCategoryCodes, tertiaryCategoryQuantities },
         });
         if (result.requirement) {
           state.requirements = state.requirements.map(item => item.id === requirementId ? result.requirement : item);
@@ -6614,11 +6664,15 @@
       const selectedTertiaryNames = preserveTertiarySelection
         ? [...(tertiarySelect?.selectedOptions || [])].map(option => option.textContent.trim()).filter(Boolean)
         : [];
+      const selectedTertiaryQuantities = preserveTertiarySelection
+        ? selectedTertiaryCategoryQuantities(tertiarySelect)
+        : {};
       renderSecondaryCategorySelect(
         type.value,
         preserveTertiarySelection ? secondarySelect.value || "" : "",
         selectedTertiaryCodes,
         selectedTertiaryNames,
+        selectedTertiaryQuantities,
       );
 
       let project = state.projects.find(p => p.customer_code === customer.customer_code && p.project_type === type.value);
@@ -7403,13 +7457,13 @@
         ...values.map(value => `<option value="${escapeAttr(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHtml(value)}</option>`),
       ].join("");
     }
-    function renderSecondaryCategorySelect(categoryValue = "", selectedValue = "", selectedTertiaryCodes = [], selectedTertiaryNames = []) {
+    function renderSecondaryCategorySelect(categoryValue = "", selectedValue = "", selectedTertiaryCodes = [], selectedTertiaryNames = [], selectedTertiaryQuantities = {}) {
       const select = qs("secondaryCategoryInput");
       if (!select) return;
       select.innerHTML = secondaryCategoryOptions(categoryValue, selectedValue, "请选择二级分类");
       select.dataset.category = categoryValue;
       if (selectedValue) select.value = selectedValue;
-      renderTertiaryCategorySelect(categoryValue, select.value || "", selectedTertiaryCodes, selectedTertiaryNames);
+      renderTertiaryCategorySelect(categoryValue, select.value || "", selectedTertiaryCodes, selectedTertiaryNames, selectedTertiaryQuantities);
     }
     function categoryTreeNode(categoryValue = "") {
       return (state.categoryTree || []).find(item => item.code === categoryValue || item.name === categoryValue);
@@ -7521,23 +7575,59 @@
         return [];
       }
     }
+    function parseTertiaryCategoryQuantities(requirement) {
+      try {
+        const parsed = JSON.parse(requirement?.tertiary_category_quantities_json || "{}");
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+        return Object.fromEntries(Object.entries(parsed).map(([code, value]) => [code, normalizeTertiaryQuantity(value)]));
+      } catch (_) {
+        return {};
+      }
+    }
+    function normalizeTertiaryQuantity(value) {
+      const quantity = Number(value);
+      return Number.isInteger(quantity) && quantity >= 1 ? quantity : 1;
+    }
+    function isOperationCategory(categoryValue = "") {
+      return normalizedBusinessCategory(categoryValue) === "operation"
+        || normalizedBusinessCategoryCode(categoryValue) === "operation";
+    }
     function selectedTertiaryCategoryCodes(select = qs("tertiaryCategoryInput")) {
       return [...(select?.selectedOptions || [])].map(option => option.value).filter(Boolean);
+    }
+    function selectedTertiaryCategoryQuantities(select = qs("tertiaryCategoryInput")) {
+      if (!select || !isOperationCategory(select.dataset.category || qs("projectTypeSelect")?.value || "")) return {};
+      const selectedCodes = new Set(selectedTertiaryCategoryCodes(select));
+      const quantities = {};
+      document.querySelectorAll("input[data-tertiary-quantity-store]").forEach(input => {
+        if (input.dataset.tertiaryQuantityStore !== select.id || !selectedCodes.has(input.dataset.tertiaryQuantityCode)) return;
+        quantities[input.dataset.tertiaryQuantityCode] = normalizeTertiaryQuantity(input.value);
+      });
+      return quantities;
     }
     function tertiaryPickerLabelText(selectedNames = []) {
       const names = [...new Set(selectedNames.map(item => String(item).trim()).filter(Boolean))];
       return !names.length ? "请选择三级分类" : names.length <= 2 ? names.join("、") : `已选 ${names.length} 项三级分类`;
     }
-    function tertiaryCategoryPickerOptionsHtml(categoryValue, secondaryValue, selectedCodes = [], selectedNames = [], storeId = "tertiaryCategoryInput") {
+    function tertiaryCategoryPickerOptionsHtml(categoryValue, secondaryValue, selectedCodes = [], selectedNames = [], selectedQuantities = {}, storeId = "tertiaryCategoryInput") {
       const selected = new Set(selectedCodes);
       const names = new Set(selectedNames);
+      const showQuantity = isOperationCategory(categoryValue);
       const items = tertiaryCategoryItems(categoryValue, secondaryValue);
       if (!items.length) return `<div class="muted">该二级分类暂无三级分类配置</div>`;
-      return items.map(item => {
+      const hint = showQuantity
+        ? `<div class="tertiary-picker-quantity-hint">运营任务：请填写每个三级分类的数量</div>`
+        : "";
+      const quantityHeader = showQuantity
+        ? `<div class="tertiary-picker-quantity-header"><span>三级分类</span><span>数量</span></div>`
+        : "";
+      return hint + quantityHeader + items.map(item => {
         const checked = selected.has(item.code) || names.has(item.name);
-        return `<label class="tertiary-picker-option">
+        const quantity = normalizeTertiaryQuantity(selectedQuantities?.[item.code]);
+        return `<label class="tertiary-picker-option ${showQuantity ? "tertiary-picker-option-with-quantity" : ""}">
           <input type="checkbox" value="${escapeAttr(item.code)}" data-tertiary-picker-store="${escapeAttr(storeId)}" ${checked ? "checked" : ""} onchange="syncTertiaryPicker('${escapeAttr(storeId)}')" />
           <span class="tertiary-picker-option-body"><span class="tertiary-picker-option-name">${escapeHtml(item.name)}</span></span>
+          ${showQuantity ? `<input class="tertiary-quantity-input" type="number" min="1" step="1" value="${quantity}" title="数量" aria-label="数量" data-tertiary-quantity-store="${escapeAttr(storeId)}" data-tertiary-quantity-code="${escapeAttr(item.code)}" ${checked ? "" : "disabled"} onchange="syncTertiaryPicker('${escapeAttr(storeId)}')" onclick="event.stopPropagation()" />` : ""}
         </label>`;
       }).join("");
     }
@@ -7553,18 +7643,24 @@
       if (!store) return;
       const checked = new Set([...document.querySelectorAll("input[data-tertiary-picker-store]")].filter(input => input.dataset.tertiaryPickerStore === storeId && input.checked).map(input => input.value));
       [...store.options].forEach(option => { option.selected = checked.has(option.value); });
+      document.querySelectorAll("input[data-tertiary-quantity-store]").forEach(input => {
+        if (input.dataset.tertiaryQuantityStore !== storeId) return;
+        input.disabled = !checked.has(input.dataset.tertiaryQuantityCode);
+        if (!input.disabled) input.value = normalizeTertiaryQuantity(input.value);
+      });
       updateTertiaryPickerLabel(storeId);
       if (storeId === "tertiaryCategoryInput") updateClassificationSummary(store);
       else if (storeId.startsWith("edit-tertiary-category-")) updateEditClassificationSummary(storeId.replace("edit-tertiary-category-", ""));
     }
-    function renderTertiaryPicker(storeId, optionsId, categoryValue, secondaryValue, selectedCodes = [], selectedNames = []) {
+    function renderTertiaryPicker(storeId, optionsId, categoryValue, secondaryValue, selectedCodes = [], selectedNames = [], selectedQuantities = {}) {
       const store = qs(storeId);
       const options = qs(optionsId);
       if (!store || !options) return;
       store.dataset.category = categoryValue;
       store.dataset.secondary = secondaryValue;
       store.innerHTML = tertiaryCategoryOptionsHtml(categoryValue, secondaryValue, selectedCodes, selectedNames);
-      options.innerHTML = tertiaryCategoryPickerOptionsHtml(categoryValue, secondaryValue, selectedCodes, selectedNames, storeId);
+      options.innerHTML = tertiaryCategoryPickerOptionsHtml(categoryValue, secondaryValue, selectedCodes, selectedNames, selectedQuantities, storeId);
+      syncTertiaryPicker(storeId);
       updateTertiaryPickerLabel(storeId);
     }
     function tertiaryCategoryOptionsHtml(categoryValue, secondaryValue, selectedCodes = [], selectedNames = []) {
@@ -7574,10 +7670,10 @@
       if (!items.length) return `<option value="" disabled>该二级分类暂无三级分类配置</option>`;
       return items.map(item => `<option value="${escapeAttr(item.code)}" ${(selected.has(item.code) || names.has(item.name)) ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
     }
-    function renderTertiaryCategorySelect(categoryValue = qs("projectTypeSelect")?.value || "", secondaryValue = qs("secondaryCategoryInput")?.value || "", selectedCodes = [], selectedNames = []) {
+    function renderTertiaryCategorySelect(categoryValue = qs("projectTypeSelect")?.value || "", secondaryValue = qs("secondaryCategoryInput")?.value || "", selectedCodes = [], selectedNames = [], selectedQuantities = {}) {
       const select = qs("tertiaryCategoryInput");
       if (!select) return;
-      renderTertiaryPicker("tertiaryCategoryInput", "tertiaryCategoryPickerOptions", categoryValue, secondaryValue, selectedCodes, selectedNames);
+      renderTertiaryPicker("tertiaryCategoryInput", "tertiaryCategoryPickerOptions", categoryValue, secondaryValue, selectedCodes, selectedNames, selectedQuantities);
       updateClassificationSummary();
     }
     function updateClassificationSummary(select = qs("tertiaryCategoryInput"), target = qs("classificationMetricSummary")) {
@@ -7589,11 +7685,13 @@
       }
       const categoryValue = select?.dataset.category || qs("projectTypeSelect")?.value || "";
       const secondaryValue = select?.dataset.secondary || qs("secondaryCategoryInput")?.value || "";
+      const quantities = selectedTertiaryCategoryQuantities(select);
       const byCode = new Map(tertiaryCategoryItems(categoryValue, secondaryValue).map(item => [item.code, item]));
       const totals = selected.reduce((sum, option) => {
         const item = byCode.get(option.value);
-        sum.hours += Number(item?.estimatedHours || 0);
-        sum.points += Number(item?.contributionPoints || 0);
+        const quantity = normalizeTertiaryQuantity(quantities[option.value]);
+        sum.hours += Number(item?.estimatedHours || 0) * quantity;
+        sum.points += Number(item?.contributionPoints || 0) * quantity;
         return sum;
       }, { hours: 0, points: 0 });
       target.textContent = `已选 ${selected.length} 项，自动汇总 ${totals.hours.toFixed(2)} 小时 / ${totals.points.toFixed(2)} 贡献分`;
@@ -8198,6 +8296,7 @@
       const selectedTertiaryNamesBeforeSync = [...(selectedTertiarySelect?.selectedOptions || [])]
         .map(option => option.textContent.trim())
         .filter(Boolean);
+      const selectedTertiaryQuantitiesBeforeSync = selectedTertiaryCategoryQuantities(selectedTertiarySelect);
       const project = await syncProjectSelection(true);
       if (!project) return toast("请先选择客户和业务大类");
       if (selectedTertiaryCodesBeforeSync.length) {
@@ -8206,11 +8305,13 @@
           qs("secondaryCategoryInput")?.value || selectedSecondary,
           selectedTertiaryCodesBeforeSync,
           selectedTertiaryNamesBeforeSync,
+          selectedTertiaryQuantitiesBeforeSync,
         );
       }
       const businessPlatform = normalizeBusinessPlatform(qs("businessPlatformInput").value);
       const secondaryCategory = qs("secondaryCategoryInput").value;
       const tertiaryCategoryCodes = selectedTertiaryCategoryCodes();
+      const tertiaryCategoryQuantities = selectedTertiaryCategoryQuantities();
       const plannedStartAt = qs("plannedStartAtInput").value;
       const plannedEndAt = qs("plannedEndAtInput").value;
       const priority = priorityValueFromDeadline(plannedEndAt);
@@ -8260,6 +8361,7 @@
             businessCategory: qs("projectTypeSelect").value || undefined,
             secondaryCategory: secondaryCategory || undefined,
             tertiaryCategoryCodes,
+            tertiaryCategoryQuantities,
             sourceCandidateId: selectedCandidateId || undefined,
           },
         });
