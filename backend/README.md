@@ -180,7 +180,8 @@ npm run migrate:project-tables -- --help
 
 ## 数据链路说明
 
-关键链路见 [../DATA_FLOW.md](../DATA_FLOW.md)。
+关键链路见 [../DATA_FLOW.md](../DATA_FLOW.md)；结算明细 SQL 模板配置见
+[src/settlement/README.md](src/settlement/README.md)。
 
 后端已经对以下链路做一致性保护：
 

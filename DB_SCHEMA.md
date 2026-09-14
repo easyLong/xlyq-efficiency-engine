@@ -961,6 +961,32 @@ business_category_owner_configs is legacy compatibility only
 | created_at | timestamptz | not null | 创建时间 |
 | updated_at | timestamptz | not null | 更新时间 |
 
+## 12.8 `settlement_sql_templates`
+
+基金结算明细 SQL 模板表。当前 MySQL 实现由后端首次启动时自动创建，模板新增和版本维护见
+[结算明细 SQL 模板配置](backend/src/settlement/README.md)。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | char(36) | pk | 模板记录ID |
+| customer_code | varchar(32) | not null | 基金客户编码，关联 `customers.customer_code` |
+| template_code | varchar(64) | not null | 模板编码，同一客户模板的稳定标识 |
+| name | varchar(128) | not null | 模板显示名称 |
+| version | int | not null | 模板版本号 |
+| status | varchar(16) | not null | `draft/published/archived` |
+| sql_text | longtext | not null | 只读模板 SQL，必须是单条 `SELECT` |
+| columns_json | text | not null | 页面和 Excel 的列名、顺序、宽度及数字格式配置 |
+| created_at | datetime | not null | 创建时间 |
+| updated_at | datetime | not null | 更新时间 |
+
+唯一约束：
+
+- `(template_code, version)`
+
+索引：
+
+- `(customer_code, status)`
+
 ## 13. 变更管理域
 
 ## 13.1 `change_requests`

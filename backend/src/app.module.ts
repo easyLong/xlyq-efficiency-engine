@@ -13,6 +13,7 @@ import { ProjectsModule } from './projects/projects.module';
 import { QuoteMappingsModule } from './quote-mappings/quote-mappings.module';
 import { QuotationsModule } from './quotations/quotations.module';
 import { RequirementsModule } from './requirements/requirements.module';
+import { SettlementModule } from './settlement/settlement.module';
 import { RiskAlertsModule } from './risk-alerts/risk-alerts.module';
 import { TasksModule } from './tasks/tasks.module';
 import { UsersModule } from './users/users.module';
@@ -53,6 +54,7 @@ import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
     WorkReportsModule,
     ProjectsModule,
     RequirementsModule,
+    SettlementModule,
     TasksModule,
     WorklogsModule,
     RiskAlertsModule,

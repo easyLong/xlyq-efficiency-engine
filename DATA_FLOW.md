@@ -157,17 +157,19 @@ WHERE source IN (
 - 草稿保存和正式提交是两个独立动作；正式提交使用事务，成功后任务才进入 `pending_review`。
 - 资产查看页支持两种访问方式：飞书通知携带审核人专用 token 免登录进入；管理后台已登录且具备任务范围的人员点击“查看资产”进入。旧负责人 token 仅保留查看兼容，不能执行审核。
 
-资产 PPT 导出口径：
+## 4.1 结算明细模板链路
+
+结算金额概览和客户明细采用两套职责清晰的口径：概览继续使用系统通用统计；客户明细通过 `settlement_sql_templates` 按基金匹配模板。
 
 ```text
-结算统计筛选出的任务
-  -> requirement_quotation_mappings(mapping_status = matched)
-  -> quotation_items.item_name 层级
-  -> task_result_files 图片资产
-  -> assets.pptx
+settlement_sql_templates
+  -> 模板 SQL（只读 SELECT）
+  -> __filter_date / 业务维度参数化筛选
+  -> 页面分页预览
+  -> 同一结果生成真实 .xlsx
 ```
 
-导出的 PPT 标题为“基金名称-结算项目”。正文按报价子项层级顺序展示，例如 `运营支持 > 线上银行平台日常运营 > 设计`，每个层级下直接放置原始图片资产，图片下方显示真实图片名称；合作链接和非图片文件不进入 PPT。
+模板 SQL 必须返回 `__task_id`、`__customer_code`、`__filter_date`、`__business_platform`、`__business_category`、`__secondary_category` 和 `__tertiary_category`。页面顶部时间控件会同时作用于预览和 Excel 导出。新增基金模板的配置步骤见 [结算明细 SQL 模板配置](backend/src/settlement/README.md)。
 
 ## 5. 合同报价链路
 
@@ -287,11 +289,25 @@ WHERE source IN (
 
 ## 10. 结算和统计
 
-结算统计口径：
+结算金额概览口径：
 
 ```text
-已确认报价子项单价 × 任务图片资产个数
+任务价格
 ```
+
+客户结算明细使用动态 SQL 模板。模板表为 `settlement_sql_templates`，按
+`customer_code + template_code + version` 管理；页面预览和 Excel 导出共用同一份
+SQL 结果。SQL 需要返回内部筛选字段，顶部时间控件通过 `__filter_date` 联动模板查询。
+
+```text
+settlement_sql_templates
+  -> 只读模板 SQL
+  -> 基金 / 时间 / 平台 / 分类筛选
+  -> 页面分页预览
+  -> 真实 .xlsx 导出
+```
+
+新增模板的操作步骤见 [结算明细 SQL 模板配置](backend/src/settlement/README.md)。
 
 需求面板支持：
 
@@ -300,6 +316,8 @@ WHERE source IN (
 - 业务大类
 - 二级分类
 - 员工
+
+旧报价映射和资产数量口径仅保留用于历史数据兼容，不再作为当前客户模板结算明细的必要条件。
 
 待报价口径包含：
 
