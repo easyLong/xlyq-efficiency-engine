@@ -1715,7 +1715,11 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async removeBundle(id: string) {
+  async removeBundle(
+    id: string,
+    currentUser: UserEntity | null = null,
+  ) {
+    await this.assertCanDeleteBundle(id, currentUser);
     const result = await this.dataSource.transaction(async (manager) => {
       const requirement = await manager
         .getRepository(RequirementEntity)
@@ -1776,6 +1780,42 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       deletedTaskCount: result.deletedTaskCount,
       deletedMappingCount: result.deletedMappingCount,
     };
+  }
+
+  private async assertCanDeleteBundle(
+    requirementId: string,
+    currentUser: UserEntity | null,
+  ) {
+    if (!currentUser) {
+      throw new ForbiddenException('请先登录后再删除需求任务');
+    }
+
+    const profile = await buildAccessProfile(this.dataSource, currentUser);
+    if (profile.isAdmin) {
+      return;
+    }
+    if (!hasPermission(profile, 'requirement.delete_owned')) {
+      throw new ForbiddenException('当前账号没有删除需求任务权限');
+    }
+
+    const rows = await this.dataSource.query(
+      `
+        SELECT customer_code AS customerCode
+        FROM requirements
+        WHERE id = ?
+          AND deleted_at IS NULL
+        LIMIT 1
+      `,
+      [requirementId],
+    );
+    if (!rows?.length) {
+      throw new NotFoundException('Requirement not found');
+    }
+
+    const customerCode = String(rows[0].customerCode ?? '').trim();
+    if (!profile.dispatchCustomerCodes.includes(customerCode)) {
+      throw new ForbiddenException('只能删除当前派发范围内的需求任务');
+    }
   }
 
   async parse(id: string) {

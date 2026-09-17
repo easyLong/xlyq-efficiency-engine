@@ -171,9 +171,12 @@ export class RequirementsController {
   }
 
   @Delete(':id/bundle')
-  @Permission('requirement.delete_all')
-  removeBundle(@Param('id') id: string) {
-    return this.requirementsService.removeBundle(id);
+  @Permission('requirement.delete_owned', 'requirement.delete_all')
+  removeBundle(
+    @Param('id') id: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.requirementsService.removeBundle(id, request?.user ?? null);
   }
 
   @Post(':id/parse')

@@ -41,6 +41,7 @@ const dispatcherPermissions = [
   'requirement.view_owned',
   'requirement.create',
   'requirement.edit_owned',
+  'requirement.delete_owned',
   'task.view_owned',
   'task.assign_owned',
   'task.remind_execution_owned',

@@ -78,6 +78,7 @@ describe('workflow access profile', () => {
         'page.settlement',
         'settlement.view_all',
         'requirement.create',
+        'requirement.delete_owned',
         'task.assign_owned',
         'task.accept_owned',
       ]),

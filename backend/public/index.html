@@ -6085,13 +6085,14 @@
       renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
     }
     function renderRequirementEditAction(row) {
-      if (!can("requirement.create") && !can("requirement.edit_owned") && !can("requirement.delete_all")) return "";
+      const canDeleteRequirement = can("requirement.delete_owned") || can("requirement.delete_all");
+      if (!can("requirement.create") && !can("requirement.edit_owned") && !canDeleteRequirement) return "";
       const isBusy = state.busyActionId === row.requirement.id;
       return `
         <div class="card-edit-actions" onclick="event.stopPropagation()">
           ${can("requirement.create") ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="copyRequirementAsNew(event, '${escapeAttr(row.requirement.id)}')">复制创建</button>` : ""}
           ${can("requirement.edit_owned") ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="startEditRequirement('${row.requirement.id}')">编辑</button>` : ""}
-          ${can("requirement.delete_all") ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="deleteRequirementBundle('${row.requirement.id}')">${isBusy ? "处理中..." : "删除"}</button>` : ""}
+          ${canDeleteRequirement ? `<button class="btn danger" ${isBusy ? "disabled" : ""} onclick="deleteRequirementBundle('${row.requirement.id}')">${isBusy ? "处理中..." : "删除"}</button>` : ""}
         </div>
       `;
     }
