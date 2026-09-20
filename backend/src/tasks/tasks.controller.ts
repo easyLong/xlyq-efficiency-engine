@@ -8,7 +8,10 @@ import {
   Query,
   Req,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import { Permission } from '../common/decorators/permission.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -19,7 +22,6 @@ import { ExportTaskAssetsPptDto } from './dto/export-task-assets-ppt.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
 import { SaveLocalAssetSheetDto } from './dto/save-local-asset-sheet.dto';
-import { UploadLocalAssetImageDto } from './dto/upload-local-asset-image.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TasksService } from './tasks.service';
 
@@ -303,12 +305,35 @@ export class TasksController {
 
   @Public()
   @Post(':id/asset-sheet/upload-image')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 500 * 1024 * 1024,
+      },
+      fileFilter: (_request, file, callback) => {
+        callback(
+          null,
+          ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(
+            file.mimetype.toLowerCase(),
+          ),
+        );
+      },
+    }),
+  )
   uploadLocalAssetImage(
     @Param('id') id: string,
     @Query('token') token: string | undefined,
-    @Body() dto: UploadLocalAssetImageDto,
+    @UploadedFile()
+    file:
+      | {
+          buffer: Buffer;
+          originalname: string;
+          mimetype: string;
+          size: number;
+        }
+      | undefined,
   ) {
-    return this.tasksService.uploadLocalAssetImage(id, dto, token);
+    return this.tasksService.uploadLocalAssetImage(id, file, token);
   }
 
   @Public()

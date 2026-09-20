@@ -721,9 +721,9 @@
           if (file.size > maxImageSizeMb * 1024 * 1024) {
             throw new Error(`${file.name} 超过 ${maxImageSizeMb}MB`);
           }
-          const dataUrl = await readFileAsDataUrl(file);
-          pendingImagePreviews.push({ id: previewId, url: dataUrl });
-          uploadJobs.push(uploadPendingImage(previewId, dataUrl, file.name, uploadBatch));
+          const previewUrl = URL.createObjectURL(file);
+          pendingImagePreviews.push({ id: previewId, url: previewUrl });
+          uploadJobs.push(uploadPendingImage(previewId, file, uploadBatch));
         } catch (error) {
           pendingImagePreviews = pendingImagePreviews.filter(item => item.id !== previewId);
           setStatus(error.message, "error");
@@ -738,15 +738,19 @@
       document.getElementById("fileInput").value = "";
     }
 
-    async function uploadPendingImage(previewId, dataUrl, fileName, uploadBatch) {
+    async function uploadPendingImage(previewId, file, uploadBatch) {
       try {
-        const url = await uploadImage(dataUrl, fileName);
+        const url = await uploadImage(file);
+        const preview = pendingImagePreviews.find(item => item.id === previewId);
+        if (preview?.url?.startsWith("blob:")) URL.revokeObjectURL(preview.url);
         pendingImagePreviews = pendingImagePreviews.filter(item => item.id !== previewId);
         addImageUrls([url]);
         uploadBatch.uploaded += 1;
         setStatus(`已上传 ${uploadBatch.uploaded} / ${uploadBatch.total} 张图片。`, "ok");
         return true;
       } catch (error) {
+        const preview = pendingImagePreviews.find(item => item.id === previewId);
+        if (preview?.url?.startsWith("blob:")) URL.revokeObjectURL(preview.url);
         pendingImagePreviews = pendingImagePreviews.filter(item => item.id !== previewId);
         renderAssets();
         setStatus(error.message, "error");
@@ -754,16 +758,17 @@
       }
     }
 
-    async function uploadImage(dataUrl, fileName) {
+    async function uploadImage(file) {
       if (taskId === "default") {
-        return dataUrl;
+        return readFileAsDataUrl(file);
       }
+      const formData = new FormData();
+      formData.append("file", file, file.name);
       const response = await fetch(taskAssetApi("upload-image"), {
         method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify({ dataUrl, fileName }),
+        body: formData,
       });
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "图片上传失败");
       return result.imageUrl;
     }

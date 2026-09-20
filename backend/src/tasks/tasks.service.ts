@@ -39,7 +39,6 @@ import { ExportTaskAssetsPptDto } from './dto/export-task-assets-ppt.dto';
 import { ProvisionTaskWorkspaceDto } from './dto/provision-task-workspace.dto';
 import { RegisterTaskResultFileDto } from './dto/register-task-result-file.dto';
 import { SaveLocalAssetSheetDto } from './dto/save-local-asset-sheet.dto';
-import { UploadLocalAssetImageDto } from './dto/upload-local-asset-image.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskDirectoryEntity } from './entities/task-directory.entity';
 import { TaskEntity } from './entities/task.entity';
@@ -1930,29 +1929,37 @@ export class TasksService implements OnModuleInit {
 
   async uploadLocalAssetImage(
     id: string,
-    dto: UploadLocalAssetImageDto,
+    file:
+      | {
+          buffer: Buffer;
+          originalname: string;
+          mimetype: string;
+          size: number;
+        }
+      | undefined,
     token?: string,
   ) {
     const task = await this.findOne(id);
     this.assertAssetSheetAccess(task, token);
     this.assertTaskCanSubmitDelivery(task);
     await this.assertUploadCapacity(task.id);
-    const match =
-      /^data:image\/(png|jpe?g|webp|gif);base64,([a-z0-9+/=]+)$/i.exec(
-        dto.dataUrl ?? '',
-      );
-    if (!match) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('请选择要上传的图片');
+    }
+    const extensionByMimeType: Record<string, string> = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
+    const ext = extensionByMimeType[file.mimetype.toLowerCase()];
+    if (!ext) {
       throw new BadRequestException(
         'Only png, jpg, webp or gif images are supported',
       );
     }
 
-    const ext =
-      match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase();
-    const bytes = Buffer.from(match[2], 'base64');
-    if (bytes.length <= 0) {
-      throw new BadRequestException('Uploaded image is empty');
-    }
+    const bytes = file.buffer;
     const maxBytes = this.assetImageMaxBytes();
     if (bytes.length > maxBytes) {
       throw new BadRequestException(
@@ -1968,7 +1975,7 @@ export class TasksService implements OnModuleInit {
       task.id,
     );
     await mkdir(uploadDir, { recursive: true });
-    const safeBaseName = this.safeFileBaseName(dto.fileName) || 'image';
+    const safeBaseName = this.safeFileBaseName(file.originalname) || 'image';
     const fileName = `${safeBaseName}-${randomUUID().slice(0, 8)}.${ext}`;
     const filePath = join(uploadDir, fileName);
     await writeFile(filePath, bytes);
