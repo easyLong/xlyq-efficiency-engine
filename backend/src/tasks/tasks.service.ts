@@ -155,7 +155,6 @@ type EmployeeLoadSqlRow = {
 export class TasksService implements OnModuleInit {
   private readonly liveAssetSyncTtlMs = 2 * 60 * 1000;
   private readonly liveAssetSyncConcurrency = 5;
-  private readonly defaultListLimit = 500;
   private readonly maxLocalImageCount = 80;
   private readonly maxLocalAssetCount = 200;
 
@@ -208,7 +207,6 @@ export class TasksService implements OnModuleInit {
     const tasks = await this.tasksRepository.find({
       where,
       order: { created_at: 'DESC' },
-      take: this.defaultListLimit,
     });
     const scoped = await this.scopeTasksForUser(tasks, currentUser ?? null);
     return this.taskWorkflowRuntime.decorateTasks(scoped, currentUser ?? null);
@@ -402,11 +400,9 @@ export class TasksService implements OnModuleInit {
       const tasks = await this.tasksRepository.find({
         where: projectId ? { project_id: projectId } : {},
         order: { created_at: 'DESC' },
-        ...(globalScope ? {} : { take: this.defaultListLimit }),
       });
-      return globalScope
-        ? tasks
-        : this.scopeTasksForUser(tasks, currentUser ?? null);
+      if (globalScope) return tasks;
+      return this.scopeTasksForUser(tasks, currentUser ?? null);
     }
 
     const projects = await this.projectsRepository.find({
@@ -424,11 +420,9 @@ export class TasksService implements OnModuleInit {
     const tasks = await this.tasksRepository.find({
       where: { project_id: In(projectIds) },
       order: { created_at: 'DESC' },
-      ...(globalScope ? {} : { take: this.defaultListLimit }),
     });
-    return globalScope
-      ? tasks
-      : this.scopeTasksForUser(tasks, currentUser ?? null);
+    if (globalScope) return tasks;
+    return this.scopeTasksForUser(tasks, currentUser ?? null);
   }
 
   private async loadEmployeeRows(userId?: string) {

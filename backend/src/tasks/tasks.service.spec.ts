@@ -356,6 +356,28 @@ describe('TasksService delivery flow', () => {
     ).rejects.toThrow('任务正在审核中');
   });
 
+  it('does not truncate the grouped task list with a global limit', async () => {
+    const { service, tasksRepository, taskWorkflowRuntime } = buildService();
+    const visibleTasks = Array.from({ length: 501 }, (_, index) => ({
+      ...task,
+      id: `task-${index + 1}`,
+      task_no: `TASK-${index + 1}`,
+    }));
+    tasksRepository.find = jest.fn().mockResolvedValue(visibleTasks);
+    taskWorkflowRuntime.decorateTasks.mockImplementation(async (values) => values);
+
+    const result = await service.findAll();
+
+    expect(tasksRepository.find).toHaveBeenCalledWith({
+      where: {},
+      order: { created_at: 'DESC' },
+    });
+    expect(result).toHaveLength(501);
+    expect(result.at(-1)).toEqual(
+      expect.objectContaining({ id: 'task-501' }),
+    );
+  });
+
   it('rejects a product review after another reviewer wins the stage', async () => {
     const { service, dataSource } = buildService();
     const pendingReviewTask = {

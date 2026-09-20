@@ -69,7 +69,7 @@ const AI_PREVIEW_REJECT_REASON_LABELS: Record<string, string> = {
 @Injectable()
 export class RequirementsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RequirementsService.name);
-  private readonly defaultListLimit = 500;
+  private readonly defaultListLimit = 1_000_000;
   private aiPreviewNotificationTimer: NodeJS.Timeout | null = null;
   private aiPreviewNotificationRunning = false;
 
@@ -186,7 +186,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       ? await buildAccessProfile(this.dataSource, currentUser)
       : null;
     const quoteVisible = profile?.dataScope.quotes === 'all';
-    let requirements = await this.findAll();
+    // The history board is grouped by customer/status on the client. Keep all
+    // authorized rows so a global limit cannot remove an older customer group.
+    let requirements = await this.findAllForHistoryBoard();
     const requirementIds = requirements.map((requirement) => requirement.id);
     if (requirementIds.length === 0) {
       return {
@@ -269,6 +271,12 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       tasks: presentedTasks,
       quoteMappings: scopedQuoteMappings,
     };
+  }
+
+  private async findAllForHistoryBoard() {
+    return this.requirementsRepository.find({
+      order: { created_at: 'DESC' },
+    });
   }
 
   private async scopeHistoryBoardRows(
