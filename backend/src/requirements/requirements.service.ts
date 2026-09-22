@@ -181,10 +181,18 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async historyBoard(currentUser: UserEntity | null = null) {
+  async historyBoard(
+    currentUser: UserEntity | null = null,
+    requestGlobalDashboard = false,
+  ) {
     const profile = currentUser
       ? await buildAccessProfile(this.dataSource, currentUser)
       : null;
+    const globalDashboardRead = Boolean(
+      requestGlobalDashboard &&
+        profile &&
+        hasPermission(profile, 'dashboard.view_global'),
+    );
     const quoteVisible = profile?.dataScope.quotes === 'all';
     // The history board is grouped by customer/status on the client. Keep all
     // authorized rows so a global limit cannot remove an older customer group.
@@ -231,6 +239,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       tasks,
       profile,
       currentUser,
+      globalDashboardRead,
     );
     requirements = scoped.requirements;
     const scopedRequirementItems = scoped.requirementItems;
@@ -285,8 +294,15 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     tasks: TaskEntity[],
     profile: Awaited<ReturnType<typeof buildAccessProfile>> | null,
     currentUser: UserEntity | null,
+    globalDashboardRead = false,
   ) {
-    if (!profile || profile.dataScope.requirements === 'all') {
+    // Global dashboard access is explicitly requested by the demand panel.
+    // The requirement-and-assignment board keeps the default customer scope.
+    if (
+      !profile ||
+      profile.dataScope.requirements === 'all' ||
+      globalDashboardRead
+    ) {
       return { requirements, requirementItems, tasks };
     }
 

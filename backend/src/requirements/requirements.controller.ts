@@ -31,8 +31,14 @@ export class RequirementsController {
   }
 
   @Get('history-board')
-  historyBoard(@Req() request?: Request & { user?: UserEntity }) {
-    return this.requirementsService.historyBoard(request?.user ?? null);
+  historyBoard(
+    @Query('scope') scope?: string,
+    @Req() request?: Request & { user?: UserEntity },
+  ) {
+    return this.requirementsService.historyBoard(
+      request?.user ?? null,
+      scope === 'global',
+    );
   }
 
   @Get('ai-preview-candidates')

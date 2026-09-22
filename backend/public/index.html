@@ -4333,6 +4333,7 @@
       qs("pageTitle").textContent = titles[view][0];
       qs("pageSub").textContent = titles[view][1];
       if (view === "dashboard") refreshAnalytics();
+      if (view === "requirements") refreshRequirementBoard({ preserveScroll: true });
       if (view === "quotations") renderQuotationsBoard();
       if (view === "mappings") loadQuarterMappingWorkbench(false);
       if (view === "settlement") loadSettlementStatement(false);
@@ -8770,10 +8771,14 @@
         const employeeLoadPromise = can("dashboard.employee_detail")
           ? request("/tasks/dashboard/employees")
           : Promise.resolve(null);
-        const [board, employeeBoard, employeeLoad] = await Promise.all([
+        const dashboardHistoryPromise = canViewGlobalDashboard
+          ? request("/requirements/history-board?scope=global")
+          : Promise.resolve(null);
+        const [board, employeeBoard, employeeLoad, dashboardHistory] = await Promise.all([
           boardPromise,
           employeeBoardPromise,
           employeeLoadPromise,
+          dashboardHistoryPromise,
         ]);
         if (can("dashboard.employee_detail")) {
           state.employeeLoad = employeeLoad;
@@ -8783,6 +8788,13 @@
           renderEmployeeLoad();
         }
         if (requestSeq !== state.analyticsRequestSeq) return;
+        if (dashboardHistory) {
+          state.requirements = unwrap(dashboardHistory.requirements);
+          state.requirementItems = unwrap(dashboardHistory.requirementItems);
+          state.tasks = unwrap(dashboardHistory.tasks);
+          state.quoteMappings = unwrap(dashboardHistory.quoteMappings);
+          invalidateLookupMaps();
+        }
         const customerCodes = new Set(analyticsCustomers.map(customer => customer.customer_code));
         const employeeTopTasks = Object.entries(employeeBoard)
           .flatMap(([status, tasks]) => (tasks || []).map(t => ({ status, ...t })))
