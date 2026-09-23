@@ -23,6 +23,7 @@ import { WorkflowConfigsModule } from './workflow-configs/workflow-configs.modul
 import { WorkReportsModule } from './work-reports/work-reports.module';
 import { BusinessCalendarModule } from './common/business-calendar.module';
 import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
+import { AttendanceModule } from './attendance/attendance.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { MvpAuthGuard } from './common/guards/mvp-auth.guard';
       }),
     }),
     BusinessCalendarModule,
+    AttendanceModule,
     HealthModule,
     ContactContextsModule,
     FeishuModule,

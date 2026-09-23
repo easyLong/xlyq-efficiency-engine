@@ -36,6 +36,7 @@ export class UsersService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureUsersAuthSchema();
+    await this.initializeAttendanceExemptions();
     await this.initializePasswords();
   }
 
@@ -380,6 +381,16 @@ export class UsersService implements OnModuleInit {
     );
     await this.ensureColumn(
       'users',
+      'feishu_user_id',
+      'VARCHAR(128) NULL AFTER feishu_open_id',
+    );
+    await this.ensureColumn(
+      'users',
+      'attendance_exempt',
+      'TINYINT(1) NOT NULL DEFAULT 0 AFTER center_name',
+    );
+    await this.ensureColumn(
+      'users',
       'password_updated_at',
       'DATETIME NULL AFTER password_hash',
     );
@@ -387,6 +398,17 @@ export class UsersService implements OnModuleInit {
       'users',
       'last_login_at',
       'DATETIME NULL AFTER password_updated_at',
+    );
+  }
+
+  private async initializeAttendanceExemptions() {
+    await this.dataSource.query(
+      `
+        UPDATE users
+        SET attendance_exempt = 1
+        WHERE display_name IN (?, ?, ?, ?)
+      `,
+      ['雷声', '于波', '四海', '比比'],
     );
   }
 

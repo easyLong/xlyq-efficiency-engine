@@ -328,6 +328,7 @@ export class FeishuUserSyncService {
         status,
         source: 'feishu',
         feishu_open_id: openId,
+        feishu_user_id: item.user_id ?? null,
       });
 
     Object.assign(user, {
@@ -346,6 +347,7 @@ export class FeishuUserSyncService {
       status,
       source: 'feishu',
       feishu_open_id: openId,
+      feishu_user_id: item.user_id ?? user.feishu_user_id,
     });
 
     return this.usersRepository.save(user);

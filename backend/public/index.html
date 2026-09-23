@@ -932,6 +932,80 @@
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 16px;
     }
+    .attendance-toolbar-panel { padding: 14px 16px; }
+    .attendance-toolbar-panel .section-title { margin-bottom: 0; align-items: center; }
+    .attendance-range-tabs {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid #d8dfcf;
+      border-radius: 11px;
+      background: #f2f5ef;
+    }
+    .attendance-range-tabs button {
+      min-height: 32px;
+      padding: 6px 15px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #687366;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .attendance-range-tabs button.active {
+      background: #356d45;
+      color: #fff;
+      box-shadow: 0 4px 10px rgba(53, 109, 69, .16);
+    }
+    .attendance-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(110px, 1fr));
+      gap: 10px;
+    }
+    .attendance-metric {
+      min-height: 92px;
+      padding: 13px 14px;
+      border: 1px solid #dce4d6;
+      border-radius: 14px;
+      background: #fffdf8;
+    }
+    .attendance-metric span { display: block; color: #687366; font-size: 12px; }
+    .attendance-metric strong { display: block; margin-top: 9px; color: #18231d; font-size: 25px; line-height: 1; }
+    .attendance-metric.warn { background: #fff8f4; border-color: #eeded5; }
+    .attendance-metric.warn strong { color: #b4563f; }
+    .attendance-metric.info { background: #f6f9f3; }
+    .attendance-panel { padding: 14px 16px; }
+    .attendance-panel .section-title { margin-bottom: 9px; }
+    .attendance-panel .section-title p { margin: 3px 0 0; color: #687366; font-size: 12px; }
+    .attendance-table { min-width: 980px; table-layout: fixed; font-size: 12px; }
+    .attendance-table th,
+    .attendance-table td { padding: 7px 8px; white-space: nowrap; }
+    .attendance-table th:first-child,
+    .attendance-table td:first-child { width: 102px; }
+    .attendance-table th:nth-child(2),
+    .attendance-table td:nth-child(2) { width: 116px; }
+    .attendance-late-table { min-width: 680px; }
+    .attendance-event-table { min-width: 720px; }
+    .attendance-number { font-variant-numeric: tabular-nums; text-align: right; }
+    .attendance-number.alert { color: #b4563f; font-weight: 800; }
+    .attendance-note { margin: 0; color: #788176; font-size: 12px; line-height: 1.5; }
+    .attendance-status-chip {
+      display: inline-flex;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #fff1ec;
+      color: #a34d38;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    @media (max-width: 980px) {
+      .attendance-summary-grid { grid-template-columns: repeat(3, minmax(110px, 1fr)); }
+    }
+    @media (max-width: 620px) {
+      .attendance-summary-grid { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
+      .attendance-toolbar-panel .section-title { align-items: flex-start; }
+    }
     .dashboard-toolbar-panel {
       padding: 14px 16px;
     }
@@ -2177,6 +2251,7 @@
         <button data-view="quotations" onclick="switchView('quotations')">合同报价录入</button>
         <button data-view="settlement" onclick="switchView('settlement')">结算统计</button>
         <button data-view="dashboard" onclick="switchView('dashboard')">需求面板</button>
+        <button data-view="attendance" onclick="switchView('attendance')">考勤统计</button>
         <button data-view="groups" onclick="switchView('groups')">群管理</button>
         <button data-view="workflow" onclick="switchView('workflow')">人员配置</button>
         <button data-view="messages" onclick="switchView('messages')">消息记录</button>
@@ -2696,6 +2771,59 @@
         </div>
       </section>
 
+      <section id="view-attendance" class="grid hidden">
+        <div class="panel attendance-toolbar-panel">
+          <div class="section-title">
+            <div>
+              <div class="kicker">Attendance Overview</div>
+              <h3>考勤统计</h3>
+              <p id="attendancePeriodHint">读取飞书考勤数据，按员工展示迟到、缺卡和请假等情况。</p>
+            </div>
+            <div class="btns">
+              <div class="attendance-range-tabs" role="tablist" aria-label="考勤时间范围">
+                <button id="attendanceMonthTab" class="active" type="button" onclick="setAttendanceRange('month')">本月</button>
+                <button id="attendanceWeekTab" type="button" onclick="setAttendanceRange('week')">本周</button>
+              </div>
+              <button class="btn" type="button" onclick="loadAttendanceSummary(true)">刷新</button>
+            </div>
+          </div>
+        </div>
+        <div id="attendanceMetrics" class="attendance-summary-grid">
+          <div class="empty-list">进入页面后加载考勤数据</div>
+        </div>
+        <div class="panel attendance-panel">
+          <div class="section-title">
+            <div>
+              <h3>员工考勤汇总</h3>
+              <p>按迟到次数、缺卡次数降序展示；无异常员工也会保留。</p>
+            </div>
+            <span id="attendanceEmployeeTag" class="tag">管理员可见</span>
+          </div>
+          <div id="attendanceEmployeeBoard" class="table-wrap"></div>
+        </div>
+        <div class="panel attendance-panel">
+          <div class="section-title">
+            <div>
+              <h3>迟到明细</h3>
+              <p>迟到时长根据实际上班打卡时间与应打卡时间计算。</p>
+            </div>
+            <span id="attendanceLateTag" class="tag">0 条</span>
+          </div>
+          <div id="attendanceLateBoard" class="table-wrap"></div>
+        </div>
+        <div class="panel attendance-panel">
+          <div class="section-title">
+            <div>
+              <h3>其他考勤明细</h3>
+              <p>包含缺卡、早退、请假、出差、外出、补卡及外勤打卡记录。</p>
+            </div>
+            <span id="attendanceEventTag" class="tag">0 条</span>
+          </div>
+          <div id="attendanceEventBoard" class="table-wrap"></div>
+        </div>
+        <p class="attendance-note">说明：数据实时读取飞书考勤；当天尚未完成的下班打卡不计入异常。</p>
+      </section>
+
       <section id="view-groups" class="grid hidden">
         <div class="panel">
           <div class="section-title">
@@ -2999,6 +3127,9 @@
       employeeInsightView: "history",
       employeeDetail: null,
       employeeDetailBusy: false,
+      attendanceRange: "month",
+      attendanceSummary: null,
+      attendanceRequestSeq: 0,
       assignmentCandidateTaskId: null,
       assignmentCandidates: null,
       editingRequirementId: null,
@@ -3043,6 +3174,7 @@
         mappings: "page.quotations",
         settlement: "page.settlement",
         dashboard: "page.dashboard",
+        attendance: "page.attendance",
         groups: "page.group_management",
         workflow: "permission.manage",
         messages: "page.messages",
@@ -3082,7 +3214,7 @@
       if (isViewActive("requirements")) {
         qs("pageSub").textContent = requirementPageSubtitle();
       }
-      if (["quotations", "mappings", "settlement", "dashboard", "groups", "workflow", "messages"].some(view => isViewActive(view) && !canView(view))) {
+      if (["quotations", "mappings", "settlement", "dashboard", "attendance", "groups", "workflow", "messages"].some(view => isViewActive(view) && !canView(view))) {
         switchView("requirements");
       }
     }
@@ -4319,13 +4451,14 @@
         view = "requirements";
       }
       document.querySelectorAll(".nav button").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
-      ["requirements", "quotations", "mappings", "settlement", "dashboard", "groups", "workflow", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
+      ["requirements", "quotations", "mappings", "settlement", "dashboard", "attendance", "groups", "workflow", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
       const titles = {
         requirements: ["需求与指派", requirementPageSubtitle()],
         quotations: ["合同报价录入", "上传合同报价并拆成最细粒度子项，为后续需求任务挂靠做准备。"],
         mappings: ["报价子项选择", "在历史需求任务中为需求选择对应基金的报价子项。"],
         settlement: ["结算统计", "按基金、平台和业务分类统计结算金额与资产数量。"],
         dashboard: ["需求面板", "按不同维度查看需求进度、任务状态、延期风险和资产交付情况。"],
+        attendance: ["考勤统计", "查看本月或本周的员工考勤汇总与异常明细。"],
         groups: ["群管理", "拉DP入群-->新增群信息-->DP微信号备注客户真名"],
         workflow: ["人员配置", "按基金和业务大类维护派发、一审与二审人员。"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
@@ -4333,6 +4466,7 @@
       qs("pageTitle").textContent = titles[view][0];
       qs("pageSub").textContent = titles[view][1];
       if (view === "dashboard") refreshAnalytics();
+      if (view === "attendance") loadAttendanceSummary(false);
       if (view === "requirements") refreshRequirementBoard({ preserveScroll: true });
       if (view === "quotations") renderQuotationsBoard();
       if (view === "mappings") loadQuarterMappingWorkbench(false);
@@ -4341,6 +4475,119 @@
       if (view === "workflow") loadWorkflowConfiguration();
       if (view === "messages") refreshMessages();
       applyRoleVisibility();
+    }
+    function setAttendanceRange(range) {
+      state.attendanceRange = range === "week" ? "week" : "month";
+      qs("attendanceMonthTab")?.classList.toggle("active", state.attendanceRange === "month");
+      qs("attendanceWeekTab")?.classList.toggle("active", state.attendanceRange === "week");
+      loadAttendanceSummary(true);
+    }
+    async function loadAttendanceSummary(force = false) {
+      if (!canView("attendance")) return;
+      if (!force && state.attendanceSummary?.range === state.attendanceRange) {
+        renderAttendanceSummary();
+        return;
+      }
+      const requestSeq = ++state.attendanceRequestSeq;
+      qs("attendanceMetrics").innerHTML = `<div class="empty-list">正在读取飞书考勤数据...</div>`;
+      qs("attendanceEmployeeBoard").innerHTML = `<div class="empty-list">正在加载员工汇总...</div>`;
+      qs("attendanceLateBoard").innerHTML = "";
+      qs("attendanceEventBoard").innerHTML = "";
+      try {
+        const summary = await request(`/attendance/summary?range=${encodeURIComponent(state.attendanceRange)}`);
+        if (requestSeq !== state.attendanceRequestSeq) return;
+        state.attendanceSummary = summary;
+        renderAttendanceSummary();
+      } catch (error) {
+        if (requestSeq !== state.attendanceRequestSeq) return;
+        const message = safeText(error.message || "考勤数据加载失败");
+        qs("attendanceMetrics").innerHTML = `<div class="empty-list">${message}</div>`;
+        qs("attendanceEmployeeBoard").innerHTML = `<div class="empty-list">请确认飞书考勤权限和应用配置后重试。</div>`;
+      }
+    }
+    function formatAttendanceDuration(seconds) {
+      const totalMinutes = Math.floor(Math.max(0, Number(seconds) || 0) / 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      if (hours && minutes) return `${hours}小时${minutes}分`;
+      if (hours) return `${hours}小时`;
+      return `${minutes}分钟`;
+    }
+    function attendanceNumber(value, alert = false) {
+      const amount = Number(value) || 0;
+      return `<td class="attendance-number ${alert && amount ? "alert" : ""}">${amount}</td>`;
+    }
+    function renderAttendanceSummary() {
+      const summary = state.attendanceSummary;
+      if (!summary) return;
+      const totals = summary.totals || {};
+      qs("attendanceMonthTab")?.classList.toggle("active", state.attendanceRange === "month");
+      qs("attendanceWeekTab")?.classList.toggle("active", state.attendanceRange === "week");
+      qs("attendancePeriodHint").textContent = `${summary.period?.label || "当前时间范围"} · 共 ${summary.employeeCount || 0} 名考勤员工`;
+      const metrics = [
+        ["考勤员工", `${summary.employeeCount || 0} 人`, "info"],
+        ["排班人次", totals.scheduledDays || 0, "info"],
+        ["正常人次", totals.normalDays || 0, "info"],
+        ["迟到次数", totals.lateCount || 0, "warn"],
+        ["累计迟到", formatAttendanceDuration(totals.lateSeconds), "warn"],
+        ["缺卡次数", totals.lackCount || 0, "warn"],
+        ["早退次数", totals.earlyCount || 0, "warn"],
+        ["请假天数", totals.leaveDays || 0, ""],
+        ["出差天数", totals.travelDays || 0, ""],
+        ["外出天数", totals.goOutDays || 0, ""],
+        ["补卡天数", totals.cardReplacementDays || 0, ""],
+        ["外勤打卡天数", totals.fieldPunchDays || 0, ""],
+      ];
+      qs("attendanceMetrics").innerHTML = metrics.map(([label, value, tone]) => `
+        <div class="attendance-metric ${tone}"><span>${label}</span><strong>${value}</strong></div>
+      `).join("");
+
+      const employees = summary.employees || [];
+      qs("attendanceEmployeeTag").textContent = `${employees.length} 人`;
+      qs("attendanceEmployeeBoard").innerHTML = employees.length ? `
+        <table class="attendance-table">
+          <thead><tr><th>员工</th><th>中心</th><th class="attendance-number">排班日</th><th class="attendance-number">正常日</th><th class="attendance-number">迟到</th><th class="attendance-number">累计迟到</th><th class="attendance-number">缺卡</th><th class="attendance-number">早退</th><th class="attendance-number">请假</th><th class="attendance-number">出差</th><th class="attendance-number">外出</th><th class="attendance-number">补卡</th><th class="attendance-number">外勤</th></tr></thead>
+          <tbody>${employees.map(employee => `
+            <tr>
+              <td><strong>${safeText(employee.employeeName || "-")}</strong></td>
+              <td title="${escapeAttr(employee.centerName || "-")}">${safeText(employee.centerName || "-")}</td>
+              ${attendanceNumber(employee.scheduledDays)}
+              ${attendanceNumber(employee.normalDays)}
+              ${attendanceNumber(employee.lateCount, true)}
+              <td class="attendance-number ${employee.lateSeconds ? "alert" : ""}">${formatAttendanceDuration(employee.lateSeconds)}</td>
+              ${attendanceNumber(employee.lackCount, true)}
+              ${attendanceNumber(employee.earlyCount, true)}
+              ${attendanceNumber(employee.leaveDays)}
+              ${attendanceNumber(employee.travelDays)}
+              ${attendanceNumber(employee.goOutDays)}
+              ${attendanceNumber(employee.cardReplacementDays)}
+              ${attendanceNumber(employee.fieldPunchDays)}
+            </tr>
+          `).join("")}</tbody>
+        </table>
+      ` : `<div class="empty-list">当前时间范围暂无考勤员工</div>`;
+
+      const lateRecords = summary.lateRecords || [];
+      qs("attendanceLateTag").textContent = `${lateRecords.length} 条`;
+      qs("attendanceLateBoard").innerHTML = lateRecords.length ? `
+        <table class="attendance-table attendance-late-table">
+          <thead><tr><th>日期</th><th>员工</th><th>中心</th><th>应打卡</th><th>实际打卡</th><th class="attendance-number">迟到时长</th></tr></thead>
+          <tbody>${lateRecords.map(item => `
+            <tr><td>${safeText(item.date)}</td><td><strong>${safeText(item.employeeName)}</strong></td><td>${safeText(item.centerName)}</td><td>${safeText(item.scheduledTime)}</td><td>${safeText(item.actualTime)}</td><td class="attendance-number alert">${formatAttendanceDuration(item.lateSeconds)}</td></tr>
+          `).join("")}</tbody>
+        </table>
+      ` : `<div class="empty-list">当前时间范围没有迟到记录</div>`;
+
+      const eventRecords = summary.eventRecords || [];
+      qs("attendanceEventTag").textContent = `${eventRecords.length} 条`;
+      qs("attendanceEventBoard").innerHTML = eventRecords.length ? `
+        <table class="attendance-table attendance-event-table">
+          <thead><tr><th>日期</th><th>员工</th><th>中心</th><th>类型</th><th>说明</th></tr></thead>
+          <tbody>${eventRecords.map(item => `
+            <tr><td>${safeText(item.date)}</td><td><strong>${safeText(item.employeeName)}</strong></td><td>${safeText(item.centerName)}</td><td><span class="attendance-status-chip">${safeText(item.type)}</span></td><td>${safeText(item.detail)}</td></tr>
+          `).join("")}</tbody>
+        </table>
+      ` : `<div class="empty-list">当前时间范围没有其他考勤记录</div>`;
     }
     function selectedCustomer() {
       return state.customers.find(c => c.customer_code === qs("customerSelect").value);

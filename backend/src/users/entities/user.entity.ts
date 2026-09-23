@@ -34,7 +34,13 @@ export class UserEntity extends BaseSoftDeleteEntity {
   feishu_open_id!: string | null;
 
   @Column({ type: 'varchar', length: 128, nullable: true })
+  feishu_user_id!: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
   center_name!: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  attendance_exempt!: boolean;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   password_hash!: string | null;

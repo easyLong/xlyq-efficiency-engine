@@ -77,6 +77,7 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
         'contact:contact:readonly_as_app',
         'contact:user.employee_id:readonly',
         'contact:user.name:readonly',
+        'attendance:task:readonly',
         'drive:drive',
         'sheets:spreadsheet',
         'sheets:spreadsheet:create',
@@ -233,6 +234,57 @@ export class FeishuService implements OnModuleInit, OnModuleDestroy {
 
   async syncUsers(dto: SyncFeishuUsersDto) {
     return this.userSyncService.syncUsers(dto);
+  }
+
+  async resolveFeishuEmployeeId(openId: string) {
+    const url = new URL(
+      `https://open.feishu.cn/open-apis/contact/v3/users/${encodeURIComponent(openId)}`,
+    );
+    url.searchParams.set('user_id_type', 'open_id');
+    const response = await this.openApiClient.request(url);
+    const body = (await response.json()) as {
+      code?: number;
+      msg?: string;
+      data?: { user?: { user_id?: string } };
+    };
+    if (!response.ok || body.code !== 0 || !body.data?.user?.user_id) {
+      throw new Error(
+        `Feishu employee id query failed: ${response.status} ${body.msg ?? ''}`,
+      );
+    }
+    return body.data.user.user_id;
+  }
+
+  async queryAttendanceTasks(input: {
+    employeeIds: string[];
+    dateFrom: string;
+    dateTo: string;
+  }) {
+    if (!input.employeeIds.length) {
+      return [];
+    }
+    const url = new URL(
+      'https://open.feishu.cn/open-apis/attendance/v1/user_tasks/query',
+    );
+    url.searchParams.set('employee_type', 'employee_id');
+    url.searchParams.set('ignore_invalid_users', 'true');
+    const response = await this.openApiClient.postJson(url, {
+      user_ids: input.employeeIds,
+      check_date_from: input.dateFrom,
+      check_date_to: input.dateTo,
+      need_overtime_result: false,
+    });
+    const body = (await response.json()) as {
+      code?: number;
+      msg?: string;
+      data?: { user_task_results?: unknown[] };
+    };
+    if (!response.ok || body.code !== 0) {
+      throw new Error(
+        `Feishu attendance query failed: ${response.status} ${body.msg ?? ''}`,
+      );
+    }
+    return body.data?.user_task_results ?? [];
   }
 
   async handleWebhookEvent(body: Record<string, unknown>) {
