@@ -8,9 +8,15 @@ export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
   @Get('summary')
-  summary(@Query('range') range?: string) {
+  summary(
+    @Query('range') range?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
     return this.attendanceService.getSummary(
-      range === 'week' ? 'week' : 'month',
+      range === 'custom' ? 'custom' : range === 'week' ? 'week' : 'month',
+      startDate,
+      endDate,
     );
   }
 }

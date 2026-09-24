@@ -339,6 +339,9 @@ business_category_owner_configs is legacy compatibility only
 | status | varchar(32) | not null | `active/inactive/locked` |
 | source | varchar(32) | not null | `local/feishu` |
 | feishu_open_id | varchar(128) | unique null | 飞书用户标识 |
+| feishu_user_id | varchar(128) | null | 飞书员工 ID，供考勤接口查询 |
+| center_name | varchar(128) | null | 所属中心名称 |
+| attendance_exempt | boolean | default false | 无需打卡，考勤统计排除 |
 | last_login_at | timestamptz | null | 最后登录时间 |
 | created_at | timestamptz | not null | 创建时间 |
 | updated_at | timestamptz | not null | 更新时间 |

@@ -95,4 +95,65 @@ describe('AttendanceService', () => {
     expect(result.totals.scheduledDays).toBe(0);
     expect(result.restDays).toBe(1);
   });
+
+  it('queries a custom historical range and counts its final-day missing checkout', async () => {
+    const usersRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          display_name: '测试员工',
+          center_name: null,
+          feishu_open_id: 'open-1',
+          feishu_user_id: 'employee-1',
+        },
+      ]),
+      save: jest.fn(),
+    };
+    const feishuService = {
+      queryAttendanceTasks: jest.fn().mockResolvedValue([
+        {
+          day: 20260831,
+          user_id: 'employee-1',
+          records: [{ check_in_result: 'Normal', check_out_result: 'Lack' }],
+        },
+      ]),
+    };
+    const service = new AttendanceService(
+      usersRepository as never,
+      feishuService as never,
+    );
+
+    const result = await service.getSummary(
+      'custom',
+      '2026-08-01',
+      '2026-08-31',
+    );
+
+    expect(result.period).toEqual({
+      startDate: '2026-08-01',
+      endDate: '2026-08-31',
+      label: '2026-08-01 至 2026-08-31',
+    });
+    expect(result.totals.lackCount).toBe(1);
+    expect(feishuService.queryAttendanceTasks).toHaveBeenCalledWith({
+      employeeIds: ['employee-1'],
+      dateFrom: '20260801',
+      dateTo: '20260831',
+    });
+  });
+
+  it('rejects invalid custom dates before querying Feishu', async () => {
+    const usersRepository = { find: jest.fn() };
+    const service = new AttendanceService(
+      usersRepository as never,
+      {} as never,
+    );
+
+    await expect(
+      service.getSummary('custom', '2026-09-30', '2026-09-01'),
+    ).rejects.toThrow('开始日期不能晚于结束日期');
+    await expect(
+      service.getSummary('custom', '2026-02-30', '2026-03-01'),
+    ).rejects.toThrow('日期格式无效');
+    expect(usersRepository.find).not.toHaveBeenCalled();
+  });
 });

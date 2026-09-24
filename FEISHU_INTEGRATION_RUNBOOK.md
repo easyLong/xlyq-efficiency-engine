@@ -48,6 +48,7 @@ FEISHU_EVENT_VERIFICATION_TOKEN=
 - `contact:department.organize:readonly`
 - `contact:contact:readonly_as_app`
 - `contact:user.employee_id:readonly`
+- `attendance:task:readonly`（管理员考勤统计页读取员工打卡结果）
 - `contact:user.name:readonly`
 - `drive:drive`
 - `sheets:spreadsheet`
@@ -76,6 +77,14 @@ FEISHU_EVENT_VERIFICATION_TOKEN=
 - `contact:user.employee_id:readonly`
 
 如果希望通过员工工号或 `user_id` 发送消息，需要开通 `contact:user.employee_id:readonly`。如果希望同步员工姓名、邮箱、手机号等资料，还需要继续补充对应字段权限。当前环境已可同步 `open_id`，但如果飞书只返回 `open_id`，说明员工展示信息权限还不完整。
+
+## 考勤统计
+
+管理端“考勤统计”仅管理员可见，可切换本月、本周或自定义起止日期。系统使用应用身份、`attendance:task:readonly` 权限和员工 `user_id` 查询飞书考勤；`users.feishu_user_id` 在通讯录同步时保存，既有账号首次查询时会补齐。单次最多查询 366 天，后台按最多 31 天拆分日期、每批最多 50 名员工调用接口。
+
+统计范围是本地在职、已关联飞书账号且未标记 `attendance_exempt` 的员工。雷声、于波、四海、比比已标记无需打卡；姓名匹配的初始化配置见 `UsersService.initializeAttendanceExemptions()`。如果人数与飞书在职名单不一致，先检查本地用户是否已同步、飞书 ID 是否存在、`status` 和 `attendance_exempt` 字段，再检查应用权限。
+
+迟到时长按实际打卡与排班上班时间的差值汇总；请假、出差、外出、补卡、外勤按飞书上下班结果补充字段计天数。当天未完成的下班打卡暂不计异常，查询历史区间时最后一天按历史结果正常统计。
 
 ## 联调步骤
 

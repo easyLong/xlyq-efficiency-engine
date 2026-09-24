@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { FeishuService } from '../integrations/feishu/feishu.service';
 import { UserEntity } from '../users/entities/user.entity';
 
-type AttendanceRange = 'month' | 'week';
+type AttendanceRange = 'month' | 'week' | 'custom';
 type AttendanceRecord = {
   check_in_shift_time?: string | number;
   check_out_shift_time?: string | number;
@@ -59,8 +59,12 @@ export class AttendanceService {
     private readonly feishuService: FeishuService,
   ) {}
 
-  async getSummary(range: AttendanceRange) {
-    const period = this.resolvePeriod(range);
+  async getSummary(
+    range: AttendanceRange,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    const period = this.resolvePeriod(range, startDate, endDate);
     const users = await this.usersRepository.find({
       where: {
         status: 'active',
@@ -93,16 +97,27 @@ export class AttendanceService {
     }
 
     const rawDays: unknown[] = [];
-    for (let index = 0; index < identities.length; index += 50) {
-      rawDays.push(
-        ...(await this.feishuService.queryAttendanceTasks({
-          employeeIds: identities
-            .slice(index, index + 50)
-            .map((item) => item.employeeId),
-          dateFrom: period.startCompact,
-          dateTo: period.endCompact,
-        })),
-      );
+    const end = new Date(`${period.endDate}T00:00:00Z`);
+    for (
+      let start = new Date(`${period.startDate}T00:00:00Z`);
+      start <= end;
+    ) {
+      const chunkEnd = new Date(start);
+      chunkEnd.setUTCDate(chunkEnd.getUTCDate() + 30);
+      const boundedEnd = chunkEnd < end ? chunkEnd : end;
+      for (let index = 0; index < identities.length; index += 50) {
+        rawDays.push(
+          ...(await this.feishuService.queryAttendanceTasks({
+            employeeIds: identities
+              .slice(index, index + 50)
+              .map((item) => item.employeeId),
+            dateFrom: this.formatCalendarDate(start).replaceAll('-', ''),
+            dateTo: this.formatCalendarDate(boundedEnd).replaceAll('-', ''),
+          })),
+        );
+      }
+      start = new Date(boundedEnd);
+      start.setUTCDate(start.getUTCDate() + 1);
     }
 
     return this.aggregate(
@@ -161,7 +176,7 @@ export class AttendanceService {
       if (!identity) continue;
       const employee = employeeMap.get(userId) as EmployeeAttendance;
       const date = this.formatDay(day.day);
-      const isToday = date === period.endDate;
+      const isToday = date === period.todayDate;
       const records = Array.isArray(day.records) ? day.records : [];
       const isRestDay =
         records.length === 0 ||
@@ -343,7 +358,11 @@ export class AttendanceService {
     };
   }
 
-  private resolvePeriod(range: AttendanceRange) {
+  private resolvePeriod(
+    range: AttendanceRange,
+    requestedStartDate?: string,
+    requestedEndDate?: string,
+  ) {
     const now = new Date();
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Shanghai',
@@ -358,7 +377,36 @@ export class AttendanceService {
     const day = numberPart('day');
     const current = new Date(Date.UTC(year, month - 1, day));
     const start = new Date(current);
-    if (range === 'month') {
+    if (range === 'custom') {
+      const parseDate = (value?: string) => {
+        if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          throw new BadRequestException('请选择有效的起止日期');
+        }
+        const parsed = new Date(`${value}T00:00:00Z`);
+        if (
+          Number.isNaN(parsed.getTime()) ||
+          this.formatCalendarDate(parsed) !== value
+        ) {
+          throw new BadRequestException('日期格式无效');
+        }
+        return parsed;
+      };
+      const customStart = parseDate(requestedStartDate);
+      const customEnd = parseDate(requestedEndDate);
+      const durationDays =
+        (customEnd.getTime() - customStart.getTime()) / 86_400_000;
+      if (durationDays < 0) {
+        throw new BadRequestException('开始日期不能晚于结束日期');
+      }
+      if (customEnd > current) {
+        throw new BadRequestException('结束日期不能晚于今天');
+      }
+      if (durationDays > 365) {
+        throw new BadRequestException('单次最多查询366天');
+      }
+      start.setTime(customStart.getTime());
+      current.setTime(customEnd.getTime());
+    } else if (range === 'month') {
       start.setUTCDate(1);
     } else {
       const weekDay = current.getUTCDay() || 7;
@@ -369,8 +417,9 @@ export class AttendanceService {
     return {
       startDate,
       endDate,
-      startCompact: startDate.replaceAll('-', ''),
-      endCompact: endDate.replaceAll('-', ''),
+      todayDate: this.formatCalendarDate(
+        new Date(Date.UTC(year, month - 1, day)),
+      ),
     };
   }
 

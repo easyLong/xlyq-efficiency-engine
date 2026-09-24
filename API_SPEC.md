@@ -1,6 +1,6 @@
 # 向量引擎管理工作台后端接口设计 API 清单
 
-更新时间：2026-08-03
+更新时间：2026-09-24
 
 ## 当前重点接口
 
@@ -20,6 +20,7 @@
 ### 需求与任务
 
 - `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务；创建时必须传入任务价格 `priceAmount`。
+- `GET /api/v1/requirements/history-board`：返回当前账号有权查看的需求、需求项和任务。管理端“任务需求列表”的创建日期快捷选项及起止日期在已授权数据上筛选，不额外扩展接口权限；列表上方数量与日期范围联动。
 - `GET /api/v1/workflow-config`：查询基金派发者、业务大类一审人员和基金二审人员配置。
 - `PUT /api/v1/workflow-config/customer-dispatchers/{customerCode}`：覆盖某基金的派发候选人。
 - `PUT /api/v1/workflow-config/product-reviewers/{reviewType}`：覆盖某业务大类的一审候选人。
@@ -64,6 +65,7 @@
 ### 飞书与通知
 
 - `GET /api/v1/integrations/feishu/config`：查看飞书配置、推荐权限、资产表模式和本地入口公网可达性。
+- `GET /api/v1/attendance/summary?range=month|week|custom&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`：管理员专用考勤统计。默认本月；`week` 从周一至今天；`custom` 必须同时传起止日期，日期有效、起始不晚于结束、结束不晚于今天、区间不超过 366 天，否则返回 400。返回 `period`、`employeeCount`、`totals`、`employees`、`lateRecords`、`eventRecords` 等；普通账号返回 403。长区间按最多 31 天分段查询飞书，最多 50 名员工一批。
 - `POST /api/v1/integrations/feishu/contacts/sync-users`：同步飞书员工到本地用户。
 - `GET /api/v1/integrations/feishu/sync-logs`：查看飞书消息、表格创建、授权、同步日志。
 - `POST /api/v1/notifications/result-file-missing-scan`：扫描缺失资产 URL 的任务并提醒负责人。

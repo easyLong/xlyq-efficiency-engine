@@ -424,6 +424,38 @@
       font-size: 12px;
     }
     #view-requirements .quick-filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    #view-requirements .history-date-row { display: flex; flex: 1 0 100%; align-items: center; gap: 8px; flex-wrap: wrap; }
+    #view-requirements .history-date-label { color: #687366; font-size: 12px; font-weight: 800; white-space: nowrap; }
+    #view-requirements .history-date-presets {
+      display: inline-flex;
+      gap: 2px;
+      padding: 3px;
+      border: 1px solid #dce4d8;
+      border-radius: 10px;
+      background: #f4f7f2;
+    }
+    #view-requirements .history-date-presets .btn {
+      min-height: 28px;
+      padding: 5px 9px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: #627064;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 18px;
+      white-space: nowrap;
+    }
+    #view-requirements .history-date-presets .btn:hover { background: #eaf1e8; color: #2f6b45; }
+    #view-requirements .history-date-presets .btn.active {
+      border: 0;
+      background: #fff;
+      color: #2f6b45;
+      box-shadow: 0 1px 4px rgba(43, 72, 48, .12);
+      font-weight: 700;
+    }
+    #view-requirements .history-date-row .history-date-input { display: inline-flex; align-items: center; gap: 5px; margin: 0; color: #687366; font-size: 12px; white-space: nowrap; }
+    #view-requirements .history-date-input input { width: 132px; min-height: 34px; padding: 6px 8px; border-radius: 10px; background: #fff; font-size: 12px; }
     #view-requirements .advanced-filter { width: auto; margin-top: 0; position: relative; }
     #view-requirements .advanced-filter summary {
       display: inline-flex;
@@ -958,6 +990,10 @@
       color: #fff;
       box-shadow: 0 4px 10px rgba(53, 109, 69, .16);
     }
+    .attendance-date-controls { display: flex; align-items: end; gap: 7px; }
+    .attendance-date-controls label { margin: 0; color: #687366; font-size: 11px; font-weight: 800; }
+    .attendance-date-controls input { min-height: 34px; width: 144px; padding: 6px 8px; border-radius: 9px; font-size: 12px; }
+    .attendance-date-controls .btn { min-height: 34px; padding: 7px 12px; border-radius: 9px; }
     .attendance-summary-grid {
       display: grid;
       grid-template-columns: repeat(6, minmax(110px, 1fr));
@@ -1005,6 +1041,7 @@
     @media (max-width: 620px) {
       .attendance-summary-grid { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
       .attendance-toolbar-panel .section-title { align-items: flex-start; }
+      .attendance-date-controls { flex-wrap: wrap; }
     }
     .dashboard-toolbar-panel {
       padding: 14px 16px;
@@ -2783,6 +2820,12 @@
               <div class="attendance-range-tabs" role="tablist" aria-label="考勤时间范围">
                 <button id="attendanceMonthTab" class="active" type="button" onclick="setAttendanceRange('month')">本月</button>
                 <button id="attendanceWeekTab" type="button" onclick="setAttendanceRange('week')">本周</button>
+                <button id="attendanceCustomTab" type="button" onclick="setAttendanceRange('custom')">自定义</button>
+              </div>
+              <div id="attendanceDateControls" class="attendance-date-controls hidden">
+                <label>开始日期<input id="attendanceStartDate" type="date" /></label>
+                <label>结束日期<input id="attendanceEndDate" type="date" /></label>
+                <button class="btn primary" type="button" onclick="applyAttendanceCustomRange()">查询</button>
               </div>
               <button class="btn" type="button" onclick="loadAttendanceSummary(true)">刷新</button>
             </div>
@@ -3083,6 +3126,7 @@
       },
       settlementRequestSeq: 0,
       requirementFilter: "all",
+      requirementDateFilters: { startDate: "", endDate: "" },
       requirementKeyword: "",
       requirementKeywordTimer: null,
       requirementVisibleLimit: 80,
@@ -4458,7 +4502,7 @@
         mappings: ["报价子项选择", "在历史需求任务中为需求选择对应基金的报价子项。"],
         settlement: ["结算统计", "按基金、平台和业务分类统计结算金额与资产数量。"],
         dashboard: ["需求面板", "按不同维度查看需求进度、任务状态、延期风险和资产交付情况。"],
-        attendance: ["考勤统计", "查看本月或本周的员工考勤汇总与异常明细。"],
+        attendance: ["考勤统计", "按本月、本周或指定起止日期查看员工考勤汇总与明细。"],
         groups: ["群管理", "拉DP入群-->新增群信息-->DP微信号备注客户真名"],
         workflow: ["人员配置", "按基金和业务大类维护派发、一审与二审人员。"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
@@ -4477,14 +4521,48 @@
       applyRoleVisibility();
     }
     function setAttendanceRange(range) {
-      state.attendanceRange = range === "week" ? "week" : "month";
+      state.attendanceRange = ["month", "week", "custom"].includes(range) ? range : "month";
+      if (state.attendanceRange === "custom" && !qs("attendanceStartDate").value) {
+        const today = new Date();
+        const dateKey = date => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+        qs("attendanceStartDate").value = dateKey(new Date(today.getFullYear(), today.getMonth(), 1));
+        qs("attendanceEndDate").value = dateKey(today);
+      }
       qs("attendanceMonthTab")?.classList.toggle("active", state.attendanceRange === "month");
       qs("attendanceWeekTab")?.classList.toggle("active", state.attendanceRange === "week");
+      qs("attendanceCustomTab")?.classList.toggle("active", state.attendanceRange === "custom");
+      qs("attendanceDateControls")?.classList.toggle("hidden", state.attendanceRange !== "custom");
+      if (state.attendanceRange === "custom") {
+        state.attendanceRequestSeq += 1;
+        qs("attendancePeriodHint").textContent = "请选择开始日期和结束日期后查询考勤。";
+        qs("attendanceMetrics").innerHTML = `<div class="empty-list">请选择起止日期并点击查询</div>`;
+        qs("attendanceEmployeeBoard").innerHTML = "";
+        qs("attendanceLateBoard").innerHTML = "";
+        qs("attendanceEventBoard").innerHTML = "";
+        return;
+      }
+      loadAttendanceSummary(true);
+    }
+    function attendanceCustomDates() {
+      return { startDate: qs("attendanceStartDate")?.value || "", endDate: qs("attendanceEndDate")?.value || "" };
+    }
+    function applyAttendanceCustomRange() {
+      const { startDate, endDate } = attendanceCustomDates();
+      if (!startDate || !endDate) return toast("请选择起止日期");
+      if (startDate > endDate) return toast("开始日期不能晚于结束日期");
+      const today = new Date();
+      const todayKey = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, "0"), String(today.getDate()).padStart(2, "0")].join("-");
+      if (endDate > todayKey) return toast("结束日期不能晚于今天");
       loadAttendanceSummary(true);
     }
     async function loadAttendanceSummary(force = false) {
       if (!canView("attendance")) return;
-      if (!force && state.attendanceSummary?.range === state.attendanceRange) {
+      const { startDate, endDate } = attendanceCustomDates();
+      if (state.attendanceRange === "custom" && (!startDate || !endDate)) return;
+      if (!force && state.attendanceSummary?.range === state.attendanceRange && (
+        state.attendanceRange !== "custom" ||
+        (state.attendanceSummary?.period?.startDate === startDate && state.attendanceSummary?.period?.endDate === endDate)
+      )) {
         renderAttendanceSummary();
         return;
       }
@@ -4494,7 +4572,12 @@
       qs("attendanceLateBoard").innerHTML = "";
       qs("attendanceEventBoard").innerHTML = "";
       try {
-        const summary = await request(`/attendance/summary?range=${encodeURIComponent(state.attendanceRange)}`);
+        const params = new URLSearchParams({ range: state.attendanceRange });
+        if (state.attendanceRange === "custom") {
+          params.set("startDate", startDate);
+          params.set("endDate", endDate);
+        }
+        const summary = await request(`/attendance/summary?${params}`);
         if (requestSeq !== state.attendanceRequestSeq) return;
         state.attendanceSummary = summary;
         renderAttendanceSummary();
@@ -4523,6 +4606,7 @@
       const totals = summary.totals || {};
       qs("attendanceMonthTab")?.classList.toggle("active", state.attendanceRange === "month");
       qs("attendanceWeekTab")?.classList.toggle("active", state.attendanceRange === "week");
+      qs("attendanceCustomTab")?.classList.toggle("active", state.attendanceRange === "custom");
       qs("attendancePeriodHint").textContent = `${summary.period?.label || "当前时间范围"} · 共 ${summary.employeeCount || 0} 名考勤员工`;
       const metrics = [
         ["考勤员工", `${summary.employeeCount || 0} 人`, "info"],
@@ -5630,6 +5714,29 @@
       state.requirementVisibleLimit = 80;
       renderRequirementBoard();
     }
+    function setRequirementDatePreset(preset) {
+      state.requirementDateFilters = datePresetRange(preset);
+      state.requirementVisibleLimit = 80;
+      renderRequirementBoard();
+    }
+    function setRequirementDateFilter(key, value, input) {
+      const previous = state.requirementDateFilters || { startDate: "", endDate: "" };
+      const next = { ...previous, [key]: value || "" };
+      if (next.startDate && next.endDate && next.startDate > next.endDate) {
+        if (input) input.value = previous[key] || "";
+        toast("开始日期不能晚于结束日期");
+        return;
+      }
+      state.requirementDateFilters = next;
+      state.requirementVisibleLimit = 80;
+      renderRequirementBoard();
+    }
+    function matchesRequirementCreatedDate(requirement) {
+      const { startDate, endDate } = state.requirementDateFilters || {};
+      if (!startDate && !endDate) return true;
+      const createdDate = localDateKey(requirement?.created_at);
+      return Boolean(createdDate) && (!startDate || createdDate >= startDate) && (!endDate || createdDate <= endDate);
+    }
     function setRequirementKeyword(value, immediate = false) {
       state.requirementKeyword = value || "";
       if (state.requirementKeywordTimer) clearTimeout(state.requirementKeywordTimer);
@@ -6123,7 +6230,7 @@
       toast("已复制到手动录入，可修改后创建新需求");
     }
     function renderRequirementBoard() {
-      const rows = activeDimensionRows();
+      const rows = activeDimensionRows().filter(row => matchesRequirementCreatedDate(row.requirement));
       const quoteVisible = can("quote.view_all");
       const canManageAssignment = can("task.assign_owned");
       const personalWorkflowView = !isAdminUser();
@@ -6195,6 +6302,7 @@
       const filterUiKey = JSON.stringify({
         filter: state.requirementFilter,
         keyword: state.requirementKeyword,
+        dates: state.requirementDateFilters,
         dimensions: state.dimensionFilters,
         users: state.users.length,
         contacts: state.contactContexts.length,
@@ -6225,6 +6333,17 @@
                 ].map(([label, key, allLabel]) => dimensionSelect(label, key, allLabel, "setRequirementDimensionFilter")).join("")}
               </div>
             </details>
+          </div>
+          <div class="history-date-row" aria-label="按需求创建时间筛选">
+            <span class="history-date-label">创建时间</span>
+            <div class="history-date-presets">
+              ${datePresetButton("最近三个月", "recent3months", activeDatePreset(state.requirementDateFilters), "setRequirementDatePreset")}
+              ${datePresetButton("本月", "currentMonth", activeDatePreset(state.requirementDateFilters), "setRequirementDatePreset")}
+              ${datePresetButton("上个月", "previousMonth", activeDatePreset(state.requirementDateFilters), "setRequirementDatePreset")}
+              ${datePresetButton("全部", "all", activeDatePreset(state.requirementDateFilters), "setRequirementDatePreset")}
+            </div>
+            <label class="history-date-input">从 <input type="date" value="${escapeAttr(state.requirementDateFilters.startDate)}" onchange="setRequirementDateFilter('startDate', this.value, this)" /></label>
+            <label class="history-date-input">至 <input type="date" value="${escapeAttr(state.requirementDateFilters.endDate)}" onchange="setRequirementDateFilter('endDate', this.value, this)" /></label>
           </div>
         `;
       }
@@ -6321,6 +6440,7 @@
     }
     function clearRequirementFilters() {
       state.requirementFilter = "all";
+      state.requirementDateFilters = { startDate: "", endDate: "" };
       state.requirementKeyword = "";
       state.requirementVisibleLimit = 80;
       if (state.requirementKeywordTimer) {
