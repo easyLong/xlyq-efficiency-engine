@@ -2169,6 +2169,7 @@
     .standard-config-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
     .standard-config-toolbar .form-grid { flex: 1 1 620px; margin: 0; }
     .standard-config-toolbar .btns { margin: 0; }
+    .standard-config-hint { margin: 0; color: #71806f; font-size: 12px; }
     .standard-config-table { min-width: 1180px; }
     .standard-config-table td { vertical-align: top; }
     .standard-config-table .path-cell { min-width: 210px; line-height: 1.45; }
@@ -3084,9 +3085,9 @@
                 <label>基金<select id="taskPriceCustomerInput"></select></label>
                 <label>搜索价格规则<input id="taskPriceSearchInput" placeholder="搜索基金或分类" oninput="renderTaskPriceRules()" /></label>
               </div>
-              <div class="btns"><button class="btn" onclick="loadTaskPriceRules(true)">刷新</button></div>
+              <div class="btns"><span class="standard-config-hint">右键三级分类价格节点可新增、编辑或停用</span><button class="btn" onclick="loadTaskPriceRules(true)">刷新</button></div>
             </div>
-            <div id="taskPriceRuleEditor" class="standard-detail-panel"></div>
+            <div id="taskPriceRuleEditor" class="standard-detail-panel hidden"></div>
             <div id="taskPriceRuleBoard" class="table-wrap"></div>
           </div>
         </div>
@@ -3714,7 +3715,6 @@
       if (state.workflowConfig) renderWorkflowConfiguration();
       renderClassificationConfig();
       renderTaskPriceCustomerOptions();
-      renderTaskPriceEditor();
       if (can("quote.view_all")) {
         renderQuotationsBoard();
         renderQuotationMetrics([]);
@@ -8105,7 +8105,6 @@
         state.categoryTree = unwrap(await request("/dimensions/category-tree"));
         renderClassificationConfig();
         renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", qs("secondaryCategoryInput")?.value || "");
-        renderTaskPriceEditor();
         renderTaskPriceRules();
         if (showToast) toast("分类标准已刷新");
       } catch (error) {
@@ -8171,12 +8170,13 @@
     function renderTaskPriceEditor(rule = null) {
       const editor = qs("taskPriceRuleEditor");
       if (!editor) return;
+      editor.classList.remove("hidden");
       const selectedCategory = rule?.business_category_code || state.categoryTree?.[0]?.code || "";
       const selectedSecondary = rule?.secondary_category_code || categoryTreeNode(selectedCategory)?.secondaries?.[0]?.code || "";
       const selectedTertiary = rule?.tertiary_category_code || (categoryTreeNode(selectedCategory)?.secondaries || []).find(item => item.code === selectedSecondary)?.tertiaries?.[0]?.code || "";
       const selectedCustomer = rule?.customer_code || qs("taskPriceCustomerInput")?.value || configFundCustomers()[0]?.customer_code || "";
       editor.innerHTML = `
-        <h4>${rule ? "编辑基金任务价格" : "新增基金任务价格"}</h4>
+        <h4>${rule ? "编辑价格规则" : "新增价格规则"}</h4>
         <p>价格按基金和三级分类匹配；修改价格建议新增版本并设置生效时间。</p>
         <div class="form-grid">
           <label>基金<select id="taskPriceRuleCustomerInput">${configFundCustomers().map(item => `<option value="${escapeAttr(item.customer_code || "")}" ${item.customer_code === selectedCustomer ? "selected" : ""}>${escapeHtml(item.customer_name || item.customer_code || "未命名基金")}</option>`).join("")}</select></label>
@@ -8191,11 +8191,13 @@
           <label>状态<select id="taskPriceRuleStatusInput"><option value="active" ${rule?.status !== "inactive" ? "selected" : ""}>启用</option><option value="inactive" ${rule?.status === "inactive" ? "selected" : ""}>停用</option></select></label>
         </div>
         <label>价格说明<textarea id="taskPriceRuleRemarkInput" placeholder="例如：含税、适用于标准交付，不含临时加急">${escapeHtml(rule?.remark || "")}</textarea></label>
-        <div class="btns"><button class="btn primary" onclick="saveTaskPriceRule()">${rule ? "保存价格规则" : "新增价格规则"}</button>${rule ? `<button class="btn" onclick="cancelTaskPriceRuleEdit()">取消编辑</button>` : ""}</div>`;
+        <div class="btns"><button class="btn primary" onclick="saveTaskPriceRule()">保存价格规则</button><button class="btn" onclick="cancelTaskPriceRuleEdit()">${rule ? "取消编辑" : "关闭"}</button></div>`;
     }
     function cancelTaskPriceRuleEdit() {
       state.editingTaskPriceRuleId = null;
-      renderTaskPriceEditor();
+      const editor = qs("taskPriceRuleEditor");
+      editor?.classList.add("hidden");
+      if (editor) editor.innerHTML = "";
     }
     async function loadTaskPriceRules(showToast = false) {
       if (!canView("standard-config")) return;
@@ -8421,7 +8423,7 @@
         await request(id ? `/dimensions/task-price-rules/${id}` : "/dimensions/task-price-rules", { method: id ? "PATCH" : "POST", body });
         state.editingTaskPriceRuleId = null;
         await loadTaskPriceRules(false);
-        renderTaskPriceEditor();
+        cancelTaskPriceRuleEdit();
         toast(id ? "价格规则已保存" : "价格规则已新增");
       } catch (error) {
         toast(error.message || "价格规则保存失败");
