@@ -2158,6 +2158,80 @@
       font-weight: 800;
     }
     .workflow-config-empty { padding: 36px 14px; color: #758074; text-align: center; }
+    .standard-config-panel { padding: 0; overflow: visible; }
+    .standard-config-head { padding: 18px; border-bottom: 1px solid #e2e8da; }
+    .standard-config-head h3 { margin: 2px 0 5px; font-size: 19px; }
+    .standard-config-head p { margin: 0; color: #667163; font-size: 13px; }
+    .standard-config-tabs { display: flex; gap: 5px; padding: 8px 18px; border-bottom: 1px solid #e2e8da; background: #f7f9f4; }
+    .standard-config-tabs button { min-height: 34px; border: 0; border-radius: 8px; padding: 7px 13px; background: transparent; color: #5d685c; }
+    .standard-config-tabs button.active { background: #fff; color: #203026; box-shadow: inset 0 0 0 1px #cfd9ca; font-weight: 800; }
+    .standard-config-body { padding: 16px 18px 20px; }
+    .standard-config-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .standard-config-toolbar .form-grid { flex: 1 1 620px; margin: 0; }
+    .standard-config-toolbar .btns { margin: 0; }
+    .standard-config-table { min-width: 1180px; }
+    .standard-config-table td { vertical-align: top; }
+    .standard-config-table .path-cell { min-width: 210px; line-height: 1.45; }
+    .standard-config-table .path-cell strong { display: block; color: #233127; }
+    .standard-config-table .path-cell span { display: block; color: #748073; font-size: 12px; }
+    .standard-config-table .standard-summary { max-width: 260px; color: #667163; font-size: 12px; line-height: 1.45; white-space: pre-wrap; }
+    .standard-config-table input { min-width: 82px; }
+    .standard-config-table .actions { white-space: nowrap; }
+    .standard-detail-panel { margin-bottom: 14px; padding: 14px; border: 1px solid #cfdcca; border-radius: 12px; background: #f8fbf6; }
+    .standard-detail-panel h4 { margin: 0 0 5px; }
+    .standard-detail-panel p { margin: 0 0 12px; color: #697567; font-size: 12px; }
+    .standard-detail-panel textarea { min-height: 74px; resize: vertical; }
+    .price-rule-table { min-width: 1000px; }
+    .price-rule-table td { vertical-align: top; }
+    .price-rule-table .path-cell { min-width: 250px; line-height: 1.45; }
+    .price-rule-table .path-cell strong, .price-rule-table .path-cell span { display: block; }
+    .price-rule-table .path-cell span { color: #748073; font-size: 12px; }
+    .price-rule-table .actions { white-space: nowrap; }
+    .price-tree { display: grid; gap: 4px; min-width: 760px; }
+    .price-tree-node { position: relative; }
+    .price-tree-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 40px; padding: 6px 9px; border: 1px solid transparent; border-radius: 9px; }
+    .price-tree-row:hover { background: #f3f8f0; border-color: #dce8d7; }
+    .price-tree-row.customer { background: #eef5eb; font-weight: 800; }
+    .price-tree-row.category { margin-left: 24px; background: #fafcf8; }
+    .price-tree-row.secondary { margin-left: 48px; }
+    .price-tree-row.rule { margin-left: 72px; }
+    .price-tree-toggle { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #56705a; cursor: pointer; }
+    .price-tree-toggle:hover { background: #e0ecdd; }
+    .price-tree-label { min-width: 0; display: flex; align-items: center; gap: 8px; }
+    .price-tree-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .price-tree-label span { color: #788276; font-size: 12px; }
+    .price-tree-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; color: #61705f; font-size: 12px; }
+    .price-tree-meta .tag { min-width: 0; padding: 3px 7px; }
+    .price-tree-rule { position: relative; }
+    .price-hover-card { display: none; position: absolute; z-index: 40; right: 12px; bottom: calc(100% + 8px); width: min(390px, calc(100vw - 80px)); padding: 12px 14px; border: 1px solid #cddbc9; border-radius: 11px; background: #fffefb; box-shadow: 0 14px 34px rgba(35, 51, 39, .18); color: #4e5e50; font-size: 12px; line-height: 1.55; pointer-events: none; }
+    .price-tree-rule:hover .price-hover-card { display: block; }
+    .price-hover-card strong { display: block; margin-bottom: 5px; color: #243429; font-size: 13px; }
+    .price-hover-card div + div { margin-top: 4px; }
+    #taskPriceRuleBoard { overflow: visible; }
+    .standard-tree { display: grid; gap: 4px; min-width: 680px; }
+    .standard-tree-node { position: relative; }
+    .standard-tree-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 40px; padding: 6px 9px; border: 1px solid transparent; border-radius: 9px; }
+    .standard-tree-row:hover { background: #f3f8f0; border-color: #dce8d7; }
+    .standard-tree-row.category { background: #eef5eb; font-weight: 800; }
+    .standard-tree-row.secondary { margin-left: 24px; background: #fafcf8; }
+    .standard-tree-row.tertiary { margin-left: 48px; }
+    .standard-tree-toggle { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #56705a; cursor: pointer; }
+    .standard-tree-toggle:hover { background: #e0ecdd; }
+    .standard-tree-label { min-width: 0; display: flex; align-items: center; gap: 8px; }
+    .standard-tree-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .standard-tree-label span { color: #788276; font-size: 12px; }
+    .standard-tree-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; color: #61705f; font-size: 12px; }
+    .standard-tree-meta .tag { min-width: 0; padding: 3px 7px; }
+    .standard-tree-tertiary { position: relative; }
+    .standard-hover-card { display: none; position: absolute; z-index: 30; left: 58px; top: 34px; width: min(430px, calc(100vw - 70px)); padding: 12px 14px; border: 1px solid #cddbc9; border-radius: 11px; background: #fffefb; box-shadow: 0 14px 34px rgba(35, 51, 39, .18); color: #4e5e50; font-size: 12px; line-height: 1.55; pointer-events: none; }
+    .standard-tree-tertiary:hover .standard-hover-card { display: block; }
+    .standard-hover-card strong { display: block; margin-bottom: 5px; color: #243429; font-size: 13px; }
+    .standard-hover-card div + div { margin-top: 4px; }
+    #classificationConfigBoard { overflow: visible; }
+    .standard-context-menu { position: fixed; z-index: 120; min-width: 150px; padding: 5px; border: 1px solid #d5dfd1; border-radius: 10px; background: #fffefb; box-shadow: 0 16px 40px rgba(29, 42, 31, .2); }
+    .standard-context-menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: #304234; text-align: left; cursor: pointer; }
+    .standard-context-menu button:hover { background: #edf5eb; }
+    .standard-context-menu button.danger { color: #a74635; }
     .hidden { display: none !important; }
     @media (min-width: 981px) and (max-width: 1440px) {
       .employee-insights-panel { padding: 12px; }
@@ -2291,6 +2365,7 @@
         <button data-view="attendance" onclick="switchView('attendance')">考勤统计</button>
         <button data-view="groups" onclick="switchView('groups')">群管理</button>
         <button data-view="workflow" onclick="switchView('workflow')">人员配置</button>
+        <button data-view="standard-config" onclick="switchView('standard-config')">标准配置</button>
         <button data-view="messages" onclick="switchView('messages')">消息记录</button>
       </nav>
       <button id="logoutButton" class="btn warn" onclick="logout()">退出登录</button>
@@ -2364,8 +2439,8 @@
                     <option value="normal">不紧急不重要</option>
                   </select>
                 </label>
-                <label>任务价格（元）
-                  <input id="requirementPriceInput" type="number" min="0" step="0.01" placeholder="0.00" />
+                <label>任务价格（元，留空自动计算）
+                  <input id="requirementPriceInput" type="number" min="0" step="0.01" placeholder="留空按基金价格规则计算" />
                 </label>
               </div>
               <label>需求标题
@@ -2963,24 +3038,57 @@
               <div id="workflowMemberList" class="workflow-member-list"></div>
             </div>
         </div>
-        <div class="panel hidden">
-          <div class="section-title">
-            <div>
-              <div class="kicker">Classification Standard</div>
-              <h3>三级分类工时与贡献分</h3>
-              <p>三级分类可在需求中多选；任务预估工时和贡献分取所选项目之和。</p>
+      </section>
+
+      <section id="view-standard-config" class="grid hidden">
+        <div class="panel standard-config-panel">
+          <div class="standard-config-head">
+            <div class="kicker">Standard Configuration</div>
+            <h3>标准配置中心</h3>
+            <p>集中维护三级分类的说明、工时、贡献分和基金任务价格。分类编码由系统保存，页面只展示可读配置。</p>
+          </div>
+          <div class="standard-config-tabs" role="tablist">
+            <button id="standardConfigWorkloadTab" class="active" onclick="setStandardConfigTab('workload')">工作量标准</button>
+            <button id="standardConfigPriceTab" onclick="setStandardConfigTab('price')">基金任务价格</button>
+          </div>
+          <div id="standardConfigWorkloadPanel" class="standard-config-body">
+            <div class="standard-config-toolbar">
+              <div class="form-grid">
+                <label>业务大类<select id="classificationCategoryInput" onchange="renderClassificationSecondaryOptions()"></select></label>
+                <label>二级分类<select id="classificationSecondaryInput" onchange="renderClassificationConfig()"></select></label>
+                <label>搜索分类<input id="classificationSearchInput" placeholder="搜索分类名称或说明" oninput="renderClassificationConfig()" /></label>
+              </div>
+              <div class="btns">
+                <button class="btn" onclick="reloadCategoryTree()">刷新</button>
+                <button class="btn" onclick="toggleClassificationCreatePanel()">新增三级分类</button>
+              </div>
             </div>
-            <button class="btn" onclick="reloadCategoryTree()">刷新</button>
+            <div id="classificationCreatePanel" class="standard-detail-panel hidden">
+              <h4>新增三级分类</h4>
+              <p>新增后会立即出现在需求录入的三级分类选择器中。</p>
+              <div class="form-grid">
+                <label>三级分类名称<input id="classificationNameInput" placeholder="例如：原创长图文案" /></label>
+                <label>计量单位<input id="classificationUnitInput" placeholder="例如：批 / 篇" /></label>
+                <label>参考分钟<input id="classificationMinutesInput" type="number" min="0" step="1" /></label>
+                <label>预估工时<input id="classificationHoursInput" type="number" min="0" step="0.25" value="6" /></label>
+                <label>贡献分<input id="classificationPointsInput" type="number" min="0" step="0.01" value="0" /></label>
+              </div>
+              <div class="btns"><button class="btn primary" onclick="createTertiaryCategory()">保存新增分类</button><button class="btn" onclick="toggleClassificationCreatePanel(false)">取消</button></div>
+            </div>
+            <div id="classificationDetailPanel" class="standard-detail-panel hidden"></div>
+            <div id="classificationConfigBoard" class="table-wrap"></div>
           </div>
-          <div class="form-grid">
-            <label>业务大类<select id="classificationCategoryInput" onchange="renderClassificationSecondaryOptions()"></select></label>
-            <label>二级分类<select id="classificationSecondaryInput"></select></label>
-            <label>三级分类名称<input id="classificationNameInput" placeholder="例如：原创长图文案" /></label>
-            <label>预估工时<input id="classificationHoursInput" type="number" min="0" step="0.25" value="6" /></label>
-            <label>贡献分<input id="classificationPointsInput" type="number" min="0" step="0.01" value="0" /></label>
+          <div id="standardConfigPricePanel" class="standard-config-body hidden">
+            <div class="standard-config-toolbar">
+              <div class="form-grid">
+                <label>基金<select id="taskPriceCustomerInput"></select></label>
+                <label>搜索价格规则<input id="taskPriceSearchInput" placeholder="搜索基金或分类" oninput="renderTaskPriceRules()" /></label>
+              </div>
+              <div class="btns"><button class="btn" onclick="loadTaskPriceRules(true)">刷新</button></div>
+            </div>
+            <div id="taskPriceRuleEditor" class="standard-detail-panel"></div>
+            <div id="taskPriceRuleBoard" class="table-wrap"></div>
           </div>
-          <div class="btns"><button class="btn primary" onclick="createTertiaryCategory()">新增三级分类</button></div>
-          <div id="classificationConfigBoard" class="table-wrap"></div>
         </div>
       </section>
 
@@ -2994,6 +3102,7 @@
   </div>
 
   <div id="toast" class="toast"></div>
+  <div id="standardContextMenu" class="standard-context-menu hidden" onclick="event.stopPropagation()"></div>
   <div id="confirmBackdrop" class="dialog-backdrop hidden" onclick="handleConfirmBackdropClick(event)">
     <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" onclick="event.stopPropagation()">
       <div class="confirm-dialog-body">
@@ -3180,6 +3289,13 @@
       editingQuotationItemId: null,
       addingQuotationItem: false,
       busyActionId: null,
+      standardConfigTab: "workload",
+      taskPriceRules: [],
+      editingTaskPriceRuleId: null,
+      classificationExpanded: new Set(),
+      priceTreeExpanded: new Set(),
+      priceTreeInitialized: false,
+      standardContext: null,
     };
     const api = window.XlyqApiClient.create({
       apiBase,
@@ -3221,6 +3337,7 @@
         attendance: "page.attendance",
         groups: "page.group_management",
         workflow: "permission.manage",
+        "standard-config": "page.standard_config",
         messages: "page.messages",
       }[view] || null;
     }
@@ -3258,7 +3375,7 @@
       if (isViewActive("requirements")) {
         qs("pageSub").textContent = requirementPageSubtitle();
       }
-      if (["quotations", "mappings", "settlement", "dashboard", "attendance", "groups", "workflow", "messages"].some(view => isViewActive(view) && !canView(view))) {
+      if (["quotations", "mappings", "settlement", "dashboard", "attendance", "groups", "workflow", "standard-config", "messages"].some(view => isViewActive(view) && !canView(view))) {
         switchView("requirements");
       }
     }
@@ -3297,6 +3414,7 @@
       if (!event.target?.closest?.("#confirmBackdrop")) {
         lastPointerPosition = { x: event.clientX, y: event.clientY };
       }
+      if (!event.target?.closest?.("#standardContextMenu")) closeStandardContextMenu();
       const manualContactPopover = qs("manualContactPopover");
       if (
         manualContactPopover &&
@@ -3595,6 +3713,8 @@
       renderWorkReportList();
       if (state.workflowConfig) renderWorkflowConfiguration();
       renderClassificationConfig();
+      renderTaskPriceCustomerOptions();
+      renderTaskPriceEditor();
       if (can("quote.view_all")) {
         renderQuotationsBoard();
         renderQuotationMetrics([]);
@@ -4495,7 +4615,7 @@
         view = "requirements";
       }
       document.querySelectorAll(".nav button").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
-      ["requirements", "quotations", "mappings", "settlement", "dashboard", "attendance", "groups", "workflow", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
+      ["requirements", "quotations", "mappings", "settlement", "dashboard", "attendance", "groups", "workflow", "standard-config", "messages"].forEach(id => qs(`view-${id}`).classList.toggle("hidden", id !== view));
       const titles = {
         requirements: ["需求与指派", requirementPageSubtitle()],
         quotations: ["合同报价录入", "上传合同报价并拆成最细粒度子项，为后续需求任务挂靠做准备。"],
@@ -4505,6 +4625,7 @@
         attendance: ["考勤统计", "按本月、本周或指定起止日期查看员工考勤汇总与明细。"],
         groups: ["群管理", "拉DP入群-->新增群信息-->DP微信号备注客户真名"],
         workflow: ["人员配置", "按基金和业务大类维护派发、一审与二审人员。"],
+        "standard-config": ["标准配置", "维护分类说明、工时、贡献分和基金任务价格。"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
       };
       qs("pageTitle").textContent = titles[view][0];
@@ -4517,6 +4638,10 @@
       if (view === "settlement") loadSettlementStatement(false);
       if (view === "groups") refreshGroupManagement();
       if (view === "workflow") loadWorkflowConfiguration();
+      if (view === "standard-config") {
+        renderClassificationConfig();
+        loadTaskPriceRules(false);
+      }
       if (view === "messages") refreshMessages();
       applyRoleVisibility();
     }
@@ -6987,7 +7112,7 @@
       if (!customerId || !projectType) return toast("请选择基金客户和业务大类");
       if (!secondaryCategory) return toast("请选择二级分类");
       if (!tertiaryCategoryCodes.length) return toast("请选择至少一个三级分类");
-      if (!priceAmountInput || !Number.isFinite(priceAmount) || priceAmount < 0) return toast("请填写有效的任务价格");
+      if (priceAmountInput && (!Number.isFinite(priceAmount) || priceAmount < 0)) return toast("请填写有效的任务价格");
 
       state.busyActionId = requirementId;
       renderRequirementBoard();
@@ -6997,7 +7122,7 @@
 
         const result = await request(`/requirements/${requirementId}`, {
           method: "PATCH",
-          body: { title, rawContent, priority, urgencyLevel, priceAmount: priceAmount.toFixed(2), customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, businessCategory: projectType, secondaryCategory, tertiaryCategoryCodes, tertiaryCategoryQuantities },
+          body: { title, rawContent, priority, urgencyLevel, priceAmount: priceAmountInput ? priceAmount.toFixed(2) : undefined, customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, businessCategory: projectType, secondaryCategory, tertiaryCategoryCodes, tertiaryCategoryQuantities },
         });
         if (result.requirement) {
           state.requirements = state.requirements.map(item => item.id === requirementId ? result.requirement : item);
@@ -7901,6 +8026,36 @@
     function categoryTreeNode(categoryValue = "") {
       return (state.categoryTree || []).find(item => item.code === categoryValue || item.name === categoryValue);
     }
+    function classificationConfigRows() {
+      return (state.categoryTree || []).flatMap(category => (category.secondaries || []).flatMap(secondary =>
+        (secondary.tertiaries || []).map(tertiary => ({ category, secondary, tertiary }))
+      ));
+    }
+    function classificationDetailText(tertiary) {
+      return [tertiary.contentScope, tertiary.deliveryStandard, tertiary.acceptanceEvidence]
+        .map(value => String(value || "").trim()).filter(Boolean).join("\n");
+    }
+    function standardTreeKey(type, code) {
+      return `${type}:${code}`;
+    }
+    function toggleStandardTreeNode(type, code) {
+      const key = standardTreeKey(type, code);
+      if (state.classificationExpanded.has(key)) state.classificationExpanded.delete(key);
+      else state.classificationExpanded.add(key);
+      renderClassificationConfig();
+    }
+    function standardClassificationMatches(keyword, ...values) {
+      if (!keyword) return true;
+      return values.some(value => String(value || "").toLowerCase().includes(keyword));
+    }
+    function classificationHoverCard(tertiary) {
+      const details = [
+        ["产品编码", tertiary.productCode], ["包含内容", tertiary.contentScope],
+        ["标准交付口径", tertiary.deliveryStandard], ["验收及交付凭证", tertiary.acceptanceEvidence],
+        ["计分边界", tertiary.scoringBoundary], ["备注", tertiary.remark],
+      ].filter(([, value]) => String(value || "").trim());
+      return `<div class="standard-hover-card"><strong>${escapeHtml(tertiary.name)}</strong>${details.length ? details.map(([label, value]) => `<div><b>${escapeHtml(label)}：</b>${escapeHtml(value)}</div>`).join("") : "<div>暂未填写详细说明</div>"}</div>`;
+    }
     function renderClassificationConfig() {
       const categorySelect = qs("classificationCategoryInput");
       const board = qs("classificationConfigBoard");
@@ -7908,38 +8063,368 @@
       const categories = state.categoryTree || [];
       const selectedCategory = categorySelect.value || categories[0]?.code || "";
       categorySelect.innerHTML = categories.map(item => `<option value="${escapeAttr(item.code)}" ${item.code === selectedCategory ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
-      renderClassificationSecondaryOptions();
-      const rows = categories.flatMap(category => (category.secondaries || []).flatMap(secondary =>
-        (secondary.tertiaries || []).map(tertiary => ({ category, secondary, tertiary }))
-      ));
-      board.innerHTML = rows.length ? `
-        <table><thead><tr><th>业务大类</th><th>二级分类</th><th>三级分类</th><th>产品类型</th><th>预估工时</th><th>贡献分</th><th>操作</th></tr></thead>
-        <tbody>${rows.map(({ category, secondary, tertiary }) => `
-          <tr>
-            <td>${escapeHtml(category.name)}</td><td>${escapeHtml(secondary.name)}</td>
-            <td><input id="classification-name-${tertiary.code}" value="${escapeAttr(tertiary.name)}" /></td>
-            <td>${escapeHtml(tertiary.productType || "未设置")}</td>
-            <td><input id="classification-hours-${tertiary.code}" type="number" min="0" step="0.25" value="${escapeAttr(tertiary.estimatedHours || "0.00")}" /></td>
-            <td><input id="classification-points-${tertiary.code}" type="number" min="0" step="0.01" value="${escapeAttr(tertiary.contributionPoints || "0.00")}" /></td>
-            <td><button class="btn" onclick="saveTertiaryCategory('${escapeAttr(tertiary.code)}')">保存</button></td>
-          </tr>`).join("")}</tbody></table>
-      ` : `<div class="empty-list">暂无三级分类，请先新增。</div>`;
+      renderClassificationSecondaryOptions(false);
+      const selectedSecondary = qs("classificationSecondaryInput")?.value || "";
+      const keyword = (qs("classificationSearchInput")?.value || "").trim().toLowerCase();
+      const visibleCategories = categories.filter(category => {
+        if (selectedCategory && category.code !== selectedCategory) return false;
+        return (category.secondaries || []).some(secondary => {
+          if (selectedSecondary && secondary.code !== selectedSecondary) return false;
+          return (secondary.tertiaries || []).some(tertiary => standardClassificationMatches(keyword, category.name, secondary.name, tertiary.name, tertiary.contentScope, tertiary.deliveryStandard, tertiary.acceptanceEvidence, tertiary.scoringBoundary, tertiary.remark));
+        });
+      });
+      const categoryMarkup = visibleCategories.map(category => {
+        const categoryKeywordMatch = standardClassificationMatches(keyword, category.name);
+        const visibleSecondaries = (category.secondaries || []).filter(secondary => {
+          if (selectedSecondary && secondary.code !== selectedSecondary) return false;
+          return categoryKeywordMatch || (secondary.tertiaries || []).some(tertiary => standardClassificationMatches(keyword, secondary.name, tertiary.name, tertiary.contentScope, tertiary.deliveryStandard, tertiary.acceptanceEvidence, tertiary.scoringBoundary, tertiary.remark));
+        });
+        const categoryExpanded = state.classificationExpanded.has(standardTreeKey("category", category.code)) || Boolean(keyword);
+        const totalTertiaries = (category.secondaries || []).reduce((sum, item) => sum + (item.tertiaries || []).length, 0);
+        return `<div class="standard-tree-node"><div class="standard-tree-row category" oncontextmenu="openStandardContextMenu(event, 'category', '${escapeAttr(category.code)}')"><button class="standard-tree-toggle" onclick="event.stopPropagation(); toggleStandardTreeNode('category', '${escapeAttr(category.code)}')">${categoryExpanded ? "▾" : "▸"}</button><div class="standard-tree-label"><strong>${escapeHtml(category.name)}</strong><span>${visibleSecondaries.length}/${(category.secondaries || []).length} 个二级分类</span></div><div class="standard-tree-meta"><span class="tag">${totalTertiaries} 个三级分类</span><span class="tag">右键管理</span></div></div>${categoryExpanded ? visibleSecondaries.map(secondary => {
+          const secondaryKeywordMatch = categoryKeywordMatch || standardClassificationMatches(keyword, secondary.name);
+          const visibleTertiaries = (secondary.tertiaries || []).filter(tertiary => standardClassificationMatches(keyword, category.name, secondary.name, tertiary.name, tertiary.contentScope, tertiary.deliveryStandard, tertiary.acceptanceEvidence, tertiary.scoringBoundary, tertiary.remark));
+          const secondaryExpanded = state.classificationExpanded.has(standardTreeKey("secondary", secondary.code)) || Boolean(keyword);
+          return `<div class="standard-tree-node"><div class="standard-tree-row secondary" oncontextmenu="openStandardContextMenu(event, 'secondary', '${escapeAttr(secondary.code)}')"><button class="standard-tree-toggle" onclick="event.stopPropagation(); toggleStandardTreeNode('secondary', '${escapeAttr(secondary.code)}')">${secondaryExpanded ? "▾" : "▸"}</button><div class="standard-tree-label"><strong>${escapeHtml(secondary.name)}</strong><span>${visibleTertiaries.length}/${(secondary.tertiaries || []).length} 个三级分类</span></div><div class="standard-tree-meta"><span class="tag">${secondaryKeywordMatch ? "已匹配" : "分类"}</span><span class="tag">右键管理</span></div></div>${secondaryExpanded ? visibleTertiaries.map(tertiary => `<div class="standard-tree-tertiary"><div class="standard-tree-row tertiary" oncontextmenu="openStandardContextMenu(event, 'tertiary', '${escapeAttr(tertiary.code)}')"><span></span><div class="standard-tree-label"><strong>${escapeHtml(tertiary.name)}</strong><span>${escapeHtml(tertiary.productCode || tertiary.code || "未配置编码")}</span></div><div class="standard-tree-meta"><span class="tag">${escapeHtml(tertiary.measureUnit || "项")}</span><span class="tag">${escapeHtml(tertiary.referenceMinutes ?? "-")} 分钟</span><span class="tag">${escapeHtml(tertiary.estimatedHours || "0.00")} 小时</span><span class="tag">${escapeHtml(tertiary.contributionPoints || "0.00")} 分</span></div></div>${classificationHoverCard(tertiary)}</div>`).join("") : ""}</div>`;
+        }).join("") : ""}</div>`;
+      }).join("");
+      board.innerHTML = categoryMarkup ? `<div class="standard-tree">${categoryMarkup}</div>` : `<div class="empty-list">暂无匹配的分类，请调整筛选条件或新增三级分类。</div>`;
     }
-    function renderClassificationSecondaryOptions() {
+    function renderClassificationSecondaryOptions(shouldRender = true) {
       const categoryCode = qs("classificationCategoryInput")?.value || "";
       const select = qs("classificationSecondaryInput");
       if (!select) return;
       const rows = categoryTreeNode(categoryCode)?.secondaries || [];
-      select.innerHTML = rows.map(item => `<option value="${escapeAttr(item.code)}">${escapeHtml(item.name)}</option>`).join("");
+      const previous = select.value;
+      select.innerHTML = `<option value="">全部二级分类</option>` + rows.map(item => `<option value="${escapeAttr(item.code)}">${escapeHtml(item.name)}</option>`).join("");
+      if (rows.some(item => item.code === previous)) select.value = previous;
+      if (shouldRender) renderClassificationConfig();
     }
     async function reloadCategoryTree(showToast = true) {
       try {
         state.categoryTree = unwrap(await request("/dimensions/category-tree"));
         renderClassificationConfig();
         renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", qs("secondaryCategoryInput")?.value || "");
+        renderTaskPriceEditor();
+        renderTaskPriceRules();
         if (showToast) toast("分类标准已刷新");
       } catch (error) {
         toast(error.message || "分类标准刷新失败");
+      }
+    }
+    function setStandardConfigTab(tab = "workload") {
+      state.standardConfigTab = tab === "price" ? "price" : "workload";
+      qs("standardConfigWorkloadTab")?.classList.toggle("active", state.standardConfigTab === "workload");
+      qs("standardConfigPriceTab")?.classList.toggle("active", state.standardConfigTab === "price");
+      qs("standardConfigWorkloadPanel")?.classList.toggle("hidden", state.standardConfigTab !== "workload");
+      qs("standardConfigPricePanel")?.classList.toggle("hidden", state.standardConfigTab !== "price");
+      if (state.standardConfigTab === "price") {
+        renderTaskPriceCustomerOptions();
+        loadTaskPriceRules(false);
+      }
+    }
+    function configFundCustomers() {
+      const funds = (state.customers || []).filter(item => item.status !== "inactive" && item.industry === "公募基金");
+      return funds.length ? funds : (state.customers || []).filter(item => item.status !== "inactive");
+    }
+    function renderTaskPriceCustomerOptions() {
+      const select = qs("taskPriceCustomerInput");
+      if (!select) return;
+      const previous = select.value;
+      select.innerHTML = `<option value="">全部基金</option>` + configFundCustomers().map(item => `<option value="${escapeAttr(item.customer_code || "")}">${escapeHtml(item.customer_name || item.customer_code || "未命名基金")}</option>`).join("");
+      if (previous) select.value = previous;
+      select.onchange = () => renderTaskPriceRules();
+    }
+    function priceRulePath(rule) {
+      const row = classificationConfigRows().find(item => item.tertiary.code === rule.tertiary_category_code);
+      return row ? `${row.category.name} / ${row.secondary.name} / ${row.tertiary.name}` : `${rule.business_category_code} / ${rule.secondary_category_code} / ${rule.tertiary_category_code}`;
+    }
+    function renderTaskPriceRuleCategoryOptions(selected = "") {
+      return (state.categoryTree || []).map(item => `<option value="${escapeAttr(item.code)}" ${item.code === selected ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
+    }
+    function renderTaskPriceRuleSecondaryOptions(categoryCode, selected = "") {
+      const rows = categoryTreeNode(categoryCode)?.secondaries || [];
+      return rows.map(item => `<option value="${escapeAttr(item.code)}" ${item.code === selected ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
+    }
+    function renderTaskPriceRuleTertiaryOptions(categoryCode, secondaryCode, selected = "") {
+      const secondary = (categoryTreeNode(categoryCode)?.secondaries || []).find(item => item.code === secondaryCode);
+      return (secondary?.tertiaries || []).map(item => `<option value="${escapeAttr(item.code)}" ${item.code === selected ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
+    }
+    function syncTaskPriceRuleSecondaryOptions() {
+      const category = qs("taskPriceRuleCategoryInput")?.value || "";
+      const select = qs("taskPriceRuleSecondaryInput");
+      if (!select) return;
+      const previous = select.value;
+      select.innerHTML = renderTaskPriceRuleSecondaryOptions(category);
+      if ([...select.options].some(item => item.value === previous)) select.value = previous;
+      syncTaskPriceRuleTertiaryOptions();
+    }
+    function syncTaskPriceRuleTertiaryOptions() {
+      const category = qs("taskPriceRuleCategoryInput")?.value || "";
+      const secondary = qs("taskPriceRuleSecondaryInput")?.value || "";
+      const select = qs("taskPriceRuleTertiaryInput");
+      if (!select) return;
+      const previous = select.value;
+      select.innerHTML = renderTaskPriceRuleTertiaryOptions(category, secondary);
+      if ([...select.options].some(item => item.value === previous)) select.value = previous;
+    }
+    function renderTaskPriceEditor(rule = null) {
+      const editor = qs("taskPriceRuleEditor");
+      if (!editor) return;
+      const selectedCategory = rule?.business_category_code || state.categoryTree?.[0]?.code || "";
+      const selectedSecondary = rule?.secondary_category_code || categoryTreeNode(selectedCategory)?.secondaries?.[0]?.code || "";
+      const selectedTertiary = rule?.tertiary_category_code || (categoryTreeNode(selectedCategory)?.secondaries || []).find(item => item.code === selectedSecondary)?.tertiaries?.[0]?.code || "";
+      const selectedCustomer = rule?.customer_code || qs("taskPriceCustomerInput")?.value || configFundCustomers()[0]?.customer_code || "";
+      editor.innerHTML = `
+        <h4>${rule ? "编辑基金任务价格" : "新增基金任务价格"}</h4>
+        <p>价格按基金和三级分类匹配；修改价格建议新增版本并设置生效时间。</p>
+        <div class="form-grid">
+          <label>基金<select id="taskPriceRuleCustomerInput">${configFundCustomers().map(item => `<option value="${escapeAttr(item.customer_code || "")}" ${item.customer_code === selectedCustomer ? "selected" : ""}>${escapeHtml(item.customer_name || item.customer_code || "未命名基金")}</option>`).join("")}</select></label>
+          <label>业务大类<select id="taskPriceRuleCategoryInput" onchange="syncTaskPriceRuleSecondaryOptions()">${renderTaskPriceRuleCategoryOptions(selectedCategory)}</select></label>
+          <label>二级分类<select id="taskPriceRuleSecondaryInput" onchange="syncTaskPriceRuleTertiaryOptions()">${renderTaskPriceRuleSecondaryOptions(selectedCategory, selectedSecondary)}</select></label>
+          <label>三级分类<select id="taskPriceRuleTertiaryInput">${renderTaskPriceRuleTertiaryOptions(selectedCategory, selectedSecondary, selectedTertiary)}</select></label>
+          <label>计价方式<select id="taskPriceRuleModeInput"><option value="fixed" ${rule?.pricing_mode === "fixed" ? "selected" : ""}>固定单价</option><option value="quantity" ${rule?.pricing_mode === "quantity" ? "selected" : ""}>按数量</option><option value="time_rate" ${rule?.pricing_mode === "time_rate" ? "selected" : ""}>按分钟/时间</option></select></label>
+          <label>单价<input id="taskPriceRuleUnitPriceInput" type="number" min="0" step="0.01" value="${escapeAttr(rule?.unit_price || "0.00")}" /></label>
+          <label>生效日期<input id="taskPriceRuleFromInput" type="date" value="${escapeAttr(String(rule?.effective_from || "").slice(0, 10))}" /></label>
+          <label>失效日期<input id="taskPriceRuleToInput" type="date" value="${escapeAttr(String(rule?.effective_to || "").slice(0, 10))}" /></label>
+          <label>版本号<input id="taskPriceRuleVersionInput" type="number" min="1" step="1" value="${escapeAttr(rule?.version_no || 1)}" /></label>
+          <label>状态<select id="taskPriceRuleStatusInput"><option value="active" ${rule?.status !== "inactive" ? "selected" : ""}>启用</option><option value="inactive" ${rule?.status === "inactive" ? "selected" : ""}>停用</option></select></label>
+        </div>
+        <label>价格说明<textarea id="taskPriceRuleRemarkInput" placeholder="例如：含税、适用于标准交付，不含临时加急">${escapeHtml(rule?.remark || "")}</textarea></label>
+        <div class="btns"><button class="btn primary" onclick="saveTaskPriceRule()">${rule ? "保存价格规则" : "新增价格规则"}</button>${rule ? `<button class="btn" onclick="cancelTaskPriceRuleEdit()">取消编辑</button>` : ""}</div>`;
+    }
+    function cancelTaskPriceRuleEdit() {
+      state.editingTaskPriceRuleId = null;
+      renderTaskPriceEditor();
+    }
+    async function loadTaskPriceRules(showToast = false) {
+      if (!canView("standard-config")) return;
+      try {
+        renderTaskPriceCustomerOptions();
+        state.taskPriceRules = unwrap(await request("/dimensions/task-price-rules?status=all"));
+        renderTaskPriceRules();
+        if (showToast) toast("基金价格规则已刷新");
+      } catch (error) {
+        toast(error.message || "价格规则加载失败");
+      }
+    }
+    function priceTreeKey(type, code) {
+      return `price:${type}:${code}`;
+    }
+    function togglePriceTreeNode(type, code) {
+      const key = priceTreeKey(type, code);
+      if (state.priceTreeExpanded.has(key)) state.priceTreeExpanded.delete(key);
+      else state.priceTreeExpanded.add(key);
+      renderTaskPriceRules();
+    }
+    function priceRuleHoverCard(rule, customerName, path) {
+      const mode = { fixed: "固定单价", quantity: "按数量", time_rate: "按分钟/时间" }[rule.pricing_mode] || rule.pricing_mode;
+      return `<div class="price-hover-card"><strong>${escapeHtml(path)}</strong><div><b>基金：</b>${escapeHtml(customerName || rule.customer_code || "全部基金")}</div><div><b>计价方式：</b>${escapeHtml(mode)}</div><div><b>单价：</b>${formatMoney(rule.unit_price)}</div><div><b>生效期间：</b>${escapeHtml(String(rule.effective_from || "起始").slice(0, 10))} ~ ${escapeHtml(String(rule.effective_to || "长期").slice(0, 10))}</div><div><b>版本/状态：</b>${escapeHtml(rule.version_no || 1)} / ${rule.status === "active" ? "启用" : "停用"}</div><div><b>说明：</b>${escapeHtml(rule.remark || "暂无价格说明")}</div></div>`;
+    }
+    function priceRulesHoverCard(rules, path, customerNames) {
+      return `<div class="price-hover-card"><strong>${escapeHtml(path)}</strong>${rules.map(rule => `<div><b>基金：</b>${escapeHtml(customerNames.get(rule.customer_code) || (rule.customer_code === "*" ? "全部基金" : rule.customer_code))}　<b>价格：</b>${formatMoney(rule.unit_price)}　<b>版本：</b>${escapeHtml(rule.version_no || 1)}　<b>状态：</b>${rule.status === "active" ? "启用" : "停用"}</div>`).join("")}</div>`;
+    }
+    function unpricedPriceHoverCard(customerName, path) {
+      return `<div class="price-hover-card"><strong>${escapeHtml(path)}</strong><div><b>基金：</b>${escapeHtml(customerName || "全部基金")}</div><div><b>价格状态：</b>尚未配置价格规则</div><div><b>操作：</b>可在右侧编辑器中新增该三级分类的价格</div></div>`;
+    }
+    function renderUnpricedPriceTree(customerName, customerCode) {
+      const categories = state.categoryTree || [];
+      const customerKey = customerCode || "*";
+      const expanded = state.priceTreeExpanded.has(priceTreeKey("customer", customerKey)) || state.priceTreeExpanded.size === 0 || Boolean((qs("taskPriceSearchInput")?.value || "").trim());
+      const categoryMarkup = categories.map(category => {
+        const categoryKey = `${customerKey}:${category.code}`;
+        const categoryExpanded = state.priceTreeExpanded.has(priceTreeKey("category", categoryKey));
+        const tertiaryCount = (category.secondaries || []).reduce((sum, secondary) => sum + (secondary.tertiaries || []).length, 0);
+        return `<div class="price-tree-node"><div class="price-tree-row category"><button class="price-tree-toggle" onclick="event.stopPropagation(); togglePriceTreeNode('category', '${escapeAttr(categoryKey)}')">${categoryExpanded ? "▾" : "▸"}</button><div class="price-tree-label"><strong>${escapeHtml(category.name)}</strong><span>${tertiaryCount} 个三级分类</span></div><div class="price-tree-meta"><span class="tag">待配置价格</span></div></div>${categoryExpanded ? (category.secondaries || []).map(secondary => `<div class="price-tree-node"><div class="price-tree-row secondary"><span></span><div class="price-tree-label"><strong>${escapeHtml(secondary.name)}</strong><span>${(secondary.tertiaries || []).length} 个三级分类</span></div><div class="price-tree-meta"><span class="tag">待配置</span></div></div>${(secondary.tertiaries || []).map(tertiary => `<div class="price-tree-rule"><div class="price-tree-row rule"><span></span><div class="price-tree-label"><strong>${escapeHtml(tertiary.name)}</strong><span>${escapeHtml(tertiary.code || "")}</span></div><div class="price-tree-meta"><span class="tag">未配置价格</span></div></div>${unpricedPriceHoverCard(customerName, `${category.name} / ${secondary.name} / ${tertiary.name}`)}</div>`).join("")}</div>`).join("") : ""}</div>`;
+      }).join("");
+      return `<div class="price-tree"><div class="price-tree-node"><div class="price-tree-row customer"><button class="price-tree-toggle" onclick="event.stopPropagation(); togglePriceTreeNode('customer', '${escapeAttr(customerKey)}')">${expanded ? "▾" : "▸"}</button><div class="price-tree-label"><strong>${escapeHtml(customerName || "全部基金")}</strong><span>尚未配置价格规则</span></div><div class="price-tree-meta"><span class="tag">${categories.length} 个业务大类</span><span class="tag">请展开查看分类</span></div></div>${expanded ? categoryMarkup : ""}</div></div>`;
+    }
+    function openTaskPriceRuleContext(event, id) {
+      event.preventDefault();
+      event.stopPropagation();
+      const rule = (state.taskPriceRules || []).find(item => String(item.id) === String(id));
+      const menu = qs("standardContextMenu");
+      if (!rule || !menu) return;
+      state.standardContext = { type: "price-rule", code: id };
+      menu.innerHTML = `<button onclick="closeStandardContextMenu(); editTaskPriceRule('${escapeAttr(id)}')">编辑价格规则</button><button class="danger" onclick="closeStandardContextMenu(); disableTaskPriceRule('${escapeAttr(id)}')">删除（停用）价格规则</button>`;
+      menu.classList.remove("hidden");
+      const margin = 10;
+      const rect = menu.getBoundingClientRect();
+      menu.style.left = `${Math.min(event.clientX, Math.max(margin, window.innerWidth - rect.width - margin))}px`;
+      menu.style.top = `${Math.min(event.clientY, Math.max(margin, window.innerHeight - rect.height - margin))}px`;
+    }
+    async function disableTaskPriceRule(id) {
+      const rule = (state.taskPriceRules || []).find(item => String(item.id) === String(id));
+      if (!rule) return;
+      const confirmed = await confirmDialog({ title: "停用价格规则", message: "停用后新任务将不再使用此价格规则，是否继续？", okText: "确认停用" });
+      if (!confirmed) return;
+      try {
+        await request(`/dimensions/task-price-rules/${id}`, { method: "PATCH", body: { status: "inactive" } });
+        await loadTaskPriceRules(false);
+        toast("价格规则已停用");
+      } catch (error) { toast(error.message || "停用价格规则失败"); }
+    }
+    function renderTaskPriceRulesLegacy() {
+      const board = qs("taskPriceRuleBoard");
+      if (!board) return;
+      const customerCode = qs("taskPriceCustomerInput")?.value || "";
+      const keyword = (qs("taskPriceSearchInput")?.value || "").trim().toLowerCase();
+      const customerNames = new Map(configFundCustomers().map(item => [item.customer_code, item.customer_name || item.customer_code]));
+      const rows = (state.taskPriceRules || []).filter(rule => {
+        if (customerCode && rule.customer_code !== customerCode) return false;
+        const text = `${customerNames.get(rule.customer_code) || rule.customer_code} ${priceRulePath(rule)} ${rule.remark || ""}`.toLowerCase();
+        return !keyword || text.includes(keyword);
+      });
+      const customers = new Map();
+      rows.forEach(rule => {
+        const row = findClassificationRow(rule.tertiary_category_code);
+        const customerKey = rule.customer_code || "*";
+        const customer = customers.get(customerKey) || { code: customerKey, name: customerNames.get(customerKey) || (customerKey === "*" ? "全部基金" : customerKey), categories: new Map() };
+        const categoryKey = row?.category?.code || rule.business_category_code || "unknown";
+        const category = customer.categories.get(categoryKey) || { code: categoryKey, name: row?.category?.name || rule.business_category_code || "未分类", secondaries: new Map() };
+        const secondaryKey = row?.secondary?.code || rule.secondary_category_code || "unknown";
+        const secondary = category.secondaries.get(secondaryKey) || { code: secondaryKey, name: row?.secondary?.name || rule.secondary_category_code || "未分类", rules: [] };
+        secondary.rules.push({ rule, path: row ? `${row.category.name} / ${row.secondary.name} / ${row.tertiary.name}` : priceRulePath(rule), tertiaryName: row?.tertiary?.name || rule.tertiary_category_code });
+        category.secondaries.set(secondaryKey, secondary);
+        customer.categories.set(categoryKey, category);
+        customers.set(customerKey, customer);
+      });
+      if (!rows.length && state.categoryTree?.length) {
+        const selectedCustomerName = customerCode ? (customerNames.get(customerCode) || customerCode) : "全部基金";
+        board.innerHTML = renderUnpricedPriceTree(selectedCustomerName, customerCode);
+        return;
+      }
+      const customerMarkup = [...customers.values()].map(customer => {
+        const customerExpanded = state.priceTreeExpanded.has(priceTreeKey("customer", customer.code)) || Boolean(keyword) || state.priceTreeExpanded.size === 0;
+        const ruleCount = [...customer.categories.values()].reduce((sum, category) => sum + [...category.secondaries.values()].reduce((inner, secondary) => inner + secondary.rules.length, 0), 0);
+        return `<div class="price-tree-node"><div class="price-tree-row customer" oncontextmenu="event.preventDefault()"><button class="price-tree-toggle" onclick="event.stopPropagation(); togglePriceTreeNode('customer', '${escapeAttr(customer.code)}')">${customerExpanded ? "▾" : "▸"}</button><div class="price-tree-label"><strong>${escapeHtml(customer.name)}</strong><span>${ruleCount} 条价格规则</span></div><div class="price-tree-meta"><span class="tag">${customer.categories.size} 个业务大类</span><span class="tag">右键编辑价格规则</span></div></div>${customerExpanded ? [...customer.categories.values()].map(category => {
+          const categoryExpanded = state.priceTreeExpanded.has(priceTreeKey("category", `${customer.code}:${category.code}`)) || Boolean(keyword);
+          const categoryRuleCount = [...category.secondaries.values()].reduce((sum, secondary) => sum + secondary.rules.length, 0);
+          return `<div class="price-tree-node"><div class="price-tree-row category"><button class="price-tree-toggle" onclick="event.stopPropagation(); togglePriceTreeNode('category', '${escapeAttr(`${customer.code}:${category.code}`)}')">${categoryExpanded ? "▾" : "▸"}</button><div class="price-tree-label"><strong>${escapeHtml(category.name)}</strong><span>${categoryRuleCount} 条规则</span></div><div class="price-tree-meta"><span class="tag">${category.secondaries.size} 个二级分类</span></div></div>${categoryExpanded ? [...category.secondaries.values()].map(secondary => {
+            const secondaryExpanded = state.priceTreeExpanded.has(priceTreeKey("secondary", `${customer.code}:${category.code}:${secondary.code}`)) || Boolean(keyword);
+            return `<div class="price-tree-node"><div class="price-tree-row secondary"><button class="price-tree-toggle" onclick="event.stopPropagation(); togglePriceTreeNode('secondary', '${escapeAttr(`${customer.code}:${category.code}:${secondary.code}`)}')">${secondaryExpanded ? "▾" : "▸"}</button><div class="price-tree-label"><strong>${escapeHtml(secondary.name)}</strong><span>${secondary.rules.length} 条规则</span></div><div class="price-tree-meta"><span class="tag">三级分类价格</span></div></div>${secondaryExpanded ? secondary.rules.map(({ rule, path, tertiaryName }) => `<div class="price-tree-rule"><div class="price-tree-row rule" oncontextmenu="openTaskPriceRuleContext(event, '${escapeAttr(rule.id)}')"><span></span><div class="price-tree-label"><strong>${escapeHtml(tertiaryName)}</strong><span>${escapeHtml(rule.tertiary_category_code)}</span></div><div class="price-tree-meta"><span class="tag">${escapeHtml({ fixed: "固定单价", quantity: "按数量", time_rate: "按时间" }[rule.pricing_mode] || rule.pricing_mode)}</span><span class="tag">${formatMoney(rule.unit_price)}</span><span class="tag">V${escapeHtml(rule.version_no || 1)}</span><span class="tag">${rule.status === "active" ? "启用" : "停用"}</span></div></div>${priceRuleHoverCard(rule, customer.name, path)}</div>`).join("") : ""}</div>`;
+          }).join("") : ""}</div>`;
+        }).join("") : ""}</div>`;
+      }).join("");
+      board.innerHTML = customerMarkup ? `<div class="price-tree">${customerMarkup}</div>` : `<div class="empty-list">暂无基金价格规则，请先新增。</div>`;
+    }
+    function prepareTaskPriceRuleCreate(categoryCode, secondaryCode, tertiaryCode) {
+      state.editingTaskPriceRuleId = null;
+      renderTaskPriceEditor();
+      const customerSelect = qs("taskPriceRuleCustomerInput");
+      const customerFilter = qs("taskPriceCustomerInput")?.value || "";
+      if (customerSelect) customerSelect.value = customerFilter || configFundCustomers()[0]?.customer_code || "";
+      const categorySelect = qs("taskPriceRuleCategoryInput");
+      if (categorySelect) categorySelect.value = categoryCode;
+      syncTaskPriceRuleSecondaryOptions();
+      const secondarySelect = qs("taskPriceRuleSecondaryInput");
+      if (secondarySelect) secondarySelect.value = secondaryCode;
+      syncTaskPriceRuleTertiaryOptions();
+      const tertiarySelect = qs("taskPriceRuleTertiaryInput");
+      if (tertiarySelect) tertiarySelect.value = tertiaryCode;
+      qs("taskPriceRuleEditor")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    function openTaskPriceRuleCreateContext(event, categoryCode, secondaryCode, tertiaryCode) {
+      event.preventDefault();
+      event.stopPropagation();
+      const menu = qs("standardContextMenu");
+      if (!menu) return;
+      state.standardContext = { type: "price-create", code: tertiaryCode };
+      const customerCode = qs("taskPriceCustomerInput")?.value || "";
+      const matchingRules = (state.taskPriceRules || []).filter(rule => rule.tertiary_category_code === tertiaryCode && (!customerCode || rule.customer_code === customerCode || rule.customer_code === "*"));
+      const editButtons = matchingRules.slice(0, 5).map(rule => `<button onclick="closeStandardContextMenu(); editTaskPriceRule('${escapeAttr(rule.id)}')">编辑价格规则${matchingRules.length > 1 ? `（${escapeHtml(rule.customer_code === "*" ? "全部基金" : rule.customer_code)}）` : ""}</button>`).join("");
+      menu.innerHTML = `${editButtons}<button onclick="closeStandardContextMenu(); prepareTaskPriceRuleCreate('${escapeAttr(categoryCode)}', '${escapeAttr(secondaryCode)}', '${escapeAttr(tertiaryCode)}')">新增价格规则</button>${matchingRules.length ? `<button class="danger" onclick="closeStandardContextMenu(); disableTaskPriceRule('${escapeAttr(matchingRules[0].id)}')">删除（停用）价格规则</button>` : ""}`;
+      menu.classList.remove("hidden");
+      const margin = 10;
+      const rect = menu.getBoundingClientRect();
+      menu.style.left = `${Math.min(event.clientX, Math.max(margin, window.innerWidth - rect.width - margin))}px`;
+      menu.style.top = `${Math.min(event.clientY, Math.max(margin, window.innerHeight - rect.height - margin))}px`;
+    }
+    function renderTaskPriceRules() {
+      const board = qs("taskPriceRuleBoard");
+      if (!board) return;
+      const customerCode = qs("taskPriceCustomerInput")?.value || "";
+      const keyword = (qs("taskPriceSearchInput")?.value || "").trim().toLowerCase();
+      if (!state.priceTreeInitialized && state.categoryTree?.length) {
+        state.categoryTree.forEach(category => {
+          state.priceTreeExpanded.add(priceTreeKey("category", category.code));
+          (category.secondaries || []).forEach(secondary => state.priceTreeExpanded.add(priceTreeKey("secondary", `${category.code}:${secondary.code}`)));
+        });
+        state.priceTreeInitialized = true;
+      }
+      const customerNames = new Map(configFundCustomers().map(item => [item.customer_code, item.customer_name || item.customer_code]));
+      const allRules = state.taskPriceRules || [];
+      const ruleMap = new Map();
+      allRules.forEach(rule => {
+        if (customerCode && rule.customer_code !== customerCode && rule.customer_code !== "*") return;
+        const rows = ruleMap.get(rule.tertiary_category_code) || [];
+        rows.push(rule);
+        ruleMap.set(rule.tertiary_category_code, rows);
+      });
+      const matches = (category, secondary, tertiary, rules) => {
+        if (!keyword) return true;
+        const text = [category.name, secondary.name, tertiary.name, tertiary.productCode, tertiary.contentScope, tertiary.deliveryStandard, ...rules.map(rule => `${customerNames.get(rule.customer_code) || rule.customer_code} ${rule.remark || ""}`)].join(" ").toLowerCase();
+        return text.includes(keyword);
+      };
+      const categoryMarkup = (state.categoryTree || []).map(category => {
+        const secondaries = (category.secondaries || []).map(secondary => {
+          const tertiaries = (secondary.tertiaries || []).map(tertiary => ({ tertiary, rules: ruleMap.get(tertiary.code) || [] })).filter(item => matches(category, secondary, item.tertiary, item.rules));
+          return { secondary, tertiaries };
+        }).filter(item => item.tertiaries.length);
+        if (!secondaries.length) return "";
+        const categoryKey = category.code;
+        const categoryExpanded = state.priceTreeExpanded.has(priceTreeKey("category", categoryKey)) || Boolean(keyword);
+        return `<div class="price-tree-node"><div class="price-tree-row category"><button class="price-tree-toggle" onclick="event.stopPropagation(); togglePriceTreeNode('category', '${escapeAttr(categoryKey)}')">${categoryExpanded ? "▾" : "▸"}</button><div class="price-tree-label"><strong>${escapeHtml(category.name)}</strong><span>${secondaries.reduce((sum, item) => sum + item.tertiaries.length, 0)} 个三级分类</span></div><div class="price-tree-meta"><span class="tag">${secondaries.length} 个二级分类</span><span class="tag">基金价格</span></div></div>${categoryExpanded ? secondaries.map(({ secondary, tertiaries }) => {
+          const secondaryKey = `${category.code}:${secondary.code}`;
+          const secondaryExpanded = state.priceTreeExpanded.has(priceTreeKey("secondary", secondaryKey)) || Boolean(keyword);
+          return `<div class="price-tree-node"><div class="price-tree-row secondary"><button class="price-tree-toggle" onclick="event.stopPropagation(); togglePriceTreeNode('secondary', '${escapeAttr(secondaryKey)}')">${secondaryExpanded ? "▾" : "▸"}</button><div class="price-tree-label"><strong>${escapeHtml(secondary.name)}</strong><span>${tertiaries.length} 个三级分类</span></div><div class="price-tree-meta"><span class="tag">价格按基金匹配</span></div></div>${secondaryExpanded ? tertiaries.map(({ tertiary, rules }) => {
+            const path = `${category.name} / ${secondary.name} / ${tertiary.name}`;
+            const detailRules = customerCode ? (rules.filter(rule => rule.customer_code === customerCode).length ? rules.filter(rule => rule.customer_code === customerCode) : rules.filter(rule => rule.customer_code === "*")) : rules;
+            const ruleLabel = detailRules.length === 0 ? "未配置价格" : detailRules.length === 1 ? `¥${formatMoney(detailRules[0].unit_price)}` : `${detailRules.length} 个基金价格`;
+            const ruleMeta = detailRules.length ? detailRules.map(rule => `${customerNames.get(rule.customer_code) || (rule.customer_code === "*" ? "全部基金" : rule.customer_code)} ${formatMoney(rule.unit_price)}`).join("；") : "";
+            const context = detailRules.length === 1 ? `openTaskPriceRuleContext(event, '${escapeAttr(detailRules[0].id)}')` : `openTaskPriceRuleCreateContext(event, '${escapeAttr(category.code)}', '${escapeAttr(secondary.code)}', '${escapeAttr(tertiary.code)}')`;
+            return `<div class="price-tree-rule"><div class="price-tree-row rule" oncontextmenu="${context}"><span></span><div class="price-tree-label"><strong>${escapeHtml(tertiary.name)}</strong><span>${escapeHtml(tertiary.productCode || tertiary.code || "")}</span></div><div class="price-tree-meta"><span class="tag">${escapeHtml(ruleLabel)}</span>${ruleMeta ? `<span class="tag">${escapeHtml(ruleMeta)}</span>` : ""}<span class="tag">${detailRules.length ? "已配置" : "未配置"}</span><span class="tag">右键管理</span></div></div>${detailRules.length ? priceRulesHoverCard(detailRules, path, customerNames) : unpricedPriceHoverCard(customerCode ? (customerNames.get(customerCode) || customerCode) : "全部基金", path)}</div>`;
+          }).join("") : ""}</div>`;
+        }).join("") : ""}</div>`;
+      }).join("");
+      board.innerHTML = categoryMarkup ? `<div class="price-tree">${categoryMarkup}</div>` : `<div class="empty-list">暂无匹配的分类，请调整筛选条件或先维护分类标准。</div>`;
+    }
+    function editTaskPriceRule(id) {
+      const rule = (state.taskPriceRules || []).find(item => String(item.id) === String(id));
+      if (!rule) return toast("未找到价格规则");
+      state.editingTaskPriceRuleId = id;
+      renderTaskPriceEditor(rule);
+      qs("taskPriceRuleEditor")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    async function saveTaskPriceRule() {
+      const customerCode = qs("taskPriceRuleCustomerInput")?.value || "";
+      const businessCategoryCode = qs("taskPriceRuleCategoryInput")?.value || "";
+      const secondaryCategoryCode = qs("taskPriceRuleSecondaryInput")?.value || "";
+      const tertiaryCategoryCode = qs("taskPriceRuleTertiaryInput")?.value || "";
+      const unitPrice = qs("taskPriceRuleUnitPriceInput")?.value.trim() || "";
+      if (!customerCode || !businessCategoryCode || !secondaryCategoryCode || !tertiaryCategoryCode || !unitPrice) return toast("请完整填写基金、分类和单价");
+      const body = {
+        customerCode,
+        businessCategoryCode,
+        secondaryCategoryCode,
+        tertiaryCategoryCode,
+        pricingMode: qs("taskPriceRuleModeInput")?.value || "fixed",
+        unitPrice: Number(unitPrice).toFixed(2),
+        effectiveFrom: qs("taskPriceRuleFromInput")?.value || null,
+        effectiveTo: qs("taskPriceRuleToInput")?.value || null,
+        versionNo: Number(qs("taskPriceRuleVersionInput")?.value || 1),
+        status: qs("taskPriceRuleStatusInput")?.value || "active",
+        remark: qs("taskPriceRuleRemarkInput")?.value.trim() || null,
+      };
+      try {
+        const id = state.editingTaskPriceRuleId;
+        await request(id ? `/dimensions/task-price-rules/${id}` : "/dimensions/task-price-rules", { method: id ? "PATCH" : "POST", body });
+        state.editingTaskPriceRuleId = null;
+        await loadTaskPriceRules(false);
+        renderTaskPriceEditor();
+        toast(id ? "价格规则已保存" : "价格规则已新增");
+      } catch (error) {
+        toast(error.message || "价格规则保存失败");
       }
     }
     function metricInputValue(id, label) {
@@ -7963,6 +8448,8 @@
             status: "active",
             estimatedHours: metricInputValue("classificationHoursInput", "预估工时"),
             contributionPoints: metricInputValue("classificationPointsInput", "贡献分"),
+            measureUnit: qs("classificationUnitInput")?.value.trim() || undefined,
+            referenceMinutes: qs("classificationMinutesInput")?.value ? Number(qs("classificationMinutesInput").value) : undefined,
           },
         });
         qs("classificationNameInput").value = "";
@@ -7970,6 +8457,173 @@
         toast("三级分类已新增");
       } catch (error) {
         toast(error.message || "新增失败");
+      }
+    }
+    function toggleClassificationCreatePanel(force) {
+      const panel = qs("classificationCreatePanel");
+      if (!panel) return;
+      const show = force === undefined ? panel.classList.contains("hidden") : Boolean(force);
+      panel.classList.toggle("hidden", !show);
+    }
+    function closeStandardContextMenu() {
+      const menu = qs("standardContextMenu");
+      if (!menu) return;
+      menu.classList.add("hidden");
+      state.standardContext = null;
+    }
+    function findClassificationContextTarget(type, code) {
+      if (type === "category") return (state.categoryTree || []).find(item => item.code === code) || null;
+      if (type === "secondary") {
+        for (const category of state.categoryTree || []) {
+          const secondary = (category.secondaries || []).find(item => item.code === code);
+          if (secondary) return { category, secondary };
+        }
+      }
+      return findClassificationRow(code);
+    }
+    function openStandardContextMenu(event, type, code) {
+      event.preventDefault();
+      event.stopPropagation();
+      const menu = qs("standardContextMenu");
+      const target = findClassificationContextTarget(type, code);
+      if (!menu || !target) return;
+      state.standardContext = { type, code };
+      const actions = type === "category"
+        ? [{ action: "add-secondary", label: "新增二级分类" }]
+        : type === "secondary"
+          ? [{ action: "add-tertiary", label: "新增三级分类" }, { action: "edit-secondary", label: "编辑二级分类" }, { action: "disable", label: "删除（停用）二级分类", danger: true }]
+          : [{ action: "edit-tertiary", label: "编辑三级分类说明" }, { action: "add-sibling", label: "新增同级三级分类" }, { action: "disable", label: "删除（停用）三级分类", danger: true }];
+      menu.innerHTML = actions.map(item => `<button class="${item.danger ? "danger" : ""}" onclick="handleStandardContextAction('${item.action}')">${item.label}</button>`).join("");
+      menu.classList.remove("hidden");
+      const margin = 10;
+      const rect = menu.getBoundingClientRect();
+      menu.style.left = `${Math.min(event.clientX, Math.max(margin, window.innerWidth - rect.width - margin))}px`;
+      menu.style.top = `${Math.min(event.clientY, Math.max(margin, window.innerHeight - rect.height - margin))}px`;
+    }
+    function setClassificationCreateParent(categoryCode, secondaryCode) {
+      const categorySelect = qs("classificationCategoryInput");
+      const secondarySelect = qs("classificationSecondaryInput");
+      if (categorySelect) categorySelect.value = categoryCode;
+      renderClassificationSecondaryOptions(false);
+      if (secondarySelect) secondarySelect.value = secondaryCode;
+      if (qs("classificationNameInput")) qs("classificationNameInput").value = "";
+      if (qs("classificationUnitInput")) qs("classificationUnitInput").value = "";
+      if (qs("classificationMinutesInput")) qs("classificationMinutesInput").value = "";
+      if (qs("classificationHoursInput")) qs("classificationHoursInput").value = "6";
+      if (qs("classificationPointsInput")) qs("classificationPointsInput").value = "0";
+      toggleClassificationCreatePanel(true);
+      renderClassificationConfig();
+      qs("classificationNameInput")?.focus();
+    }
+    async function createSecondaryCategoryFromContext(categoryCode) {
+      const category = findClassificationContextTarget("category", categoryCode);
+      if (!category) return;
+      const name = window.prompt(`新增“${category.name}”下的二级分类名称`);
+      if (!name?.trim()) return;
+      try {
+        await request("/dimensions", { method: "POST", body: {
+          dimensionType: "secondary_category",
+          dimensionCode: `${categoryCode}_${String(name).trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "_").replace(/^_+|_+$/g, "") || "item"}_${Date.now().toString(36)}`,
+          dimensionName: name.trim(), parentCode: categoryCode, status: "active", sortOrder: 100,
+        }});
+        await reloadCategoryTree(false);
+        toast("二级分类已新增");
+      } catch (error) { toast(error.message || "新增二级分类失败"); }
+    }
+    async function editSecondaryCategory(code) {
+      const target = findClassificationContextTarget("secondary", code);
+      const name = window.prompt("修改二级分类名称", target?.secondary?.name || "");
+      if (!name?.trim() || !target?.secondary) return;
+      try {
+        const dimensions = unwrap(await request("/dimensions?type=secondary_category&status=all"));
+        const entity = dimensions.find(item => (item.dimension_code || item.dimensionCode) === code);
+        if (!entity?.id) return toast("未找到二级分类配置记录");
+        await request(`/dimensions/${entity.id}`, { method: "PATCH", body: { dimensionName: name.trim() } });
+        await reloadCategoryTree(false);
+        toast("二级分类名称已更新");
+      } catch (error) { toast(error.message || "编辑二级分类失败"); }
+    }
+    async function setClassificationStatus(type, code) {
+      const target = findClassificationContextTarget(type, code);
+      const label = type === "secondary" ? target?.secondary?.name : target?.tertiary?.name;
+      if (!label) return;
+      const confirmed = await confirmDialog({ title: "停用分类", message: `停用“${label}”后将不再出现在新任务选择器中，是否继续？`, okText: "确认停用" });
+      if (!confirmed) return;
+      try {
+        const dimensionType = type === "secondary" ? "secondary_category" : "tertiary_category";
+        const dimensions = unwrap(await request(`/dimensions?type=${dimensionType}&status=all`));
+        const entity = dimensions.find(item => (item.dimension_code || item.dimensionCode) === code);
+        if (!entity?.id) return toast("未找到分类配置记录");
+        await request(`/dimensions/${entity.id}`, { method: "PATCH", body: { status: "inactive" } });
+        await reloadCategoryTree(false);
+        toast("分类已停用");
+      } catch (error) { toast(error.message || "停用分类失败"); }
+    }
+    async function handleStandardContextAction(action) {
+      const context = state.standardContext;
+      closeStandardContextMenu();
+      if (!context) return;
+      const target = findClassificationContextTarget(context.type, context.code);
+      if (action === "add-secondary") return createSecondaryCategoryFromContext(context.code);
+      if (action === "edit-secondary") return editSecondaryCategory(context.code);
+      if (action === "disable") return setClassificationStatus(context.type, context.code);
+      if (action === "edit-tertiary") return openClassificationDetails(context.code);
+      if (action === "add-tertiary") return setClassificationCreateParent(target.category.code, target.secondary.code);
+      if (action === "add-sibling") return setClassificationCreateParent(target.category.code, target.secondary.code);
+    }
+    function findClassificationRow(code) {
+      return classificationConfigRows().find(item => item.tertiary.code === code) || null;
+    }
+    function openClassificationDetails(code) {
+      const row = findClassificationRow(code);
+      const panel = qs("classificationDetailPanel");
+      if (!row || !panel) return toast("未找到三级分类");
+      const { category, secondary, tertiary } = row;
+      panel.classList.remove("hidden");
+      panel.innerHTML = `
+        <h4>${escapeHtml(category.name)} / ${escapeHtml(secondary.name)} / ${escapeHtml(tertiary.name)}</h4>
+        <p>维护该三级分类的标准说明和验收依据；保存后会同步到需求录入与任务详情。</p>
+        <div class="form-grid">
+          <label>三级分类名称<input id="classification-detail-name" value="${escapeAttr(tertiary.name || "")}" /></label>
+          <label>产品编码<input id="classification-detail-product-code" value="${escapeAttr(tertiary.productCode || "")}" /></label>
+          <label>标准版本<input id="classification-detail-version" value="${escapeAttr(tertiary.standardVersion || "")}" placeholder="例如：content-v2" /></label>
+        </div>
+        <label>包含内容<textarea id="classification-detail-scope" placeholder="说明该分类包含哪些工作内容">${escapeHtml(tertiary.contentScope || "")}</textarea></label>
+        <label>标准交付口径<textarea id="classification-detail-delivery" placeholder="说明完成到什么程度算交付">${escapeHtml(tertiary.deliveryStandard || "")}</textarea></label>
+        <label>验收及交付凭证<textarea id="classification-detail-evidence" placeholder="说明需要提供哪些文件、链接或确认记录">${escapeHtml(tertiary.acceptanceEvidence || "")}</textarea></label>
+        <label>计分边界<textarea id="classification-detail-boundary" placeholder="说明哪些情况不重复计分或需要升级计分">${escapeHtml(tertiary.scoringBoundary || "")}</textarea></label>
+        <label>备注<textarea id="classification-detail-remark" placeholder="补充配置说明">${escapeHtml(tertiary.remark || "")}</textarea></label>
+        <div class="btns"><button class="btn primary" onclick="saveClassificationDetails('${escapeAttr(code)}')">保存说明</button><button class="btn" onclick="closeClassificationDetails()">关闭</button></div>`;
+      panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    function closeClassificationDetails() {
+      qs("classificationDetailPanel")?.classList.add("hidden");
+    }
+    async function saveClassificationDetails(code) {
+      const row = findClassificationRow(code);
+      if (!row) return toast("未找到三级分类");
+      try {
+        const dimensions = unwrap(await request("/dimensions?type=tertiary_category&status=active"));
+        const entity = dimensions.find(item => (item.dimension_code || item.dimensionCode) === code);
+        if (!entity?.id) return toast("未找到三级分类配置记录");
+        await request(`/dimensions/${entity.id}`, {
+          method: "PATCH",
+          body: {
+            dimensionName: qs("classification-detail-name")?.value.trim() || row.tertiary.name,
+            productCode: qs("classification-detail-product-code")?.value.trim() || null,
+            standardVersion: qs("classification-detail-version")?.value.trim() || null,
+            contentScope: qs("classification-detail-scope")?.value.trim() || null,
+            deliveryStandard: qs("classification-detail-delivery")?.value.trim() || null,
+            acceptanceEvidence: qs("classification-detail-evidence")?.value.trim() || null,
+            scoringBoundary: qs("classification-detail-boundary")?.value.trim() || null,
+            remark: qs("classification-detail-remark")?.value.trim() || null,
+          },
+        });
+        closeClassificationDetails();
+        await reloadCategoryTree(false);
+        toast("分类说明已保存");
+      } catch (error) {
+        toast(error.message || "保存说明失败");
       }
     }
     async function saveTertiaryCategory(code) {
@@ -7987,6 +8641,8 @@
             dimensionName: name,
             estimatedHours: metricInputValue(`classification-hours-${code}`, "预估工时"),
             contributionPoints: metricInputValue(`classification-points-${code}`, "贡献分"),
+            measureUnit: qs(`classification-unit-${code}`)?.value.trim() || "",
+            referenceMinutes: qs(`classification-minutes-${code}`)?.value ? Number(qs(`classification-minutes-${code}`).value) : null,
           },
         });
         await reloadCategoryTree(false);
@@ -8021,20 +8677,33 @@
       const quantity = Number(value);
       return Number.isInteger(quantity) && quantity >= 1 ? quantity : 1;
     }
+    function normalizeTertiaryMinutes(value) {
+      const minutes = Number(value);
+      return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+    }
     function isOperationCategory(categoryValue = "") {
       return normalizedBusinessCategory(categoryValue) === "operation"
         || normalizedBusinessCategoryCode(categoryValue) === "operation";
+    }
+    function supportsTertiaryQuantity(categoryValue = "", secondaryValue = "") {
+      if (isOperationCategory(categoryValue)) return true;
+      return tertiaryCategoryItems(categoryValue, secondaryValue).some(item => item.scoreMode === "time_ratio");
     }
     function selectedTertiaryCategoryCodes(select = qs("tertiaryCategoryInput")) {
       return [...(select?.selectedOptions || [])].map(option => option.value).filter(Boolean);
     }
     function selectedTertiaryCategoryQuantities(select = qs("tertiaryCategoryInput")) {
-      if (!select || !isOperationCategory(select.dataset.category || qs("projectTypeSelect")?.value || "")) return {};
+      if (!select || !supportsTertiaryQuantity(select.dataset.category || qs("projectTypeSelect")?.value || "", select.dataset.secondary || qs("secondaryCategoryInput")?.value || "")) return {};
       const selectedCodes = new Set(selectedTertiaryCategoryCodes(select));
+      const itemByCode = new Map(tertiaryCategoryItems(select.dataset.category || qs("projectTypeSelect")?.value || "", select.dataset.secondary || qs("secondaryCategoryInput")?.value || "").map(item => [item.code, item]));
       const quantities = {};
       document.querySelectorAll("input[data-tertiary-quantity-store]").forEach(input => {
         if (input.dataset.tertiaryQuantityStore !== select.id || !selectedCodes.has(input.dataset.tertiaryQuantityCode)) return;
-        quantities[input.dataset.tertiaryQuantityCode] = normalizeTertiaryQuantity(input.value);
+        const item = itemByCode.get(input.dataset.tertiaryQuantityCode);
+        const value = item?.scoreMode === "time_ratio"
+          ? normalizeTertiaryMinutes(input.value)
+          : normalizeTertiaryQuantity(input.value);
+        if (value !== null) quantities[input.dataset.tertiaryQuantityCode] = value;
       });
       return quantities;
     }
@@ -8045,22 +8714,25 @@
     function tertiaryCategoryPickerOptionsHtml(categoryValue, secondaryValue, selectedCodes = [], selectedNames = [], selectedQuantities = {}, storeId = "tertiaryCategoryInput") {
       const selected = new Set(selectedCodes);
       const names = new Set(selectedNames);
-      const showQuantity = isOperationCategory(categoryValue);
+      const showQuantity = supportsTertiaryQuantity(categoryValue, secondaryValue);
       const items = tertiaryCategoryItems(categoryValue, secondaryValue);
       if (!items.length) return `<div class="muted">该二级分类暂无三级分类配置</div>`;
       const hint = showQuantity
-        ? `<div class="tertiary-picker-quantity-hint">运营任务：请填写每个三级分类的数量</div>`
+        ? `<div class="tertiary-picker-quantity-hint">${isOperationCategory(categoryValue) ? "运营任务：请填写每个三级分类的数量" : "自定义项：请填写实际分钟数"}</div>`
         : "";
       const quantityHeader = showQuantity
-        ? `<div class="tertiary-picker-quantity-header"><span>三级分类</span><span>数量</span></div>`
+        ? `<div class="tertiary-picker-quantity-header"><span>三级分类</span><span>${items.some(item => item.scoreMode === "time_ratio") && !isOperationCategory(categoryValue) ? "分钟" : "数量"}</span></div>`
         : "";
       return hint + quantityHeader + items.map(item => {
         const checked = selected.has(item.code) || names.has(item.name);
-        const quantity = normalizeTertiaryQuantity(selectedQuantities?.[item.code]);
+        const timeRatioItem = item.scoreMode === "time_ratio";
+        const quantity = timeRatioItem
+          ? (selectedQuantities?.[item.code] ?? "")
+          : normalizeTertiaryQuantity(selectedQuantities?.[item.code]);
         return `<label class="tertiary-picker-option ${showQuantity ? "tertiary-picker-option-with-quantity" : ""}">
           <input type="checkbox" value="${escapeAttr(item.code)}" data-tertiary-picker-store="${escapeAttr(storeId)}" ${checked ? "checked" : ""} onchange="syncTertiaryPicker('${escapeAttr(storeId)}')" />
           <span class="tertiary-picker-option-body"><span class="tertiary-picker-option-name">${escapeHtml(item.name)}</span></span>
-          ${showQuantity ? `<input class="tertiary-quantity-input" type="number" min="1" step="1" value="${quantity}" title="数量" aria-label="数量" data-tertiary-quantity-store="${escapeAttr(storeId)}" data-tertiary-quantity-code="${escapeAttr(item.code)}" ${checked ? "" : "disabled"} onchange="syncTertiaryPicker('${escapeAttr(storeId)}')" onclick="event.stopPropagation()" />` : ""}
+          ${showQuantity ? `<input class="tertiary-quantity-input" type="number" min="1" step="1" value="${escapeAttr(quantity)}" title="${timeRatioItem ? "分钟" : "数量"}" aria-label="${timeRatioItem ? "分钟" : "数量"}" data-tertiary-quantity-store="${escapeAttr(storeId)}" data-tertiary-quantity-code="${escapeAttr(item.code)}" ${checked ? "" : "disabled"} onchange="syncTertiaryPicker('${escapeAttr(storeId)}')" onclick="event.stopPropagation()" />` : ""}
         </label>`;
       }).join("");
     }
@@ -8079,7 +8751,16 @@
       document.querySelectorAll("input[data-tertiary-quantity-store]").forEach(input => {
         if (input.dataset.tertiaryQuantityStore !== storeId) return;
         input.disabled = !checked.has(input.dataset.tertiaryQuantityCode);
-        if (!input.disabled) input.value = normalizeTertiaryQuantity(input.value);
+        if (!input.disabled) {
+          const item = tertiaryCategoryItems(store.dataset.category || "", store.dataset.secondary || "")
+            .find(candidate => candidate.code === input.dataset.tertiaryQuantityCode);
+          if (item?.scoreMode === "time_ratio") {
+            const minutes = normalizeTertiaryMinutes(input.value);
+            if (minutes !== null) input.value = minutes;
+          } else {
+            input.value = normalizeTertiaryQuantity(input.value);
+          }
+        }
       });
       updateTertiaryPickerLabel(storeId);
       if (storeId === "tertiaryCategoryInput") updateClassificationSummary(store);
@@ -8122,12 +8803,24 @@
       const byCode = new Map(tertiaryCategoryItems(categoryValue, secondaryValue).map(item => [item.code, item]));
       const totals = selected.reduce((sum, option) => {
         const item = byCode.get(option.value);
-        const quantity = normalizeTertiaryQuantity(quantities[option.value]);
+        if (item?.scoreMode === "time_ratio") {
+          const minutes = normalizeTertiaryMinutes(quantities[option.value]);
+          if (minutes === null) {
+            sum.missingMinutes = true;
+            return sum;
+          }
+          sum.hours += minutes / 60;
+          sum.points += Math.round(minutes * Number(item.scoreRate || (20 / 120)));
+          return sum;
+        }
+        const quantity = isOperationCategory(categoryValue) ? normalizeTertiaryQuantity(quantities[option.value]) : 1;
         sum.hours += Number(item?.estimatedHours || 0) * quantity;
         sum.points += Number(item?.contributionPoints || 0) * quantity;
         return sum;
-      }, { hours: 0, points: 0 });
-      target.textContent = `已选 ${selected.length} 项，自动汇总 ${totals.hours.toFixed(2)} 小时 / ${totals.points.toFixed(2)} 贡献分`;
+      }, { hours: 0, points: 0, missingMinutes: false });
+      target.textContent = totals.missingMinutes
+        ? `已选 ${selected.length} 项，请填写自定义项分钟数`
+        : `已选 ${selected.length} 项，自动汇总 ${totals.hours.toFixed(2)} 小时 / ${totals.points.toFixed(0)} 贡献分`;
     }
     function rulesForQuotationItem(quotationItemId) {
       return (state.mappingWorkbench?.dimensionRules || []).filter(rule => rule.quotation_item_id === quotationItemId && rule.status !== "inactive");
@@ -8860,7 +9553,7 @@
       if (!tertiaryCategoryCodes.length) return toast("请选择至少一个三级分类");
       if (!title) return toast("请填写需求标题");
       if (!content) return toast("请填写需求内容");
-      if (!priceAmountInput || !Number.isFinite(priceAmount) || priceAmount < 0) return toast("请填写有效的任务价格");
+      if (priceAmountInput && (!Number.isFinite(priceAmount) || priceAmount < 0)) return toast("请填写有效的任务价格");
       const button = qs("createRequirementButton");
       if (button) {
         button.disabled = true;
@@ -8883,7 +9576,7 @@
             rawContent: content,
             priority,
             urgencyLevel,
-            priceAmount: priceAmount.toFixed(2),
+            priceAmount: priceAmountInput ? priceAmount.toFixed(2) : undefined,
             plannedStartAt: plannedStartAt || undefined,
             plannedEndAt: plannedEndAt || undefined,
             contactContextId: contactContext?.id || undefined,
@@ -8899,6 +9592,9 @@
         state.requirement = result.requirement;
         state.item = result.item;
         state.task = result.task;
+        if (result.task?.price_source === "missing_rule") {
+          toast("任务已创建，但所选分类尚未配置基金价格");
+        }
         if (selectedCandidateId) {
           state.aiPreviewCandidates = state.aiPreviewCandidates.filter(item => String(item.candidate_id) !== String(selectedCandidateId));
           state.selectedAiPreviewCandidateId = null;

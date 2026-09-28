@@ -77,6 +77,18 @@ export class TaskEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'decimal', precision: 14, scale: 2, default: 0 })
   price_amount!: string;
 
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  price_source!: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  price_rule_ids_json!: string | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  price_calculated_at!: Date | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  price_override_reason!: string | null;
+
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   contribution_points!: string;
 

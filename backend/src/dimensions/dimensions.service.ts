@@ -6,11 +6,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { contributionPointsFromHours } from '../common/efficiency-metrics';
 import { UpdateDimensionDictionaryDto } from './dto/update-dimension-dictionary.dto';
 import { UpsertDimensionDictionaryDto } from './dto/upsert-dimension-dictionary.dto';
 import { BusinessCategorySecondaryCategoryEntity } from './entities/business-category-secondary-category.entity';
 import { DimensionDictionaryEntity } from './entities/dimension-dictionary.entity';
+import { TaskPriceRuleEntity } from './entities/task-price-rule.entity';
+import { CreateTaskPriceRuleDto } from './dto/create-task-price-rule.dto';
+import { UpdateTaskPriceRuleDto } from './dto/update-task-price-rule.dto';
 
 type SeedDimension = {
   dimensionType: string;
@@ -21,11 +23,16 @@ type SeedDimension = {
   sortOrder?: number;
   estimatedHours?: string | null;
   contributionPoints?: string | null;
+  productCode?: string | null;
+  standardVersion?: string | null;
   measureUnit?: string | null;
   contentScope?: string | null;
   deliveryStandard?: string | null;
   scoringBoundary?: string | null;
+  acceptanceEvidence?: string | null;
   referenceMinutes?: number | null;
+  scoreMode?: string | null;
+  scoreRate?: string | null;
 };
 
 @Injectable()
@@ -35,18 +42,20 @@ export class DimensionsService implements OnModuleInit {
     private readonly dimensionsRepository: Repository<DimensionDictionaryEntity>,
     @InjectRepository(BusinessCategorySecondaryCategoryEntity)
     private readonly businessCategorySecondaryRepository: Repository<BusinessCategorySecondaryCategoryEntity>,
+    @InjectRepository(TaskPriceRuleEntity)
+    private readonly taskPriceRulesRepository: Repository<TaskPriceRuleEntity>,
     private readonly dataSource: DataSource,
   ) {}
 
   async onModuleInit() {
     await this.ensureTable();
     await this.ensureMetricColumns();
+    await this.ensureTaskPriceRulesTable();
     await this.ensureBusinessCategorySecondaryTable();
     await this.seedDefaults();
     await this.seedBusinessCategorySecondaryRelations();
-    await this.syncCategoryTertiaryMetrics();
+    await this.syncContentStandardV2();
     await this.seedCompatibilityTertiaryCategories();
-    await this.normalizeMissingTertiaryPoints();
   }
 
   async findAll(input?: {
@@ -116,6 +125,14 @@ export class DimensionsService implements OnModuleInit {
       sort_order: dto.sortOrder ?? entity.sort_order ?? 100,
       status: dto.status ?? entity.status ?? 'active',
       remark: dto.remark ?? entity.remark ?? null,
+      product_code:
+        dto.productCode !== undefined
+          ? dto.productCode
+          : (entity.product_code ?? null),
+      standard_version:
+        dto.standardVersion !== undefined
+          ? dto.standardVersion
+          : (entity.standard_version ?? null),
       estimated_hours:
         dto.estimatedHours !== undefined
           ? dto.estimatedHours
@@ -140,6 +157,18 @@ export class DimensionsService implements OnModuleInit {
         dto.scoringBoundary !== undefined
           ? dto.scoringBoundary
           : (entity.scoring_boundary ?? null),
+      acceptance_evidence:
+        dto.acceptanceEvidence !== undefined
+          ? dto.acceptanceEvidence
+          : (entity.acceptance_evidence ?? null),
+      score_mode:
+        dto.scoreMode !== undefined
+          ? dto.scoreMode
+          : (entity.score_mode ?? null),
+      score_rate:
+        dto.scoreRate !== undefined
+          ? dto.scoreRate
+          : (entity.score_rate ?? null),
       reference_minutes:
         dto.referenceMinutes !== undefined
           ? dto.referenceMinutes
@@ -164,6 +193,12 @@ export class DimensionsService implements OnModuleInit {
       sort_order: dto.sortOrder ?? entity.sort_order,
       status: dto.status ?? entity.status,
       remark: dto.remark !== undefined ? dto.remark : entity.remark,
+      product_code:
+        dto.productCode !== undefined ? dto.productCode : entity.product_code,
+      standard_version:
+        dto.standardVersion !== undefined
+          ? dto.standardVersion
+          : entity.standard_version,
       estimated_hours:
         dto.estimatedHours !== undefined
           ? dto.estimatedHours
@@ -186,6 +221,14 @@ export class DimensionsService implements OnModuleInit {
         dto.scoringBoundary !== undefined
           ? dto.scoringBoundary
           : entity.scoring_boundary,
+      acceptance_evidence:
+        dto.acceptanceEvidence !== undefined
+          ? dto.acceptanceEvidence
+          : entity.acceptance_evidence,
+      score_mode:
+        dto.scoreMode !== undefined ? dto.scoreMode : entity.score_mode,
+      score_rate:
+        dto.scoreRate !== undefined ? dto.scoreRate : entity.score_rate,
       reference_minutes:
         dto.referenceMinutes !== undefined
           ? dto.referenceMinutes
@@ -214,17 +257,257 @@ export class DimensionsService implements OnModuleInit {
               code: tertiary.dimension_code,
               name: tertiary.dimension_name,
               productType: tertiary.product_type,
+              productCode: tertiary.product_code,
+              standardVersion: tertiary.standard_version,
               estimatedHours: tertiary.estimated_hours ?? '0.00',
               contributionPoints: tertiary.contribution_points ?? '0.00',
               measureUnit: tertiary.measure_unit,
               contentScope: tertiary.content_scope,
               deliveryStandard: tertiary.delivery_standard,
               scoringBoundary: tertiary.scoring_boundary,
+              acceptanceEvidence: tertiary.acceptance_evidence,
               referenceMinutes: tertiary.reference_minutes,
+              scoreMode: tertiary.score_mode,
+              scoreRate: tertiary.score_rate,
               sortOrder: tertiary.sort_order,
+              remark: tertiary.remark,
             })),
         })),
     }));
+  }
+
+  async findTaskPriceRules(input?: { customerCode?: string; status?: string }) {
+    return this.taskPriceRulesRepository.find({
+      where: {
+        ...(input?.customerCode && input.customerCode !== 'all'
+          ? { customer_code: input.customerCode }
+          : {}),
+        ...(input?.status && input.status !== 'all'
+          ? { status: input.status }
+          : {}),
+      },
+      order: {
+        customer_code: 'ASC',
+        business_category_code: 'ASC',
+        secondary_category_code: 'ASC',
+        tertiary_category_code: 'ASC',
+        effective_from: 'DESC',
+      },
+    });
+  }
+
+  async createTaskPriceRule(dto: CreateTaskPriceRuleDto) {
+    await this.assertTaskPriceRulePeriod(dto);
+    return this.taskPriceRulesRepository.save(
+      this.taskPriceRulesRepository.create({
+        customer_code: dto.customerCode,
+        business_category_code: dto.businessCategoryCode,
+        secondary_category_code: dto.secondaryCategoryCode,
+        tertiary_category_code: dto.tertiaryCategoryCode,
+        pricing_mode: dto.pricingMode ?? 'fixed',
+        unit_price: dto.unitPrice,
+        effective_from: dto.effectiveFrom || null,
+        effective_to: dto.effectiveTo || null,
+        version_no: dto.versionNo ?? 1,
+        status: dto.status ?? 'active',
+        remark: dto.remark ?? null,
+      }),
+    );
+  }
+
+  async updateTaskPriceRule(id: string, dto: UpdateTaskPriceRuleDto) {
+    const entity = await this.taskPriceRulesRepository.findOne({ where: { id } });
+    if (!entity) throw new NotFoundException('Task price rule not found');
+    const next = {
+      customerCode: dto.customerCode ?? entity.customer_code,
+      businessCategoryCode:
+        dto.businessCategoryCode ?? entity.business_category_code,
+      secondaryCategoryCode:
+        dto.secondaryCategoryCode ?? entity.secondary_category_code,
+      tertiaryCategoryCode:
+        dto.tertiaryCategoryCode ?? entity.tertiary_category_code,
+      pricingMode: dto.pricingMode ?? entity.pricing_mode,
+      unitPrice: dto.unitPrice ?? entity.unit_price,
+      effectiveFrom:
+        dto.effectiveFrom !== undefined
+          ? dto.effectiveFrom
+          : entity.effective_from,
+      effectiveTo:
+        dto.effectiveTo !== undefined ? dto.effectiveTo : entity.effective_to,
+      versionNo: dto.versionNo ?? entity.version_no,
+      status: dto.status ?? entity.status,
+      remark: dto.remark !== undefined ? dto.remark : entity.remark,
+    };
+    const materialChanged =
+      entity.status === 'active' &&
+      (next.customerCode !== entity.customer_code ||
+        next.businessCategoryCode !== entity.business_category_code ||
+        next.secondaryCategoryCode !== entity.secondary_category_code ||
+        next.tertiaryCategoryCode !== entity.tertiary_category_code ||
+        next.pricingMode !== entity.pricing_mode ||
+        String(next.unitPrice) !== String(entity.unit_price) ||
+        next.effectiveFrom !== entity.effective_from ||
+        next.effectiveTo !== entity.effective_to);
+    if (materialChanged) {
+      await this.assertTaskPriceRulePeriod(next, id);
+      entity.status = 'inactive';
+      await this.taskPriceRulesRepository.save(entity);
+      return this.createTaskPriceRule({
+        customerCode: next.customerCode,
+        businessCategoryCode: next.businessCategoryCode,
+        secondaryCategoryCode: next.secondaryCategoryCode,
+        tertiaryCategoryCode: next.tertiaryCategoryCode,
+        pricingMode: next.pricingMode,
+        unitPrice: String(next.unitPrice),
+        effectiveFrom: next.effectiveFrom,
+        effectiveTo: next.effectiveTo,
+        versionNo: Math.max(entity.version_no + 1, next.versionNo),
+        status: next.status,
+        remark: next.remark,
+      });
+    }
+    await this.assertTaskPriceRulePeriod(
+      {
+        customerCode: next.customerCode,
+        businessCategoryCode: next.businessCategoryCode,
+        secondaryCategoryCode: next.secondaryCategoryCode,
+        tertiaryCategoryCode: next.tertiaryCategoryCode,
+        effectiveFrom: next.effectiveFrom,
+        effectiveTo: next.effectiveTo,
+        status: next.status,
+      },
+      id,
+    );
+    Object.assign(entity, {
+      customer_code: next.customerCode,
+      business_category_code: next.businessCategoryCode,
+      secondary_category_code: next.secondaryCategoryCode,
+      tertiary_category_code: next.tertiaryCategoryCode,
+      pricing_mode: next.pricingMode,
+      unit_price: next.unitPrice,
+      effective_from:
+        next.effectiveFrom || null,
+      effective_to:
+        next.effectiveTo || null,
+      version_no: next.versionNo,
+      status: next.status,
+      remark: next.remark || null,
+    });
+    return this.taskPriceRulesRepository.save(entity);
+  }
+
+  async resolveTaskPrice(input: {
+    customerCode: string;
+    businessCategory?: string | null;
+    secondaryCategory?: string | null;
+    tertiaryCodes: string[];
+    quantities?: Record<string, number>;
+    effectiveAt?: string | null;
+  }) {
+    const categoryCode = this.slug(String(input.businessCategory ?? '').trim());
+    const secondaryValue = String(input.secondaryCategory ?? '').trim();
+    const secondary = await this.dimensionsRepository.findOne({
+      where: [
+        {
+          dimension_type: 'secondary_category',
+          dimension_code: secondaryValue,
+          parent_code: categoryCode,
+          status: 'active',
+        },
+        {
+          dimension_type: 'secondary_category',
+          dimension_name: secondaryValue,
+          parent_code: categoryCode,
+          status: 'active',
+        },
+      ],
+    });
+    const secondaryCode = secondary?.dimension_code ?? secondaryValue;
+    const rules = await this.taskPriceRulesRepository.find({
+      where: {
+        customer_code: In([input.customerCode, '*']),
+        business_category_code: categoryCode,
+        secondary_category_code: secondaryCode,
+        status: 'active',
+      },
+      order: { version_no: 'DESC', effective_from: 'DESC' },
+    });
+    const effectiveDate = input.effectiveAt
+      ? new Date(input.effectiveAt)
+      : new Date();
+    const applicable = rules.filter((rule) => {
+      const from = rule.effective_from ? new Date(rule.effective_from) : null;
+      const to = rule.effective_to ? new Date(rule.effective_to) : null;
+      return (!from || effectiveDate >= from) && (!to || effectiveDate <= to);
+    });
+    const breakdown = input.tertiaryCodes.map((code) => {
+      const candidates = applicable
+        .filter((rule) => rule.tertiary_category_code === code)
+        .sort((left, right) => {
+          const customerOrder = (right.customer_code === input.customerCode ? 1 : 0) - (left.customer_code === input.customerCode ? 1 : 0);
+          return customerOrder || right.version_no - left.version_no;
+        });
+      const rule = candidates[0] ?? null;
+      const quantity = Number(input.quantities?.[code] ?? 1);
+      const amount = rule
+        ? (rule.pricing_mode === 'time_rate'
+            ? quantity * Number(rule.unit_price) / 60
+            : quantity * Number(rule.unit_price))
+        : 0;
+      return {
+        tertiaryCode: code,
+        quantity,
+        unitPrice: rule?.unit_price ?? null,
+        amount: amount.toFixed(2),
+        ruleId: rule?.id ?? null,
+        ruleVersion: rule?.version_no ?? null,
+      };
+    });
+    const missingCodes = breakdown.filter((item) => !item.ruleId).map((item) => item.tertiaryCode);
+    return {
+      totalAmount: breakdown.reduce((sum, item) => sum + Number(item.amount), 0).toFixed(2),
+      breakdown,
+      missingCodes,
+      source: missingCodes.length ? 'missing_rule' : 'standard_rule',
+    };
+  }
+
+  private async assertTaskPriceRulePeriod(
+    input: {
+      customerCode: string;
+      businessCategoryCode: string;
+      secondaryCategoryCode: string;
+      tertiaryCategoryCode: string;
+      effectiveFrom?: string | null;
+      effectiveTo?: string | null;
+      status?: string;
+    },
+    excludeId?: string,
+  ) {
+    if (input.status === 'inactive') return;
+    const from = input.effectiveFrom ? new Date(input.effectiveFrom) : new Date('1970-01-01');
+    const to = input.effectiveTo ? new Date(input.effectiveTo) : new Date('2999-12-31');
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) {
+      throw new BadRequestException('价格规则生效日期范围无效');
+    }
+    const existing = await this.taskPriceRulesRepository.find({
+      where: {
+        customer_code: input.customerCode,
+        business_category_code: input.businessCategoryCode,
+        secondary_category_code: input.secondaryCategoryCode,
+        tertiary_category_code: input.tertiaryCategoryCode,
+        status: 'active',
+      },
+    });
+    const overlaps = existing.some((rule) => {
+      if (excludeId && rule.id === excludeId) return false;
+      const existingFrom = rule.effective_from ? new Date(rule.effective_from) : new Date('1970-01-01');
+      const existingTo = rule.effective_to ? new Date(rule.effective_to) : new Date('2999-12-31');
+      return from <= existingTo && existingFrom <= to;
+    });
+    if (overlaps) {
+      throw new BadRequestException('同一基金和三级分类的价格生效期间不能重叠');
+    }
   }
 
   async resolveTertiarySelection(
@@ -273,35 +556,59 @@ export class DimensionsService implements OnModuleInit {
     }
     const byCode = new Map(rows.map((row) => [row.dimension_code, row]));
     const ordered = uniqueCodes.map((code) => byCode.get(code)!);
-    const isOperation = categoryCode === 'operation';
+    const supportsQuantity = categoryCode === 'operation';
     const normalizedQuantities = Object.fromEntries(
       ordered.map((item) => {
         const rawQuantity = quantities?.[item.dimension_code];
+        const isTimeRatio = item.score_mode === 'time_ratio';
+        if (isTimeRatio) {
+          const minutes = Number(rawQuantity);
+          if (!Number.isFinite(minutes) || minutes <= 0) {
+            throw new BadRequestException(
+              '正常修改和其他需求必须填写大于0的分钟数',
+            );
+          }
+          return [item.dimension_code, minutes];
+        }
         const quantity =
           rawQuantity === undefined || rawQuantity === null || rawQuantity === ''
             ? 1
             : Number(rawQuantity);
-        if (isOperation && (!Number.isInteger(quantity) || quantity < 1)) {
-          throw new BadRequestException('运营三级分类数量必须是大于等于1的整数');
+        if (supportsQuantity && (!Number.isInteger(quantity) || quantity < 1)) {
+          throw new BadRequestException('三级分类数量必须是大于等于1的整数');
         }
-        return [item.dimension_code, isOperation ? quantity : 1];
+        return [item.dimension_code, supportsQuantity ? quantity : 1];
       }),
     ) as Record<string, number>;
     const estimatedHours = ordered
-      .reduce(
-        (sum, item) =>
+      .reduce((sum, item) => {
+        const quantity = normalizedQuantities[item.dimension_code];
+        return (
           sum +
-          Number(item.estimated_hours ?? 0) *
-            normalizedQuantities[item.dimension_code],
-        0,
-      )
+          (item.score_mode === 'time_ratio'
+            ? quantity / 60
+            : Number(item.estimated_hours ?? 0) * quantity)
+        );
+      }, 0)
       .toFixed(2);
     return {
       codes: uniqueCodes,
       names: ordered.map((item) => item.dimension_name),
       quantities: normalizedQuantities,
       estimatedHours,
-      contributionPoints: contributionPointsFromHours(estimatedHours),
+      contributionPoints: ordered
+        .reduce((sum, item) => {
+          const quantity = normalizedQuantities[item.dimension_code];
+          return (
+            sum +
+            (item.score_mode === 'time_ratio'
+              ? Math.round(
+                  quantity * Number(item.score_rate ?? 0.166667),
+                )
+              : Number(item.contribution_points ?? 0) * quantity)
+          );
+        }, 0)
+        .toFixed(2),
     };
   }
 
@@ -317,13 +624,18 @@ export class DimensionsService implements OnModuleInit {
         sort_order INT NOT NULL DEFAULT 100,
         status VARCHAR(32) NOT NULL,
         remark VARCHAR(255) NULL,
+        product_code VARCHAR(32) NULL,
+        standard_version VARCHAR(32) NULL,
         estimated_hours DECIMAL(8,2) NULL,
         contribution_points DECIMAL(10,2) NULL,
         measure_unit VARCHAR(32) NULL,
         content_scope TEXT NULL,
         delivery_standard TEXT NULL,
         scoring_boundary TEXT NULL,
+        acceptance_evidence TEXT NULL,
         reference_minutes INT NULL,
+        score_mode VARCHAR(32) NULL,
+        score_rate DECIMAL(10,6) NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         deleted_at DATETIME NULL,
@@ -337,6 +649,8 @@ export class DimensionsService implements OnModuleInit {
 
   private async ensureMetricColumns() {
     const definitions = [
+      ['product_code', 'product_code VARCHAR(32) NULL AFTER remark'],
+      ['standard_version', 'standard_version VARCHAR(32) NULL AFTER product_code'],
       ['estimated_hours', 'estimated_hours DECIMAL(8,2) NULL AFTER remark'],
       ['product_type', 'product_type VARCHAR(32) NULL AFTER dimension_name'],
       [
@@ -354,9 +668,15 @@ export class DimensionsService implements OnModuleInit {
         'scoring_boundary TEXT NULL AFTER delivery_standard',
       ],
       [
-        'reference_minutes',
-        'reference_minutes INT NULL AFTER scoring_boundary',
+        'acceptance_evidence',
+        'acceptance_evidence TEXT NULL AFTER scoring_boundary',
       ],
+      [
+        'reference_minutes',
+        'reference_minutes INT NULL AFTER acceptance_evidence',
+      ],
+      ['score_mode', 'score_mode VARCHAR(32) NULL AFTER reference_minutes'],
+      ['score_rate', 'score_rate DECIMAL(10,6) NULL AFTER score_mode'],
     ];
     for (const [column, definition] of definitions) {
       const rows = await this.dataSource.query<
@@ -371,6 +691,31 @@ export class DimensionsService implements OnModuleInit {
         );
       }
     }
+  }
+
+  private async ensureTaskPriceRulesTable() {
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS task_price_rules (
+        id CHAR(36) NOT NULL,
+        customer_code VARCHAR(32) NOT NULL,
+        business_category_code VARCHAR(64) NOT NULL,
+        secondary_category_code VARCHAR(64) NOT NULL,
+        tertiary_category_code VARCHAR(64) NOT NULL,
+        pricing_mode VARCHAR(32) NOT NULL DEFAULT 'fixed',
+        unit_price DECIMAL(14,2) NOT NULL DEFAULT 0,
+        effective_from DATE NULL,
+        effective_to DATE NULL,
+        version_no INT NOT NULL DEFAULT 1,
+        status VARCHAR(32) NOT NULL DEFAULT 'active',
+        remark TEXT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
+        PRIMARY KEY (id),
+        KEY idx_task_price_rule_customer_status (customer_code, status),
+        KEY idx_task_price_rule_category (business_category_code, secondary_category_code, tertiary_category_code)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='基金三级分类任务价格规则'
+    `);
   }
 
   private async seedCompatibilityTertiaryCategories() {
@@ -398,49 +743,120 @@ export class DimensionsService implements OnModuleInit {
         sortOrder: 10,
         status: 'active',
         estimatedHours: '6.00',
-        contributionPoints: '60.00',
-        remark: '兼容既有分类的默认三级项，请按实际标准调整工时与积分',
+        contributionPoints: '0.00',
+        remark: '兼容既有分类的默认三级项；贡献分需由管理员按实际标准填写',
       });
     }
   }
 
-  private async syncCategoryTertiaryMetrics() {
-    const targetCategories = new Set(['operation', 'content']);
-    for (const item of this.categorySeeds()) {
-      if (
-        item.dimensionType !== 'tertiary_category' ||
-        !item.parentCode ||
-        !targetCategories.has(item.parentCode.split('_')[0])
-      ) {
-        continue;
-      }
-      const existing = await this.dimensionsRepository.findOne({
+  private contentStandardV2(): Array<{
+    productCode: string;
+    secondary: string;
+    tertiary: string;
+    unit?: string;
+    minutes?: number;
+    points?: number;
+    scope: string;
+    delivery: string;
+    evidence: string;
+    scoreMode?: string;
+    scoreRate?: string;
+  }> {
+    const fixed = (
+      productCode: number,
+      secondary: string,
+      tertiary: string,
+      minutes: number,
+      points: number,
+      scope: string,
+      delivery: string,
+      evidence: string,
+      unit = '',
+    ) => ({
+      productCode: String(productCode),
+      secondary,
+      tertiary,
+      minutes,
+      points,
+      unit,
+      scope,
+      delivery,
+      evidence,
+    });
+    return [
+      fixed(1, '陪伴文章', '陪伴内容', 120, 20, '含数据的偏复杂内容，覆盖净值波动、持有陪伴、定投陪伴、季报解读和突发行情陪伴。', '围绕一个产品、行情节点或持有场景形成一篇完整陪伴内容。', '定稿、交付链接或客户确认记录。', '篇'),
+      fixed(2, '基金经理来信', '陪伴内容', 40, 7, '基金经理来信等简单内容页面。', '形成一个可直接交付的内容 Word。', '一个内容 Word。', '篇'),
+      fixed(3, '模板新作', '陪伴内容', 60, 10, '指定产品陪伴、月报或周报模板新作。', '完成一个可复用的原型图。', '一个原型图。', '篇'),
+      fixed(4, '简单周报/月报套模板', '陪伴内容', 10, 2, '套模板内容为简单内容，不涉及复杂文案、图表和数据更新。', '完成一个简单套模板原型图。', '一个原型图。', '篇'),
+      fixed(5, '复杂周报/月报套模板', '陪伴内容', 30, 5, '涉及复杂文案、图表或数据更新。', '完成一个复杂套模板原型图。', '一个原型图。', '篇'),
+      fixed(6, '产品/行情内容', '营销内容/H5', 240, 40, '活动或 H5 页面文案、产品一页纸、问答手册等。', '围绕一个明确营销主题形成完整文章或页面文案，包含标题和主体内容。', '定稿、数据依据及交付记录。', '篇'),
+      fixed(7, '社区/活动内容', '话题活动', 60, 10, '话题活动原型图页面。', '完成一个完整话题活动文案原型页面。', '原型文案或客户确认记录。', '套'),
+      fixed(8, '直播/视频脚本', '直播脚本（复杂）', 120, 20, '直播提纲、完整逐字稿、主持人串词、嘉宾问题和互动环节。', '完成一场 60—90 分钟常规直播的完整脚本。', '完整脚本及客户确认记录。', '场'),
+      fixed(9, '直播/视频脚本', '直播脚本（简单）', 40, 7, '基于已有模板修改、串词调整或框架填充。', '基于既有模板和明确材料，完成一场可直接使用的简单直播脚本。', '仅适用于结构基本不变、无需重新策划和大量研究的模板化脚本；从零撰写或大幅重构按复杂直播脚本计分。', '场'),
+      fixed(10, '直播/视频脚本', '视频脚本', 120, 20, '口播、动画、PPT 翻页、访谈、旁白、字幕及分镜脚本。', '完成一条 1—3 分钟常规视频的完整脚本，含对应字幕或分镜说明。', '完整脚本或交付记录。', '条'),
+      fixed(11, '视觉/短文案', '海报文案', 40, 7, '主副标题、数据说明、脚注及内容结构。', '完成一张海报的完整文案及内容结构。', '文案稿、原型或终稿链接。', '套'),
+      fixed(12, '视觉/短文案', 'Banner/封面', 10, 2, 'Banner、文章封面、视频封面或直播封面等。', '完成一个明确需求下的 Banner 或封面主副文案。', '文案稿或终稿截图。', '套'),
+      fixed(13, '视觉/短文案', '推广短文案合集', 20, 3, 'Push、弹窗、推荐位、摘要等推广短文案。', '完成一个明确需求下的推广短文案合集。', '需求记录、文案稿或客户确认记录。', '批'),
+      fixed(14, '数据处理', '数据修改（常规）', 60, 10, '更新数据、日期、产品名称、基金经理、风险提示等。', '完成部分产品替换、数据更新或风险提示调整。', '修改前后文件及数据来源。', '批'),
+      fixed(15, '数据处理', '数据修改（复杂）', 90, 15, '模板新找亮点、数据更新、计算口径调整和关联内容修改。', '完成复杂数据修改并保留可核验过程。', '修改终稿、数据来源或计算底稿、修改对照及确认记录。', '项'),
+      fixed(16, '数据处理', '数据核验（简单）', 20, 3, '基于已有数据，核查少量数据来源、截止日期、计算口径和图文一致性。', '对一个完整文件或一组同口径数据进行独立核验。', '核验记录、修改标记或确认结果。', '项'),
+      fixed(17, '数据处理', '数据核验（复杂）', 60, 10, '长内容数据重新校准。', '完成多来源数据交叉核验、重新测算、公式检查、统计口径比对及图文一致性复核。', '确认记录等。', '项'),
+      fixed(18, '产品卡片', '策划与撰写', 60, 10, '产品弹窗等具有卖点实质内容的卡片，非简单文案，含赎回拦截。', '完成产品弹窗、推荐卡、产品亮点卡、持仓或自选陪伴卡等完整信息结构的卡片文案。', '卡片文案及原型等确认交付记录。', '张'),
+      { productCode: '19', secondary: '正常修改', tertiary: '正常修改', unit: '项', scope: '因客户原因产生的修改需求。', delivery: '按实际修改内容完成交付。', evidence: '/', scoreMode: 'time_ratio', scoreRate: '0.166667' },
+      { productCode: '20', secondary: '其他需求', tertiary: '其他需求', unit: '项', scope: '无法归入标准分类的自定义内容需求。', delivery: '按实际约定完成交付。', evidence: '/', scoreMode: 'time_ratio', scoreRate: '0.166667' },
+    ];
+  }
+
+  private async syncContentStandardV2() {
+    for (const standard of this.contentStandardV2()) {
+      const secondaryCode = `content_${this.slug(standard.secondary)}`;
+      const tertiaryCode = `${secondaryCode}_${this.slug(standard.tertiary)}`;
+      const entity = await this.dimensionsRepository.findOne({
         where: {
           dimension_type: 'tertiary_category',
-          dimension_code: item.dimensionCode,
+          dimension_code: tertiaryCode,
         },
       });
-      if (!existing) continue;
-      existing.estimated_hours =
-        item.estimatedHours ?? existing.estimated_hours;
-      existing.contribution_points =
-        item.contributionPoints ?? existing.contribution_points;
-      existing.reference_minutes =
-        item.referenceMinutes ?? existing.reference_minutes;
-      await this.dimensionsRepository.save(existing);
+      if (!entity) continue;
+      if (entity.standard_version === 'content-v2') {
+        let changed = false;
+        if (standard.unit && !entity.measure_unit) {
+          entity.measure_unit = standard.unit;
+          changed = true;
+        }
+        if (standard.minutes !== undefined && entity.reference_minutes == null) {
+          entity.reference_minutes = standard.minutes;
+          entity.estimated_hours = this.hoursFromMinutes(standard.minutes);
+          changed = true;
+        }
+        if (standard.scoreMode && !entity.score_mode) {
+          entity.score_mode = standard.scoreMode;
+          changed = true;
+        }
+        if (standard.scoreRate && !entity.score_rate) {
+          entity.score_rate = standard.scoreRate;
+          changed = true;
+        }
+        if (changed) await this.dimensionsRepository.save(entity);
+        continue;
+      }
+      entity.product_code = standard.productCode;
+      entity.standard_version = 'content-v2';
+      entity.measure_unit = standard.unit || null;
+      entity.content_scope = standard.scope;
+      entity.delivery_standard = standard.delivery;
+      entity.acceptance_evidence = standard.evidence;
+      entity.score_mode = standard.scoreMode ?? 'manual_fixed';
+      entity.score_rate = standard.scoreRate ?? null;
+      entity.reference_minutes = standard.minutes ?? null;
+      entity.estimated_hours =
+        standard.minutes === undefined
+          ? null
+          : this.hoursFromMinutes(standard.minutes);
+      entity.contribution_points =
+        standard.points === undefined ? null : standard.points.toFixed(2);
+      await this.dimensionsRepository.save(entity);
     }
-  }
-
-  private async normalizeMissingTertiaryPoints() {
-    await this.dataSource.query(`
-      UPDATE dimension_dictionaries
-      SET contribution_points = ROUND(estimated_hours * 10, 2)
-      WHERE dimension_type = 'tertiary_category'
-        AND deleted_at IS NULL
-        AND estimated_hours IS NOT NULL
-        AND estimated_hours > 0
-        AND (contribution_points IS NULL OR contribution_points = 0)
-    `);
   }
 
   private async ensureBusinessCategorySecondaryTable() {
@@ -484,13 +900,18 @@ export class DimensionsService implements OnModuleInit {
         parentCode: item.parentCode ?? null,
         sortOrder: item.sortOrder ?? 100,
         status: 'active',
+        productCode: item.productCode ?? undefined,
+        standardVersion: item.standardVersion ?? undefined,
         estimatedHours: item.estimatedHours ?? undefined,
         contributionPoints: item.contributionPoints ?? undefined,
         measureUnit: item.measureUnit ?? undefined,
         contentScope: item.contentScope ?? undefined,
         deliveryStandard: item.deliveryStandard ?? undefined,
         scoringBoundary: item.scoringBoundary ?? undefined,
+        acceptanceEvidence: item.acceptanceEvidence ?? undefined,
         referenceMinutes: item.referenceMinutes ?? undefined,
+        scoreMode: item.scoreMode ?? undefined,
+        scoreRate: item.scoreRate ?? undefined,
       });
     }
   }
@@ -661,6 +1082,10 @@ export class DimensionsService implements OnModuleInit {
             ),
             productType:
               category.tertiaryMetadata?.[child]?.[tertiary]?.productType,
+            productCode:
+              category.tertiaryMetadata?.[child]?.[tertiary]?.productCode,
+            standardVersion:
+              category.tertiaryMetadata?.[child]?.[tertiary]?.standardVersion,
             contributionPoints: (
               category.tertiaryMetadata?.[child]?.[tertiary]?.points ??
               category.tertiaryPoints?.[child]?.[tertiary] ??
@@ -676,10 +1101,22 @@ export class DimensionsService implements OnModuleInit {
               category.tertiaryMetadata?.[child]?.[tertiary]?.delivery,
             scoringBoundary:
               category.tertiaryMetadata?.[child]?.[tertiary]?.boundary,
+            acceptanceEvidence:
+              category.tertiaryMetadata?.[child]?.[tertiary]
+                ?.acceptanceEvidence,
             referenceMinutes:
               category.tertiaryMetadata?.[child]?.[tertiary]?.minutes ??
               category.tertiaryMinutes?.[child]?.[tertiary] ??
               null,
+            scoreMode:
+              category.tertiaryMetadata?.[child]?.[tertiary]?.scoreMode,
+            scoreRate:
+              category.tertiaryMetadata?.[child]?.[tertiary]?.scoreRate ===
+              undefined
+                ? undefined
+                : String(
+                    category.tertiaryMetadata?.[child]?.[tertiary]?.scoreRate,
+                  ),
           });
         }
       });
@@ -706,6 +1143,11 @@ export class DimensionsService implements OnModuleInit {
           delivery: string;
           minutes: number;
           points: number;
+          productCode?: string;
+          standardVersion?: string;
+          acceptanceEvidence?: string;
+          scoreMode?: string;
+          scoreRate?: number;
         }
       >
     >;
@@ -879,6 +1321,15 @@ export class DimensionsService implements OnModuleInit {
           '数据处理',
           '文案修改/审核',
           '产品征信卡片',
+          '陪伴文章',
+          '基金经理来信',
+          '模板新作',
+          '简单周报/月报套模板',
+          '复杂周报/月报套模板',
+          '产品卡片',
+          '正常修改',
+          '其他需求',
+          'KOC内容',
         ],
         tertiaries: {
           '产品/行情内容': ['投教内容', '陪伴内容', '营销内容/H5'],
@@ -889,7 +1340,12 @@ export class DimensionsService implements OnModuleInit {
             '视频脚本',
             '配套文案',
           ],
-          '视觉/短文案': ['海报文案', 'Banner/封面', '渠道短文案'],
+          '视觉/短文案': [
+            '海报文案',
+            'Banner/封面',
+            '渠道短文案',
+            '推广短文案合集',
+          ],
           'PPT/方案材料': ['PPT文案', '方案报告'],
           数据处理: [
             '数据修改（常规）',
@@ -901,6 +1357,44 @@ export class DimensionsService implements OnModuleInit {
           ],
           '文案修改/审核': ['文案修改/优化/更新', '审核校对'],
           产品征信卡片: ['策划与撰写'],
+          陪伴文章: ['陪伴内容'],
+          基金经理来信: ['陪伴内容'],
+          模板新作: ['陪伴内容'],
+          '简单周报/月报套模板': ['陪伴内容'],
+          '复杂周报/月报套模板': ['陪伴内容'],
+          产品卡片: ['策划与撰写'],
+          正常修改: ['正常修改'],
+          其他需求: ['其他需求'],
+          KOC内容: [
+            '基础短帖安排（不写内容）',
+            '氛围帖（一批10～50条）',
+            '氛围帖（一批51～100条）',
+            '氛围帖（一批101～150条）',
+            '氛围帖（一批151～200条）',
+            '精品长帖',
+          ],
+        },
+        tertiaryMetadata: {
+          KOC内容: {
+            '基础短帖安排（不写内容）': {
+              unit: '批', scope: '', boundary: '', delivery: '', minutes: 10, points: 2,
+            },
+            '氛围帖（一批10～50条）': {
+              unit: '批', scope: '', boundary: '', delivery: '', minutes: 30, points: 5,
+            },
+            '氛围帖（一批51～100条）': {
+              unit: '批', scope: '', boundary: '', delivery: '', minutes: 60, points: 10,
+            },
+            '氛围帖（一批101～150条）': {
+              unit: '批', scope: '', boundary: '', delivery: '', minutes: 90, points: 15,
+            },
+            '氛围帖（一批151～200条）': {
+              unit: '批', scope: '', boundary: '', delivery: '', minutes: 120, points: 20,
+            },
+            精品长帖: {
+              unit: '篇', scope: '', boundary: '', delivery: '', minutes: 20, points: 4,
+            },
+          },
         },
         tertiaryMinutes: {
           '产品/行情内容': { 投教内容: 120, 陪伴内容: 150, '营销内容/H5': 150 },

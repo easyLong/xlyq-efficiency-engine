@@ -8,6 +8,7 @@ import { RequirementItemEntity } from '../requirements/entities/requirement-item
 import { RequirementEntity } from '../requirements/entities/requirement.entity';
 import { UserEntity } from '../users/entities/user.entity';
 import { WorkflowConfigsModule } from '../workflow-configs/workflow-configs.module';
+import { DimensionsModule } from '../dimensions/dimensions.module';
 import { TaskDirectoryEntity } from './entities/task-directory.entity';
 import { TaskEntity } from './entities/task.entity';
 import { TaskResultFileEntity } from './entities/task-result-file.entity';
@@ -21,6 +22,7 @@ import { TasksService } from './tasks.service';
     FeishuModule,
     NotificationsModule,
     WorkflowConfigsModule,
+    DimensionsModule,
     TypeOrmModule.forFeature([
       TaskEntity,
       ProjectEntity,

@@ -22,9 +22,9 @@ import {
   buildAppPublicUrl,
   rebaseAppPublicUrl,
 } from '../common/app-public-url';
-import { contributionPointsFromHours } from '../common/efficiency-metrics';
 import { ensureIndex } from '../common/schema-maintenance';
 import { ensureWorkflowConfigTables } from '../common/workflow-config-schema';
+import { DimensionsService } from '../dimensions/dimensions.service';
 import { FeishuSyncLogEntity } from '../integrations/feishu/entities/feishu-sync-log.entity';
 import { FeishuService } from '../integrations/feishu/feishu.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -182,6 +182,7 @@ export class TasksService implements OnModuleInit {
     private readonly notificationsService: NotificationsService,
     private readonly workflowConfigsService: WorkflowConfigsService,
     private readonly taskWorkflowRuntime: TaskWorkflowRuntimeService,
+    private readonly dimensionsService: DimensionsService,
   ) {}
 
   async onModuleInit() {
@@ -825,6 +826,34 @@ export class TasksService implements OnModuleInit {
 
   async create(dto: CreateTaskDto, createdByUserId: string | null = null) {
     const estimatedHours = dto.estimatedHours ?? null;
+    const requirementItem = dto.requirementItemId
+      ? await this.requirementItemsRepository.findOne({ where: { id: dto.requirementItemId } })
+      : null;
+    const requirement = requirementItem
+      ? await this.requirementsRepository.findOne({ where: { id: requirementItem.requirement_id } })
+      : null;
+    let autoPrice: Awaited<ReturnType<DimensionsService['resolveTaskPrice']>> | null = null;
+    if (!dto.priceAmount && requirement && requirementItem) {
+      let codes: string[] = [];
+      let quantities: Record<string, number> = {};
+      try {
+        codes = JSON.parse(requirement.tertiary_category_codes_json || '[]');
+        quantities = JSON.parse(requirement.tertiary_category_quantities_json || '{}');
+      } catch {
+        codes = [];
+        quantities = {};
+      }
+      if (codes.length) {
+        autoPrice = await this.dimensionsService.resolveTaskPrice({
+          customerCode: requirement.customer_code,
+          businessCategory: requirement.business_category,
+          secondaryCategory: requirement.secondary_category,
+          tertiaryCodes: codes,
+          quantities,
+        });
+      }
+    }
+    const resolvedPrice = dto.priceAmount ?? autoPrice?.totalAmount ?? '0.00';
     const task = this.tasksRepository.create({
       id: randomUUID(),
       project_id: dto.projectId,
@@ -843,8 +872,12 @@ export class TasksService implements OnModuleInit {
       urgency_level: dto.urgencyLevel ?? null,
       assignee_user_id: null,
       estimated_hours: estimatedHours,
-      price_amount: dto.priceAmount ?? '0.00',
-      contribution_points: contributionPointsFromHours(estimatedHours),
+      price_amount: resolvedPrice,
+      price_source: dto.priceAmount ? 'manual_override' : (autoPrice?.source ?? 'legacy_manual'),
+      price_rule_ids_json: JSON.stringify(autoPrice?.breakdown.map((entry) => entry.ruleId).filter(Boolean) ?? []),
+      price_calculated_at: new Date(),
+      price_override_reason: dto.priceAmount ? '任务创建时手动填写' : null,
+      contribution_points: dto.contributionPoints ?? '0.00',
       planned_start_at: dto.plannedStartAt
         ? new Date(dto.plannedStartAt)
         : null,
@@ -937,7 +970,10 @@ export class TasksService implements OnModuleInit {
         : task.planned_end_at,
       estimated_hours: estimatedHours,
       price_amount: dto.priceAmount ?? task.price_amount,
-      contribution_points: contributionPointsFromHours(estimatedHours),
+      price_source: dto.priceAmount ? 'manual_override' : task.price_source,
+      price_calculated_at: dto.priceAmount ? new Date() : task.price_calculated_at,
+      price_override_reason: dto.priceAmount ? '任务编辑时手动修改' : task.price_override_reason,
+      contribution_points: dto.contributionPoints ?? task.contribution_points ?? '0.00',
     });
     return this.tasksRepository.save(task);
   }
@@ -2441,6 +2477,26 @@ export class TasksService implements OnModuleInit {
       'tasks',
       'contribution_points',
       'contribution_points DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER price_amount',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'price_source',
+      'price_source VARCHAR(32) NULL AFTER price_amount',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'price_rule_ids_json',
+      'price_rule_ids_json TEXT NULL AFTER price_source',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'price_calculated_at',
+      'price_calculated_at DATETIME NULL AFTER price_rule_ids_json',
+    );
+    await this.addColumnIfMissing(
+      'tasks',
+      'price_override_reason',
+      'price_override_reason VARCHAR(255) NULL AFTER price_calculated_at',
     );
     await this.addColumnIfMissing(
       'tasks',

@@ -41,10 +41,11 @@ export class CreateRequirementWithTaskDto {
   @IsString()
   estimatedHours?: string;
 
+  @IsOptional()
   @Matches(/^\d{1,12}(?:\.\d{1,2})?$/, {
     message: 'priceAmount must be a non-negative amount with up to 2 decimals',
   })
-  priceAmount!: string;
+  priceAmount?: string;
 
   @IsOptional()
   @IsString()

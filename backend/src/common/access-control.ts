@@ -36,6 +36,7 @@ const dispatcherPermissions = [
   'dashboard.employee_detail',
   'page.messages',
   'page.group_management',
+  'page.standard_config',
   'work_report.create',
   'work_report.view_own',
   'requirement.view_owned',

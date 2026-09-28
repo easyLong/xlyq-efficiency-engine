@@ -18,7 +18,6 @@ import {
 } from '../common/access-control';
 import { buildAppPublicUrl } from '../common/app-public-url';
 import { AiExecutionLogEntity } from '../common/entities/ai-execution-log.entity';
-import { contributionPointsFromHours } from '../common/efficiency-metrics';
 import { ensureIndex } from '../common/schema-maintenance';
 import { ensureWorkflowConfigTables } from '../common/workflow-config-schema';
 import { ContactContextConfigEntity } from '../contact-contexts/entities/contact-context-config.entity';
@@ -1317,6 +1316,18 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           dto.tertiaryCategoryQuantities,
         )
       : null;
+    const standardPrice = classification
+      ? await this.dimensionsService.resolveTaskPrice({
+          customerCode,
+          businessCategory: dto.businessCategory,
+          secondaryCategory: dto.secondaryCategory,
+          tertiaryCodes: classification.codes,
+          quantities: classification.quantities,
+          effectiveAt: dto.plannedStartAt,
+        })
+      : null;
+    const manualPrice = dto.priceAmount?.trim();
+    const useManualPrice = Boolean(manualPrice && Number(manualPrice) > 0);
 
     const createBundle = async (manager?: EntityManager) => {
       const bundle = await this.createRequirementTaskBundle(
@@ -1336,9 +1347,18 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
           tertiaryCategoryCodes: classification?.codes ?? [],
           tertiaryCategoryQuantities: classification?.quantities ?? {},
           estimatedHours: classification?.estimatedHours ?? dto.estimatedHours,
+          priceAmount: useManualPrice
+            ? Number(manualPrice).toFixed(2)
+            : (standardPrice?.totalAmount ?? '0.00'),
+          priceSource: useManualPrice
+            ? 'manual_override'
+            : (standardPrice?.source ?? 'none'),
+          priceRuleIds: standardPrice?.breakdown
+            .map((item) => item.ruleId)
+            .filter(Boolean) ?? [],
           contributionPoints:
             classification?.contributionPoints ??
-            contributionPointsFromHours(dto.estimatedHours ?? '6'),
+            '0.00',
           sourceType: dto.sourceCandidateId ? 'ai_preview_confirmed' : 'manual',
           dispatcherUserId: currentUser?.id ?? null,
           createdByUserId: currentUser?.id ?? null,
@@ -1627,6 +1647,16 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
             dto.tertiaryCategoryQuantities,
           )
         : null;
+    const standardPrice = classification
+      ? await this.dimensionsService.resolveTaskPrice({
+          customerCode: targetCustomerCode,
+          businessCategory: targetBusinessCategory,
+          secondaryCategory: targetSecondaryCategory,
+          tertiaryCodes: classification.codes,
+          quantities: classification.quantities,
+          effectiveAt: null,
+        })
+      : null;
 
     if (targetProjectId) {
       const project = await this.projectsRepository.findOne({
@@ -1699,7 +1729,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         item.estimated_hours = classification?.estimatedHours ?? '0.00';
         item.contribution_points =
           classification?.contributionPoints ??
-          contributionPointsFromHours(item.estimated_hours);
+          '0.00';
       }
       await this.requirementItemsRepository.save(item);
     }
@@ -1717,12 +1747,23 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         task.description = dto.rawContent ?? task.description;
         task.priority = priority ?? task.priority;
         task.urgency_level = urgencyLevel ?? task.urgency_level;
-        task.price_amount = dto.priceAmount ?? task.price_amount;
+        if (dto.priceAmount !== undefined && Number(dto.priceAmount) > 0) {
+          task.price_amount = Number(dto.priceAmount).toFixed(2);
+          task.price_source = 'manual_override';
+          task.price_override_reason = '需求编辑时手动修改';
+        } else if (shouldSyncClassification && task.price_source !== 'manual_override') {
+          task.price_amount = standardPrice?.totalAmount ?? '0.00';
+          task.price_source = standardPrice?.source ?? 'none';
+          task.price_rule_ids_json = JSON.stringify(
+            standardPrice?.breakdown.map((entry) => entry.ruleId).filter(Boolean) ?? [],
+          );
+          task.price_calculated_at = new Date();
+        }
         if (shouldSyncClassification) {
           task.estimated_hours = classification?.estimatedHours ?? '0.00';
           task.contribution_points =
             classification?.contributionPoints ??
-            contributionPointsFromHours(task.estimated_hours);
+            '0.00';
         }
         await this.tasksRepository.save(task);
       }
@@ -1986,6 +2027,8 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       urgencyLevel?: string | null;
       estimatedHours?: string;
       priceAmount?: string;
+      priceSource?: string | null;
+      priceRuleIds?: string[];
       plannedStartAt?: string | null;
       plannedEndAt?: string | null;
       contactContextId?: string | null;
@@ -2071,7 +2114,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         estimated_hours: input.estimatedHours ?? '6',
         contribution_points:
           input.contributionPoints ??
-          contributionPointsFromHours(input.estimatedHours ?? '6'),
+          '0.00',
         status: 'confirmed',
         quote_scope_status: 'not_started',
       }),
@@ -2097,9 +2140,13 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         assignee_user_id: null,
         estimated_hours: item.estimated_hours ?? null,
         price_amount: input.priceAmount ?? '0.00',
+        price_source: input.priceSource ?? 'legacy_manual',
+        price_rule_ids_json: JSON.stringify(input.priceRuleIds ?? []),
+        price_calculated_at: new Date(),
+        price_override_reason: null,
         contribution_points:
           input.contributionPoints ??
-          contributionPointsFromHours(item.estimated_hours),
+          '0.00',
         planned_start_at: input.plannedStartAt
           ? new Date(input.plannedStartAt)
           : null,
@@ -3337,7 +3384,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'contribution_points',
       'contribution_points DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER price_amount',
     );
-    await this.normalizeMissingContributionPoints();
     await ensureIndex(
       this.dataSource,
       'requirements',
@@ -3374,23 +3420,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       'idx_requirement_items_item_no',
       ['item_no'],
     );
-  }
-
-  private async normalizeMissingContributionPoints() {
-    await this.dataSource.query(`
-      UPDATE requirement_items
-      SET contribution_points = ROUND(estimated_hours * 10, 2)
-      WHERE estimated_hours IS NOT NULL
-        AND estimated_hours > 0
-        AND (contribution_points IS NULL OR contribution_points = 0)
-    `);
-    await this.dataSource.query(`
-      UPDATE tasks
-      SET contribution_points = ROUND(estimated_hours * 10, 2)
-      WHERE estimated_hours IS NOT NULL
-        AND estimated_hours > 0
-        AND (contribution_points IS NULL OR contribution_points = 0)
-    `);
   }
 
   private async ensureBusinessCategoryOwnerConfigTable() {

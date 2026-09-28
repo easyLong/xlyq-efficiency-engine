@@ -31,6 +31,12 @@ export class DimensionDictionaryEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 255, nullable: true })
   remark!: string | null;
 
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  product_code!: string | null;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  standard_version!: string | null;
+
   @Column({ type: 'decimal', precision: 8, scale: 2, nullable: true })
   estimated_hours!: string | null;
 
@@ -48,6 +54,15 @@ export class DimensionDictionaryEntity extends BaseSoftDeleteEntity {
 
   @Column({ type: 'text', nullable: true })
   scoring_boundary!: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  acceptance_evidence!: string | null;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  score_mode!: string | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 6, nullable: true })
+  score_rate!: string | null;
 
   @Column({ type: 'int', nullable: true })
   reference_minutes!: number | null;

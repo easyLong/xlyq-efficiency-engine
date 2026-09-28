@@ -44,6 +44,16 @@ export class UpsertDimensionDictionaryDto {
   remark?: string | null;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  productCode?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  standardVersion?: string | null;
+
+  @IsOptional()
   @Matches(/^\d{1,6}(?:\.\d{1,2})?$/)
   estimatedHours?: string | null;
 
@@ -67,6 +77,19 @@ export class UpsertDimensionDictionaryDto {
   @IsOptional()
   @IsString()
   scoringBoundary?: string | null;
+
+  @IsOptional()
+  @IsString()
+  acceptanceEvidence?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  scoreMode?: string | null;
+
+  @IsOptional()
+  @Matches(/^\d{1,4}(?:\.\d{1,6})?$/)
+  scoreRate?: string | null;
 
   @IsOptional()
   @IsInt()
