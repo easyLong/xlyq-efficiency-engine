@@ -8741,8 +8741,14 @@
       return normalizedBusinessCategory(categoryValue) === "operation"
         || normalizedBusinessCategoryCode(categoryValue) === "operation";
     }
+    function isContentCategory(categoryValue = "") {
+      return normalizedBusinessCategoryCode(categoryValue) === "content";
+    }
+    function isQuantityCategory(categoryValue = "") {
+      return isOperationCategory(categoryValue) || isContentCategory(categoryValue);
+    }
     function supportsTertiaryQuantity(categoryValue = "", secondaryValue = "") {
-      if (isOperationCategory(categoryValue)) return true;
+      if (isQuantityCategory(categoryValue)) return true;
       return tertiaryCategoryItems(categoryValue, secondaryValue).some(item => item.scoreMode === "time_ratio");
     }
     function selectedTertiaryCategoryCodes(select = qs("tertiaryCategoryInput")) {
@@ -8770,14 +8776,15 @@
     function tertiaryCategoryPickerOptionsHtml(categoryValue, secondaryValue, selectedCodes = [], selectedNames = [], selectedQuantities = {}, storeId = "tertiaryCategoryInput") {
       const selected = new Set(selectedCodes);
       const names = new Set(selectedNames);
-      const showQuantity = supportsTertiaryQuantity(categoryValue, secondaryValue);
       const items = tertiaryCategoryItems(categoryValue, secondaryValue);
+      const showQuantity = supportsTertiaryQuantity(categoryValue, secondaryValue);
+      const usesMinutes = items.some(item => item.scoreMode === "time_ratio");
       if (!items.length) return `<div class="muted">该二级分类暂无三级分类配置</div>`;
       const hint = showQuantity
-        ? `<div class="tertiary-picker-quantity-hint">${isOperationCategory(categoryValue) ? "运营任务：请填写每个三级分类的数量" : "自定义项：请填写实际分钟数"}</div>`
+        ? `<div class="tertiary-picker-quantity-hint">${usesMinutes ? "按时间计分项：请填写实际分钟数" : `${isContentCategory(categoryValue) ? "内容" : "运营"}任务：请填写每个三级分类的数量`}</div>`
         : "";
       const quantityHeader = showQuantity
-        ? `<div class="tertiary-picker-quantity-header"><span>三级分类</span><span>${items.some(item => item.scoreMode === "time_ratio") && !isOperationCategory(categoryValue) ? "分钟" : "数量"}</span></div>`
+        ? `<div class="tertiary-picker-quantity-header"><span>三级分类</span><span>${usesMinutes ? "分钟" : "数量"}</span></div>`
         : "";
       return hint + quantityHeader + items.map(item => {
         const checked = selected.has(item.code) || names.has(item.name);
@@ -8869,7 +8876,7 @@
           sum.points += Math.round(minutes * Number(item.scoreRate || (20 / 120)));
           return sum;
         }
-        const quantity = isOperationCategory(categoryValue) ? normalizeTertiaryQuantity(quantities[option.value]) : 1;
+        const quantity = isQuantityCategory(categoryValue) ? normalizeTertiaryQuantity(quantities[option.value]) : 1;
         sum.hours += Number(item?.estimatedHours || 0) * quantity;
         sum.points += Number(item?.contributionPoints || 0) * quantity;
         return sum;

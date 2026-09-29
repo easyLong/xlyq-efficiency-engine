@@ -556,7 +556,7 @@ export class DimensionsService implements OnModuleInit {
     }
     const byCode = new Map(rows.map((row) => [row.dimension_code, row]));
     const ordered = uniqueCodes.map((code) => byCode.get(code)!);
-    const supportsQuantity = categoryCode === 'operation';
+    const supportsQuantity = ['operation', 'content'].includes(categoryCode);
     const normalizedQuantities = Object.fromEntries(
       ordered.map((item) => {
         const rawQuantity = quantities?.[item.dimension_code];
