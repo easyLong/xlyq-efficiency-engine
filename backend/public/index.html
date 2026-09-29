@@ -8506,7 +8506,7 @@
         ? [{ action: "add-secondary", label: "新增二级分类" }]
         : type === "secondary"
           ? [{ action: "add-tertiary", label: "新增三级分类" }, { action: "edit-secondary", label: "编辑二级分类" }, { action: "disable", label: "删除（停用）二级分类", danger: true }]
-          : [{ action: "edit-tertiary", label: "编辑三级分类说明" }, { action: "add-sibling", label: "新增同级三级分类" }, { action: "disable", label: "删除（停用）三级分类", danger: true }];
+          : [{ action: "edit-tertiary", label: "编辑三级分类" }, { action: "add-sibling", label: "新增同级三级分类" }, { action: "disable", label: "删除（停用）三级分类", danger: true }];
       menu.innerHTML = actions.map(item => `<button class="${item.danger ? "danger" : ""}" onclick="handleStandardContextAction('${item.action}')">${item.label}</button>`).join("");
       menu.classList.remove("hidden");
       const margin = 10;
@@ -8596,18 +8596,14 @@
       panel.classList.remove("hidden");
       panel.innerHTML = `
         <h4>${escapeHtml(category.name)} / ${escapeHtml(secondary.name)} / ${escapeHtml(tertiary.name)}</h4>
-        <p>维护该三级分类的标准说明和验收依据；保存后会同步到需求录入与任务详情。</p>
+        <p>维护三级分类名称、包含内容、预估工时和贡献分；保存后会同步到需求录入与任务详情。</p>
         <div class="form-grid">
           <label>三级分类名称<input id="classification-detail-name" value="${escapeAttr(tertiary.name || "")}" /></label>
-          <label>产品编码<input id="classification-detail-product-code" value="${escapeAttr(tertiary.productCode || "")}" /></label>
-          <label>标准版本<input id="classification-detail-version" value="${escapeAttr(tertiary.standardVersion || "")}" placeholder="例如：content-v2" /></label>
+          <label>预估工时<input id="classification-detail-hours" type="number" min="0" step="0.25" value="${escapeAttr(tertiary.estimatedHours ?? "")}" /></label>
+          <label>贡献分<input id="classification-detail-points" type="number" min="0" step="0.01" value="${escapeAttr(tertiary.contributionPoints ?? "")}" /></label>
         </div>
         <label>包含内容<textarea id="classification-detail-scope" placeholder="说明该分类包含哪些工作内容">${escapeHtml(tertiary.contentScope || "")}</textarea></label>
-        <label>标准交付口径<textarea id="classification-detail-delivery" placeholder="说明完成到什么程度算交付">${escapeHtml(tertiary.deliveryStandard || "")}</textarea></label>
-        <label>验收及交付凭证<textarea id="classification-detail-evidence" placeholder="说明需要提供哪些文件、链接或确认记录">${escapeHtml(tertiary.acceptanceEvidence || "")}</textarea></label>
-        <label>计分边界<textarea id="classification-detail-boundary" placeholder="说明哪些情况不重复计分或需要升级计分">${escapeHtml(tertiary.scoringBoundary || "")}</textarea></label>
-        <label>备注<textarea id="classification-detail-remark" placeholder="补充配置说明">${escapeHtml(tertiary.remark || "")}</textarea></label>
-        <div class="btns"><button class="btn primary" onclick="saveClassificationDetails('${escapeAttr(code)}')">保存说明</button><button class="btn" onclick="closeClassificationDetails()">关闭</button></div>`;
+        <div class="btns"><button class="btn primary" onclick="saveClassificationDetails('${escapeAttr(code)}')">保存</button><button class="btn" onclick="closeClassificationDetails()">关闭</button></div>`;
       panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
     function closeClassificationDetails() {
@@ -8624,20 +8620,16 @@
           method: "PATCH",
           body: {
             dimensionName: qs("classification-detail-name")?.value.trim() || row.tertiary.name,
-            productCode: qs("classification-detail-product-code")?.value.trim() || null,
-            standardVersion: qs("classification-detail-version")?.value.trim() || null,
             contentScope: qs("classification-detail-scope")?.value.trim() || null,
-            deliveryStandard: qs("classification-detail-delivery")?.value.trim() || null,
-            acceptanceEvidence: qs("classification-detail-evidence")?.value.trim() || null,
-            scoringBoundary: qs("classification-detail-boundary")?.value.trim() || null,
-            remark: qs("classification-detail-remark")?.value.trim() || null,
+            estimatedHours: metricInputValue("classification-detail-hours", "预估工时"),
+            contributionPoints: metricInputValue("classification-detail-points", "贡献分"),
           },
         });
         closeClassificationDetails();
         await reloadCategoryTree(false);
-        toast("分类说明已保存");
+        toast("三级分类已保存");
       } catch (error) {
-        toast(error.message || "保存说明失败");
+        toast(error.message || "保存失败");
       }
     }
     async function saveTertiaryCategory(code) {
