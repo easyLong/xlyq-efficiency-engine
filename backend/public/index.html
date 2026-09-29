@@ -2169,6 +2169,10 @@
     .standard-config-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
     .standard-config-toolbar .form-grid { flex: 1 1 620px; margin: 0; }
     .standard-config-toolbar .btns { margin: 0; }
+    .standard-config-toolbar .classification-toolbar-fields { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(150px, .8fr) minmax(240px, 1.4fr); flex: 1 1 auto; gap: 8px; }
+    .standard-config-toolbar .classification-toolbar-fields label { min-width: 0; }
+    .standard-config-toolbar .classification-toolbar-actions { display: flex; flex: 0 0 auto; gap: 6px; }
+    .standard-config-toolbar .classification-toolbar-actions .btn { min-height: 30px; padding: 5px 9px; font-size: 12px; }
     .standard-config-hint { margin: 0; color: #71806f; font-size: 12px; }
     .standard-config-table { min-width: 1180px; }
     .standard-config-table td { vertical-align: top; }
@@ -2235,6 +2239,10 @@
     .standard-context-menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: #304234; text-align: left; cursor: pointer; }
     .standard-context-menu button:hover { background: #edf5eb; }
     .standard-context-menu button.danger { color: #a74635; }
+    @media (max-width: 980px) {
+      .standard-config-toolbar .classification-toolbar-fields { grid-template-columns: 1fr; width: 100%; }
+      .standard-config-toolbar .classification-toolbar-actions { width: 100%; justify-content: flex-end; }
+    }
     .hidden { display: none !important; }
     @media (min-width: 981px) and (max-width: 1440px) {
       .employee-insights-panel { padding: 12px; }
@@ -3056,12 +3064,12 @@
           </div>
           <div id="standardConfigWorkloadPanel" class="standard-config-body">
             <div class="standard-config-toolbar">
-              <div class="form-grid">
+              <div class="form-grid classification-toolbar-fields">
                 <label>业务大类<select id="classificationCategoryInput" onchange="renderClassificationSecondaryOptions()"></select></label>
                 <label>二级分类<select id="classificationSecondaryInput" onchange="renderClassificationConfig()"></select></label>
                 <label>搜索分类<input id="classificationSearchInput" placeholder="搜索分类名称或说明" oninput="renderClassificationConfig()" /></label>
               </div>
-              <div class="btns">
+              <div class="btns classification-toolbar-actions">
                 <button class="btn" onclick="reloadCategoryTree()">刷新</button>
                 <button class="btn" onclick="toggleClassificationCreatePanel()">新增三级分类</button>
               </div>
@@ -8063,8 +8071,8 @@
       const board = qs("classificationConfigBoard");
       if (!categorySelect || !board) return;
       const categories = state.categoryTree || [];
-      const selectedCategory = categorySelect.value || categories[0]?.code || "";
-      categorySelect.innerHTML = categories.map(item => `<option value="${escapeAttr(item.code)}" ${item.code === selectedCategory ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
+      const selectedCategory = categorySelect.value || "";
+      categorySelect.innerHTML = `<option value="">全部业务大类</option>` + categories.map(item => `<option value="${escapeAttr(item.code)}" ${item.code === selectedCategory ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
       renderClassificationSecondaryOptions(false);
       const selectedSecondary = qs("classificationSecondaryInput")?.value || "";
       const keyword = (qs("classificationSearchInput")?.value || "").trim().toLowerCase();
@@ -8096,7 +8104,9 @@
       const categoryCode = qs("classificationCategoryInput")?.value || "";
       const select = qs("classificationSecondaryInput");
       if (!select) return;
-      const rows = categoryTreeNode(categoryCode)?.secondaries || [];
+      const rows = categoryCode
+        ? categoryTreeNode(categoryCode)?.secondaries || []
+        : (state.categoryTree || []).flatMap(category => category.secondaries || []).filter((item, index, list) => list.findIndex(row => row.code === item.code) === index);
       const previous = select.value;
       select.innerHTML = `<option value="">全部二级分类</option>` + rows.map(item => `<option value="${escapeAttr(item.code)}">${escapeHtml(item.name)}</option>`).join("");
       if (rows.some(item => item.code === previous)) select.value = previous;
