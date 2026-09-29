@@ -3076,14 +3076,13 @@
             </div>
             <div id="classificationCreatePanel" class="standard-detail-panel hidden">
               <h4>新增三级分类</h4>
-              <p>新增后会立即出现在需求录入的三级分类选择器中。</p>
+              <p>维护三级分类名称、包含内容、预估工时和贡献分；新增后会立即出现在需求录入的三级分类选择器中。</p>
               <div class="form-grid">
                 <label>三级分类名称<input id="classificationNameInput" placeholder="例如：原创长图文案" /></label>
-                <label>计量单位<input id="classificationUnitInput" placeholder="例如：批 / 篇" /></label>
-                <label>参考分钟<input id="classificationMinutesInput" type="number" min="0" step="1" /></label>
                 <label>预估工时<input id="classificationHoursInput" type="number" min="0" step="0.25" value="6" /></label>
                 <label>贡献分<input id="classificationPointsInput" type="number" min="0" step="0.01" value="0" /></label>
               </div>
+              <label>包含内容<textarea id="classificationScopeInput" placeholder="说明该分类包含哪些工作内容"></textarea></label>
               <div class="btns"><button class="btn primary" onclick="createTertiaryCategory()">保存新增分类</button><button class="btn" onclick="toggleClassificationCreatePanel(false)">取消</button></div>
             </div>
             <div id="classificationDetailPanel" class="standard-detail-panel hidden"></div>
@@ -8462,8 +8461,7 @@
             status: "active",
             estimatedHours: metricInputValue("classificationHoursInput", "预估工时"),
             contributionPoints: metricInputValue("classificationPointsInput", "贡献分"),
-            measureUnit: qs("classificationUnitInput")?.value.trim() || undefined,
-            referenceMinutes: qs("classificationMinutesInput")?.value ? Number(qs("classificationMinutesInput").value) : undefined,
+            contentScope: qs("classificationScopeInput")?.value.trim() || null,
           },
         });
         qs("classificationNameInput").value = "";
@@ -8521,8 +8519,7 @@
       renderClassificationSecondaryOptions(false);
       if (secondarySelect) secondarySelect.value = secondaryCode;
       if (qs("classificationNameInput")) qs("classificationNameInput").value = "";
-      if (qs("classificationUnitInput")) qs("classificationUnitInput").value = "";
-      if (qs("classificationMinutesInput")) qs("classificationMinutesInput").value = "";
+      if (qs("classificationScopeInput")) qs("classificationScopeInput").value = "";
       if (qs("classificationHoursInput")) qs("classificationHoursInput").value = "6";
       if (qs("classificationPointsInput")) qs("classificationPointsInput").value = "0";
       toggleClassificationCreatePanel(true);
