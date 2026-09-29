@@ -1,6 +1,10 @@
 export const HUITIANFU_TEMPLATE_CODE = 'china_universal';
 export const HUITIANFU_TEMPLATE_VERSION = 3;
 export const HUITIANFU_CUSTOMER_CODE = 'China Universal';
+export const DEFAULT_SETTLEMENT_TEMPLATE_CODE = 'default_settlement';
+export const DEFAULT_SETTLEMENT_TEMPLATE_VERSION = 1;
+export const DEFAULT_SETTLEMENT_CUSTOMER_CODE = '*';
+export const DEFAULT_SETTLEMENT_TEMPLATE_NAME = '通用结算明细';
 
 export const HUITIANFU_COLUMNS = [
   { key: 'usage_date', label: '使用日期', width: 15 },

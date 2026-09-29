@@ -9356,15 +9356,16 @@
     function settlementTemplateQueryParams() {
       const dates = state.settlementDetailFilters || {};
       const dimensions = state.dimensionFilters || {};
+      const customerCode = state.settlementCustomerId || "all";
       return new URLSearchParams(Object.entries({
-        customerCode: state.settlementCustomerId,
+        customerCode,
         startDate: dates.startDate,
         endDate: dates.endDate,
         businessPlatform: dimensions.businessPlatform,
         businessCategory: dimensions.businessCategory,
         secondaryCategory: dimensions.secondaryCategory,
         tertiaryCategory: dimensions.tertiaryCategory,
-      }).filter(([, value]) => value && value !== "all"));
+      }).filter(([key, value]) => value && (key === "customerCode" || value !== "all")));
     }
     async function loadSettlementTemplatePreview(customerCode) {
       if (!customerCode || customerCode === "all") return;
@@ -9509,14 +9510,19 @@
     }
     async function exportSettlementDetailsToExcel() {
       const customerCode = state.settlementCustomerId || "all";
-      let template = customerCode === "all" ? null : state.settlementTemplate;
-      if (!template && customerCode !== "all") {
+      let template = state.settlementTemplate;
+      if (!template) {
         try {
           const templates = await request(`/settlement/templates?customerCode=${encodeURIComponent(customerCode)}`);
           template = Array.isArray(templates) ? templates[0] : null;
         } catch {
-          template = null;
+          toast("结算模板加载失败");
+          return;
         }
+      }
+      if (!template) {
+        toast("未配置通用结算模板");
+        return;
       }
       if (template) {
         try {
@@ -9542,65 +9548,6 @@
         }
         return;
       }
-      const rows = filteredSettlementDetailRows(state.settlementStatement?.rows || []);
-      if (!rows.length) {
-        toast("暂无可导出的结算明细");
-        return;
-      }
-      const headers = ["基金", "对接人", "时间", "需求编号", "需求标题", "需求项", "任务编号", "任务名称", "业务平台", "业务大类", "二级分类", "三级分类", "执行人", "资产个数", "基金定价", "结算金额", "状态"];
-      const tableRows = rows.map(row => [
-        row.customerName,
-        row.contactContextName,
-        settlementRowDateKey(row) || "-",
-        row.requirementCode,
-        row.requirementTitle,
-        row.requirementItemTitle,
-        row.taskNo,
-        row.taskName,
-        row.businessPlatform,
-        row.businessCategory,
-        row.secondaryCategory,
-        row.tertiaryCategory,
-        row.employeeName,
-        row.assetCount > 0 ? row.assetCount : "未交付",
-        Number(row.taskPrice || 0).toFixed(2),
-        Number(row.amount || 0).toFixed(2),
-        row.status,
-      ]);
-      const html = `
-        <html>
-          <head>
-            <meta charset="utf-8" />
-            <style>
-              table { border-collapse: collapse; }
-              th, td { border: 1px solid #d9d9d9; padding: 6px 8px; white-space: nowrap; }
-              th { background: #eef4ea; font-weight: 700; }
-              .num { mso-number-format:"0.00"; }
-            </style>
-          </head>
-          <body>
-            <table>
-              <thead><tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
-              <tbody>
-                ${tableRows.map(row => `<tr>${row.map((cell, index) => `<td class="${index === 14 || index === 15 ? "num" : ""}">${escapeHtml(cell ?? "-")}</td>`).join("")}</tr>`).join("")}
-              </tbody>
-            </table>
-          </body>
-        </html>
-      `;
-      const blob = new Blob(["\ufeff", html], { type: "application/vnd.ms-excel;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const filters = state.settlementDetailFilters || {};
-      const datePart = [filters.startDate, filters.endDate].filter(Boolean).join("_") || new Date().toISOString().slice(0, 10);
-      const scope = state.settlementCustomerId === "all" ? "全部基金" : customerName(state.settlementCustomerId);
-      link.href = url;
-      link.download = `结算统计明细_${scope}_${datePart}.xls`.replace(/[\\/:*?"<>|]/g, "_");
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      toast(`已导出 ${rows.length} 条结算明细`);
     }
     async function createRequirement() {
       if (!can("requirement.create")) return toast("当前账号没有新建需求权限。");

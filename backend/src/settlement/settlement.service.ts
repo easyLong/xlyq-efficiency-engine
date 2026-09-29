@@ -8,6 +8,10 @@ import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import ExcelJS from 'exceljs';
 import {
+  DEFAULT_SETTLEMENT_CUSTOMER_CODE,
+  DEFAULT_SETTLEMENT_TEMPLATE_CODE,
+  DEFAULT_SETTLEMENT_TEMPLATE_NAME,
+  DEFAULT_SETTLEMENT_TEMPLATE_VERSION,
   HUITIANFU_COLUMNS,
   HUITIANFU_CUSTOMER_CODE,
   HUITIANFU_SQL,
@@ -100,16 +104,66 @@ export class SettlementService implements OnModuleInit {
         ],
       );
     }
+    await this.ensureBuiltInTemplate({
+      customerCode: DEFAULT_SETTLEMENT_CUSTOMER_CODE,
+      templateCode: DEFAULT_SETTLEMENT_TEMPLATE_CODE,
+      name: DEFAULT_SETTLEMENT_TEMPLATE_NAME,
+      version: DEFAULT_SETTLEMENT_TEMPLATE_VERSION,
+      sql: HUITIANFU_SQL,
+      columns: HUITIANFU_COLUMNS,
+    });
+  }
+
+  private async ensureBuiltInTemplate(input: {
+    customerCode: string;
+    templateCode: string;
+    name: string;
+    version: number;
+    sql: string;
+    columns: readonly unknown[];
+  }) {
+    const existing = await this.queryRows<{ id: string; version: number }>(
+      'SELECT id, version FROM settlement_sql_templates WHERE template_code = ? LIMIT 1',
+      [input.templateCode],
+    );
+    if (existing.length === 0) {
+      await this.dataSource.query(
+        `INSERT IGNORE INTO settlement_sql_templates
+         (id, customer_code, template_code, name, version, status, sql_text, columns_json)
+         VALUES (?, ?, ?, ?, ?, 'published', ?, ?)`,
+        [
+          randomUUID(),
+          input.customerCode,
+          input.templateCode,
+          input.name,
+          input.version,
+          input.sql,
+          JSON.stringify(input.columns),
+        ],
+      );
+    } else if (Number(existing[0].version) < input.version) {
+      await this.dataSource.query(
+        `UPDATE settlement_sql_templates
+         SET version = ?, status = 'published', sql_text = ?, columns_json = ?
+         WHERE id = ?`,
+        [
+          input.version,
+          input.sql,
+          JSON.stringify(input.columns),
+          existing[0].id,
+        ],
+      );
+    }
   }
 
   async listTemplates(customerCode: string) {
-    if (!customerCode || customerCode === 'all') return [];
+    if (!customerCode) return [];
     const rows = await this.queryRows<TemplateRecord>(
       `SELECT id, customer_code, template_code, name, version
        FROM settlement_sql_templates
-       WHERE customer_code = ? AND status = 'published'
-       ORDER BY template_code, version DESC`,
-      [customerCode],
+       WHERE status = 'published' AND (customer_code = ? OR customer_code = ?)
+       ORDER BY (customer_code = ?) DESC, (customer_code = '*') DESC, template_code, version DESC`,
+      [customerCode, DEFAULT_SETTLEMENT_CUSTOMER_CODE, customerCode],
     );
     const seen = new Set<string>();
     return rows.filter((row) => {
@@ -120,13 +174,16 @@ export class SettlementService implements OnModuleInit {
   }
 
   private async template(id: string, customerCode: string) {
-    if (!id || !customerCode || customerCode === 'all') {
+    if (!id || !customerCode) {
       throw new BadRequestException('请选择基金和结算模板');
     }
     const rows = await this.queryRows<TemplateRecord>(
       `SELECT * FROM settlement_sql_templates
-       WHERE id = ? AND customer_code = ? AND status = 'published' LIMIT 1`,
-      [id, customerCode],
+       WHERE id = ? AND status = 'published'
+         AND (customer_code = ? OR customer_code = ?)
+       ORDER BY (customer_code = ?) DESC, (customer_code = '*') DESC
+       LIMIT 1`,
+      [id, customerCode, DEFAULT_SETTLEMENT_CUSTOMER_CODE, customerCode],
     );
     const template = rows[0];
     if (!template) throw new NotFoundException('结算模板不存在或未发布');
@@ -152,8 +209,12 @@ export class SettlementService implements OnModuleInit {
   }
 
   private filteredQuery(sql: string, filters: SettlementFilters) {
-    const clauses = ['v.__customer_code = ?'];
-    const params: unknown[] = [filters.customerCode];
+    const clauses: string[] = ['1 = 1'];
+    const params: unknown[] = [];
+    if (filters.customerCode !== 'all') {
+      clauses.push('v.__customer_code = ?');
+      params.push(filters.customerCode);
+    }
     for (const [key, field] of [
       ['startDate', '__filter_date'],
       ['endDate', '__filter_date'],
