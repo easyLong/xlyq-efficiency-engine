@@ -2690,7 +2690,7 @@
             <div>
               <div class="kicker">Settlement</div>
               <h3>结算统计</h3>
-            <p>基于任务上的分类、任务价格和交付资产统计结算金额，支持按基金、平台和三级分类查看。</p>
+            <p>基于基金定价、三级分类数量和交付资产统计结算金额，支持按基金、平台和三级分类查看。</p>
             </div>
             <span class="tag">金额 / 维度图表</span>
           </div>
@@ -3246,6 +3246,7 @@
         endDate: "",
       },
       settlementRequestSeq: 0,
+      settlementPriceRules: [],
       requirementFilter: "all",
       requirementDateFilters: { startDate: "", endDate: "" },
       requirementKeyword: "",
@@ -9047,6 +9048,8 @@
         }).toString()}`);
         if (requestSeq !== state.settlementRequestSeq) return;
         const taskRows = Object.entries(board).flatMap(([status, tasks]) => (tasks || []).map(task => ({ status, ...task })));
+        const priceRules = unwrap(await request("/dimensions/task-price-rules?status=active"));
+        state.settlementPriceRules = Array.isArray(priceRules) ? priceRules : [];
         let requirements = state.requirements || [];
         let requirementItems = state.requirementItems || [];
         if (!requirements.length || !requirementItems.length) {
@@ -9058,7 +9061,7 @@
         const requirementByItemId = new Map(requirementItems
           .map(item => [item.id, requirementById.get(item.requirement_id)])
           .filter(([, requirement]) => requirement));
-        const rows = buildSettlementRows(taskRows, requirementByItemId)
+        const rows = buildSettlementRows(taskRows, requirementByItemId, state.settlementPriceRules)
           .filter(settlementDimensionMatchesRow);
         state.settlementStatement = {
           customerId,
@@ -9084,16 +9087,58 @@
       const secondary = (category?.secondaries || []).find(item => item.code === rawSecondaryCategory || item.name === rawSecondaryCategory);
       const rawTertiaryCategory = task?.tertiary_category || task?.tertiaryCategory || requirement?.tertiary_category || "";
       const tertiaryValues = String(rawTertiaryCategory).split(/[、,，]/).map(item => item.trim()).filter(Boolean);
-      const tertiaryNames = tertiaryValues.map(value => {
+      const configuredCodes = parseTertiaryCategoryCodes(requirement);
+      const configuredQuantities = parseTertiaryCategoryQuantities(requirement);
+      const tertiaryCodes = (configuredCodes.length ? configuredCodes : tertiaryValues.map(value => {
         const item = (secondary?.tertiaries || []).find(candidate => candidate.code === value || candidate.name === value);
-        return item?.name || "";
+        return item?.code || value;
+      })).filter(Boolean);
+      const tertiaryNames = tertiaryCodes.map(code => {
+        const item = (secondary?.tertiaries || []).find(candidate => candidate.code === code || candidate.name === code);
+        return item?.name || code;
       }).filter(Boolean);
       return {
         businessCategoryCode,
         businessCategory: category?.name || "未分类",
+        secondaryCategoryCode: secondary?.code || rawSecondaryCategory,
         secondaryCategory: secondary?.name || "未分类",
         tertiaryCategory: tertiaryNames.length ? tertiaryNames.join("、") : "未分类",
+        tertiaryCodes,
+        tertiaryQuantities: configuredQuantities,
       };
+    }
+    function settlementPriceForTask(task, requirement, classification, priceRules = []) {
+      const customerCode = requirement?.customer_code || projectForTask(task)?.customer_code || "";
+      const effectiveAt = new Date(task?.actual_end_at || task?.planned_end_at || Date.now());
+      const codes = classification?.tertiaryCodes || [];
+      if (!customerCode || !classification?.businessCategoryCode || !classification?.secondaryCategoryCode || !codes.length) {
+        return { amount: 0, missing: true, breakdown: [] };
+      }
+      let amount = 0;
+      let missing = false;
+      const breakdown = codes.map(code => {
+        const candidates = priceRules.filter(rule => {
+          if (rule.status !== "active") return false;
+          if (rule.business_category_code !== classification.businessCategoryCode) return false;
+          if (rule.secondary_category_code !== classification.secondaryCategoryCode) return false;
+          if (rule.tertiary_category_code !== code) return false;
+          if (rule.customer_code !== customerCode && rule.customer_code !== "*") return false;
+          const from = rule.effective_from ? new Date(rule.effective_from) : null;
+          const to = rule.effective_to ? new Date(rule.effective_to) : null;
+          return (!from || effectiveAt >= from) && (!to || effectiveAt <= to);
+        }).sort((left, right) => {
+          const customerOrder = (right.customer_code === customerCode ? 1 : 0) - (left.customer_code === customerCode ? 1 : 0);
+          return customerOrder || Number(right.version_no || 1) - Number(left.version_no || 1) || String(right.effective_from || "").localeCompare(String(left.effective_from || ""));
+        });
+        const rule = candidates[0] || null;
+        const quantity = Number(classification.tertiaryQuantities?.[code] || 1);
+        const unitPrice = rule ? Number(rule.unit_price || 0) : 0;
+        const lineAmount = rule && Number.isFinite(unitPrice) ? quantity * unitPrice : 0;
+        if (!rule) missing = true;
+        amount += lineAmount;
+        return { tertiaryCode: code, quantity, unitPrice, amount: lineAmount, ruleId: rule?.id || null };
+      });
+      return { amount: Number(amount.toFixed(2)), missing, breakdown };
     }
     function settlementDimensionMatchesRow(row) {
       const values = {
@@ -9107,16 +9152,17 @@
       };
       return Object.entries(state.dimensionFilters).every(([key, selected]) => !selected || selected === "all" || values[key] === selected);
     }
-    function buildSettlementRows(tasks, requirementByItemId) {
+    function buildSettlementRows(tasks, requirementByItemId, priceRules = []) {
       return (tasks || []).map(task => {
         const requirement = requirementByItemId.get(task?.requirement_item_id || task?.requirementItemId) || null;
         const project = projectForTask(task);
         const assetCount = Number(task?.asset_count ?? task?.assetCount ?? 0);
-        const taskPrice = Number(task?.price_amount ?? task?.priceAmount ?? 0);
         const contactContext = contactContextForRequirement(requirement);
         const customerId = requirement?.customer_code || project?.customer_code || "";
         const classification = settlementClassification(task, requirement, project);
-        const status = settlementRowStatus(task, assetCount, taskPrice);
+        const resolvedPrice = settlementPriceForTask(task, requirement, classification, priceRules);
+        const taskPrice = resolvedPrice.amount;
+        const status = settlementRowStatus(task, assetCount, taskPrice, resolvedPrice.missing);
         return {
           customerId,
           customerName: customerName(customerId) || project?.project_name || "-",
@@ -9132,6 +9178,10 @@
           businessCategory: classification.businessCategory,
           secondaryCategory: classification.secondaryCategory,
           tertiaryCategory: classification.tertiaryCategory,
+          tertiaryCodes: classification.tertiaryCodes,
+          tertiaryQuantities: classification.tertiaryQuantities,
+          priceBreakdown: resolvedPrice.breakdown,
+          priceMissing: resolvedPrice.missing,
           employeeName: assigneeName(task?.assignee_user_id),
           taskPrice,
           amount: status === "可结算" ? taskPrice : 0,
@@ -9141,7 +9191,8 @@
         };
       });
     }
-    function settlementRowStatus(task, assetCount, taskPrice) {
+    function settlementRowStatus(task, assetCount, taskPrice, priceMissing = false) {
+      if (priceMissing) return "待定价";
       if (!Number.isFinite(taskPrice) || taskPrice <= 0) return "待定价";
       if (assetCount <= 0 && task?.status !== "completed") return "待交付";
       return "可结算";
@@ -9388,12 +9439,12 @@
         return;
       }
       if (!rows.length) {
-        box.innerHTML = `<div class="empty-list">暂无结算明细。请先创建任务并设置任务价格。</div>`;
+        box.innerHTML = `<div class="empty-list">暂无结算明细。请先配置三级分类对应的基金价格。</div>`;
         return;
       }
       box.innerHTML = `
         <table>
-          <thead><tr><th>基金</th><th>对接人</th><th>时间</th><th>需求任务</th><th>业务大类</th><th>二级分类</th><th>三级分类</th><th>执行人</th><th>资产个数</th><th>任务价格</th><th>结算金额</th><th>状态</th></tr></thead>
+          <thead><tr><th>基金</th><th>对接人</th><th>时间</th><th>需求任务</th><th>业务大类</th><th>二级分类</th><th>三级分类</th><th>执行人</th><th>资产个数</th><th>基金定价</th><th>结算金额</th><th>状态</th></tr></thead>
           <tbody>
             ${rows.map(row => `
               <tr>
@@ -9446,7 +9497,7 @@
         toast("暂无可导出的结算明细");
         return;
       }
-      const headers = ["基金", "对接人", "时间", "需求编号", "需求标题", "需求项", "任务编号", "任务名称", "业务平台", "业务大类", "二级分类", "三级分类", "执行人", "资产个数", "任务价格", "结算金额", "状态"];
+      const headers = ["基金", "对接人", "时间", "需求编号", "需求标题", "需求项", "任务编号", "任务名称", "业务平台", "业务大类", "二级分类", "三级分类", "执行人", "资产个数", "基金定价", "结算金额", "状态"];
       const tableRows = rows.map(row => [
         row.customerName,
         row.contactContextName,

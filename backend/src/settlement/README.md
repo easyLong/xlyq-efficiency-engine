@@ -13,7 +13,7 @@ SQL 必须是单条 `SELECT`，返回对外列配置所需的字段，并返回�
 
 SQL 不从浏览器传入。服务端只接受模板 ID 和参数化筛选条件，权限为 `settlement.view_all`。预览每页 100 条，单次导出上限 5000 条。模板 SQL 虽有基本 SELECT 检查，但不是完整 SQL 沙箱；后续若开放在线编辑，必须先使用独立的只读数据库账号，并加入审核/发布流程。
 
-汇添富 v1 按任务一行，包含零价格任务；`单价`、`总价`都取 `tasks.price_amount`，运营数量来自需求三级分类数量之和，其他业务默认 1。附图为交付图片链接。当前历史数据的零价格与空数量不会被自动修正。
+汇添富 v2 按任务一行，包含未配置价格的任务；`单价`和`总价`按基金、业务大类、二级分类、三级分类匹配 `task_price_rules`，再按需求中的三级分类数量计算，不读取 `tasks.price_amount`。附图为交付图片链接。
 
 ## 新增基金模板
 
@@ -61,7 +61,8 @@ SELECT
     COALESCE(r.secondary_category, '') AS __secondary_category,
     COALESCE(r.tertiary_category, '') AS __tertiary_category,
     p.project_name AS project_name,
-    t.price_amount AS total_price
+    -- 生产模板会按基金和三级分类读取 task_price_rules，
+    -- 再按三级分类数量计算 total_price，不读取 t.price_amount
 FROM tasks t
 JOIN requirement_items ri
     ON ri.id = t.requirement_item_id

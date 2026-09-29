@@ -12,6 +12,7 @@ import {
   HUITIANFU_CUSTOMER_CODE,
   HUITIANFU_SQL,
   HUITIANFU_TEMPLATE_CODE,
+  HUITIANFU_TEMPLATE_VERSION,
 } from './huitianfu-template';
 
 type TemplateRecord = {
@@ -67,22 +68,35 @@ export class SettlementService implements OnModuleInit {
         KEY idx_settlement_template_customer (customer_code, status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    const existing = await this.queryRows<{ id: string }>(
-      'SELECT id FROM settlement_sql_templates WHERE template_code = ? LIMIT 1',
+    const existing = await this.queryRows<{ id: string; version: number }>(
+      'SELECT id, version FROM settlement_sql_templates WHERE template_code = ? LIMIT 1',
       [HUITIANFU_TEMPLATE_CODE],
     );
     if (existing.length === 0) {
       await this.dataSource.query(
         `INSERT IGNORE INTO settlement_sql_templates
          (id, customer_code, template_code, name, version, status, sql_text, columns_json)
-         VALUES (?, ?, ?, ?, 1, 'published', ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, 'published', ?, ?)`,
         [
           randomUUID(),
           HUITIANFU_CUSTOMER_CODE,
           HUITIANFU_TEMPLATE_CODE,
           '汇添富结算明细',
+          HUITIANFU_TEMPLATE_VERSION,
           HUITIANFU_SQL,
           JSON.stringify(HUITIANFU_COLUMNS),
+        ],
+      );
+    } else if (Number(existing[0].version) < HUITIANFU_TEMPLATE_VERSION) {
+      await this.dataSource.query(
+        `UPDATE settlement_sql_templates
+         SET version = ?, status = 'published', sql_text = ?, columns_json = ?
+         WHERE id = ?`,
+        [
+          HUITIANFU_TEMPLATE_VERSION,
+          HUITIANFU_SQL,
+          JSON.stringify(HUITIANFU_COLUMNS),
+          existing[0].id,
         ],
       );
     }

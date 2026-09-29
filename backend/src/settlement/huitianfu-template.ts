@@ -1,4 +1,5 @@
 export const HUITIANFU_TEMPLATE_CODE = 'china_universal';
+export const HUITIANFU_TEMPLATE_VERSION = 2;
 export const HUITIANFU_CUSTOMER_CODE = 'China Universal';
 
 export const HUITIANFU_COLUMNS = [
@@ -17,7 +18,8 @@ export const HUITIANFU_COLUMNS = [
 ] as const;
 
 // SQL returns stable field keys; customer/date/category filters are applied by the service.
-// Keep one task per row. Unit price and total price intentionally both use task.price_amount.
+// Keep one task per row. Prices come from the active fund price rule for each
+// selected tertiary category; the task's manually entered price is ignored.
 export const HUITIANFU_SQL = `
 SELECT
   t.id AS __task_id,
@@ -33,24 +35,58 @@ SELECT
   COALESCE(d2.dimension_name, r.secondary_category) AS secondary_category,
   r.tertiary_category AS tertiary_category,
   CAST(NULL AS DECIMAL(14, 2)) AS contract_price,
-  t.price_amount AS unit_price,
   CASE
-    WHEN COALESCE(d1.dimension_code, r.business_category, p.project_type) IN ('operation', '运营')
+    WHEN JSON_LENGTH(CASE WHEN JSON_VALID(r.tertiary_category_codes_json) THEN r.tertiary_category_codes_json ELSE '[]' END) = 1
     THEN (
-      SELECT COALESCE(SUM(GREATEST(COALESCE(j.qty, 1), 1)), 1)
-      FROM JSON_TABLE(
-        CASE
-          WHEN JSON_VALID(r.tertiary_category_quantities_json)
-          THEN r.tertiary_category_quantities_json
-          ELSE '{}'
-        END,
-        '$.*' COLUMNS (qty INT PATH '$')
-      ) AS j
+      SELECT rule.unit_price
+      FROM task_price_rules rule
+      CROSS JOIN JSON_TABLE(
+        CASE WHEN JSON_VALID(r.tertiary_category_codes_json) THEN r.tertiary_category_codes_json ELSE '[]' END,
+        '$[*]' COLUMNS (tertiary_code VARCHAR(64) PATH '$')
+      ) AS one_code
+      WHERE rule.customer_code IN (r.customer_code, '*')
+        AND rule.business_category_code = COALESCE(d1.dimension_code, r.business_category, p.project_type, '')
+        AND rule.secondary_category_code = COALESCE(d2.dimension_code, r.secondary_category, '')
+        AND rule.tertiary_category_code = one_code.tertiary_code
+        AND rule.status = 'active'
+        AND rule.deleted_at IS NULL
+        AND (rule.effective_from IS NULL OR rule.effective_from <= COALESCE(t.actual_end_at, t.planned_end_at, r.created_at, NOW()))
+        AND (rule.effective_to IS NULL OR rule.effective_to >= COALESCE(t.actual_end_at, t.planned_end_at, r.created_at, NOW()))
+      ORDER BY (rule.customer_code = r.customer_code) DESC, rule.version_no DESC, rule.effective_from DESC
+      LIMIT 1
     )
-    ELSE 1
-  END AS quantity,
+    ELSE NULL
+  END AS unit_price,
+  (
+    SELECT COALESCE(SUM(GREATEST(COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(r.tertiary_category_quantities_json) THEN r.tertiary_category_quantities_json ELSE '{}' END, CONCAT('$\"', codes.tertiary_code, '\"'))) AS DECIMAL(14, 2)), 1), 1)), 1)
+    FROM JSON_TABLE(
+      CASE WHEN JSON_VALID(r.tertiary_category_codes_json) THEN r.tertiary_category_codes_json ELSE '[]' END,
+      '$[*]' COLUMNS (tertiary_code VARCHAR(64) PATH '$')
+    ) AS codes
+  ) AS quantity,
   CAST(NULL AS DECIMAL(14, 2)) AS discount_amount,
-  t.price_amount AS total_price,
+  (
+    SELECT COALESCE(SUM(
+      COALESCE((
+        SELECT rule.unit_price
+        FROM task_price_rules rule
+        WHERE rule.customer_code IN (r.customer_code, '*')
+          AND rule.business_category_code = COALESCE(d1.dimension_code, r.business_category, p.project_type, '')
+          AND rule.secondary_category_code = COALESCE(d2.dimension_code, r.secondary_category, '')
+          AND rule.tertiary_category_code = codes.tertiary_code
+          AND rule.status = 'active'
+          AND rule.deleted_at IS NULL
+          AND (rule.effective_from IS NULL OR rule.effective_from <= COALESCE(t.actual_end_at, t.planned_end_at, r.created_at, NOW()))
+          AND (rule.effective_to IS NULL OR rule.effective_to >= COALESCE(t.actual_end_at, t.planned_end_at, r.created_at, NOW()))
+        ORDER BY (rule.customer_code = r.customer_code) DESC, rule.version_no DESC, rule.effective_from DESC
+        LIMIT 1
+      ), 0) * GREATEST(COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(r.tertiary_category_quantities_json) THEN r.tertiary_category_quantities_json ELSE '{}' END, CONCAT('$\"', codes.tertiary_code, '\"'))) AS DECIMAL(14, 2)), 1), 1)
+    ), 0)
+    FROM JSON_TABLE(
+      CASE WHEN JSON_VALID(r.tertiary_category_codes_json) THEN r.tertiary_category_codes_json ELSE '[]' END,
+      '$[*]' COLUMNS (tertiary_code VARCHAR(64) PATH '$')
+    ) AS codes
+  ) AS total_price,
   r.source_contact_name AS requester_name,
   (
     SELECT GROUP_CONCAT(
