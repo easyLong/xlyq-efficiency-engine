@@ -9047,6 +9047,7 @@
       try {
         const board = await request(`/tasks/board?${new URLSearchParams({
           liveAssetCount: "true",
+           ...(can("dashboard.view_global") ? { scope: "global" } : {}),
           ...(customerId !== "all" ? { customerCode: customerId } : {}),
         }).toString()}`);
         if (requestSeq !== state.settlementRequestSeq) return;
