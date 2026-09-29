@@ -538,7 +538,8 @@
     .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
     .span-all { grid-column: 1 / -1; }
     .section-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
-    .section-title h3 { margin: 0; font-size: 20px; }
+    .section-title h3 { margin: 0; font-size: 20px; white-space: nowrap; }
+    #settlementDetails .row-title { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .summary-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
     .mini-metric { border: 1px solid #d8dfcf; background: #fffdf7; border-radius: 16px; padding: 12px; }
     .mini-metric span { display: block; color: #687366; font-size: 12px; margin-bottom: 5px; }
