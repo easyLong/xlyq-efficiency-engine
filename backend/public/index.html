@@ -1842,6 +1842,8 @@
       font-size: 11px;
     }
     .settlement-template-table .settlement-image-link:hover { background: #e5f0e4; }
+    .settlement-status-link { padding: 0; border: 0; background: transparent; color: #a65b29; font: inherit; text-decoration: underline; cursor: pointer; }
+    .settlement-status-link:hover { color: #7f421c; }
     .settlement-template-pagination { padding: 9px 0 0; }
     @media (max-width: 620px) {
       .settlement-template-meta { align-items: flex-start; flex-direction: column; gap: 4px; }
@@ -3247,6 +3249,7 @@
       },
       settlementRequestSeq: 0,
       settlementPriceRules: [],
+      settlementPricingTargets: new Map(),
       requirementFilter: "all",
       requirementDateFilters: { startDate: "", endDate: "" },
       requirementKeyword: "",
@@ -9199,6 +9202,23 @@
       if (deliveryAssetCount <= 0 && task?.status !== "completed") return "待交付";
       return "可结算";
     }
+    async function openSettlementPricingTarget(key) {
+      const row = state.settlementPricingTargets.get(key);
+      if (!row) return toast("未找到待定价任务");
+      if (!canView("standard-config")) return toast("当前账号没有基金定价权限");
+      const unresolvedPrice = (row.priceBreakdown || []).find(item => !item.ruleId || Number(item.unitPrice || 0) <= 0);
+      const tertiaryCode = unresolvedPrice?.tertiaryCode || row.tertiaryCodes?.[0] || "";
+      if (!row.businessCategoryCode || !row.secondaryCategoryCode || !tertiaryCode) return toast("该任务缺少完整的三级分类，无法定位基金定价");
+      switchView("standard-config");
+      setStandardConfigTab("price");
+      renderTaskPriceCustomerOptions();
+      const customerFilter = qs("taskPriceCustomerInput");
+      if (customerFilter && [...customerFilter.options].some(option => option.value === row.customerId)) customerFilter.value = row.customerId;
+      await loadTaskPriceRules(false);
+      if (unresolvedPrice?.ruleId) editTaskPriceRule(unresolvedPrice.ruleId);
+      else prepareTaskPriceRuleCreate(row.businessCategoryCode, row.secondaryCategoryCode, tertiaryCode);
+      toast(`已定位到“${row.tertiaryCategory || tertiaryCode}”的基金定价`);
+    }
     function buildSettlementSummary(rows) {
       return {
         requirementCount: rows.length,
@@ -9409,6 +9429,7 @@
     }
     function renderSettlementDetails(rows) {
       const box = qs("settlementDetails");
+      state.settlementPricingTargets.clear();
       if (state.settlementTemplate) {
         const preview = state.settlementTemplatePreview;
         if (!preview) {
@@ -9448,7 +9469,13 @@
         <table>
           <thead><tr><th>基金</th><th>对接人</th><th>时间</th><th>需求任务</th><th>业务大类</th><th>二级分类</th><th>三级分类</th><th>执行人</th><th>资产个数</th><th>基金定价</th><th>结算金额</th><th>状态</th></tr></thead>
           <tbody>
-            ${rows.map(row => `
+            ${rows.map((row, index) => {
+              const key = `settlement-${row.task?.id || row.taskNo || index}`;
+              state.settlementPricingTargets.set(key, row);
+              const status = row.status === "待定价"
+                ? `<button class="settlement-status-link" type="button" title="点击跳转到基金定价" onclick="openSettlementPricingTarget('${escapeAttr(key)}')">待定价</button>`
+                : `<span class="tag">${safeText(row.status)}</span>`;
+              return `
               <tr>
                 <td>${safeText(row.customerName)}</td>
                 <td>${safeText(row.contactContextName)}</td>
@@ -9461,9 +9488,10 @@
                 <td>${row.assetCount > 0 ? row.assetCount : "未交付"}</td>
                 <td>${formatMoney(row.taskPrice)}</td>
                 <td>${formatMoney(row.amount)}</td>
-                <td><span class="tag">${safeText(row.status)}</span></td>
+                <td>${status}</td>
               </tr>
-            `).join("")}
+            `;
+            }).join("")}
           </tbody>
         </table>
       `;
