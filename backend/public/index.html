@@ -2186,6 +2186,8 @@
     .standard-detail-panel h4 { margin: 0 0 5px; }
     .standard-detail-panel p { margin: 0 0 12px; color: #697567; font-size: 12px; }
     .standard-detail-panel textarea { min-height: 74px; resize: vertical; }
+    .standard-detail-path { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; padding: 8px 10px; border: 1px solid #dce6d8; border-radius: 8px; background: #fffefb; color: #5f6d5d; font-size: 12px; }
+    .standard-detail-path strong { color: #304234; font-weight: 600; }
     .price-rule-table { min-width: 1000px; }
     .price-rule-table td { vertical-align: top; }
     .price-rule-table .path-cell { min-width: 250px; line-height: 1.45; }
@@ -8178,31 +8180,30 @@
       select.innerHTML = renderTaskPriceRuleTertiaryOptions(category, secondary);
       if ([...select.options].some(item => item.value === previous)) select.value = previous;
     }
-    function renderTaskPriceEditor(rule = null) {
+    function renderTaskPriceEditor(rule = null, context = null) {
       const editor = qs("taskPriceRuleEditor");
       if (!editor) return;
       editor.classList.remove("hidden");
-      const selectedCategory = rule?.business_category_code || state.categoryTree?.[0]?.code || "";
-      const selectedSecondary = rule?.secondary_category_code || categoryTreeNode(selectedCategory)?.secondaries?.[0]?.code || "";
-      const selectedTertiary = rule?.tertiary_category_code || (categoryTreeNode(selectedCategory)?.secondaries || []).find(item => item.code === selectedSecondary)?.tertiaries?.[0]?.code || "";
+      const selectedCategory = rule?.business_category_code || context?.categoryCode || state.categoryTree?.[0]?.code || "";
+      const selectedSecondary = rule?.secondary_category_code || context?.secondaryCode || categoryTreeNode(selectedCategory)?.secondaries?.[0]?.code || "";
+      const selectedTertiary = rule?.tertiary_category_code || context?.tertiaryCode || (categoryTreeNode(selectedCategory)?.secondaries || []).find(item => item.code === selectedSecondary)?.tertiaries?.[0]?.code || "";
       const selectedCustomer = rule?.customer_code || qs("taskPriceCustomerInput")?.value || configFundCustomers()[0]?.customer_code || "";
+      const classification = findClassificationRow(selectedTertiary);
+      const categoryName = classification?.category?.name || categoryTreeNode(selectedCategory)?.name || selectedCategory;
+      const secondaryName = classification?.secondary?.name || (categoryTreeNode(selectedCategory)?.secondaries || []).find(item => item.code === selectedSecondary)?.name || selectedSecondary;
+      const tertiaryName = classification?.tertiary?.name || selectedTertiary;
       editor.innerHTML = `
-        <h4>${rule ? "编辑价格规则" : "新增价格规则"}</h4>
-        <p>价格按基金和三级分类匹配；修改价格建议新增版本并设置生效时间。</p>
+        <h4>${rule ? "编辑基金价格" : "新增基金价格"}</h4>
+        <p>基金价格只配置在三级分类叶子节点；业务大类和二级分类用于定位层级。</p>
+        <div class="standard-detail-path"><span>业务大类</span><strong>${escapeHtml(categoryName)}</strong><span>/</span><span>二级分类</span><strong>${escapeHtml(secondaryName)}</strong><span>/</span><span>三级分类</span><strong>${escapeHtml(tertiaryName)}</strong></div>
         <div class="form-grid">
           <label>基金<select id="taskPriceRuleCustomerInput">${configFundCustomers().map(item => `<option value="${escapeAttr(item.customer_code || "")}" ${item.customer_code === selectedCustomer ? "selected" : ""}>${escapeHtml(item.customer_name || item.customer_code || "未命名基金")}</option>`).join("")}</select></label>
-          <label>业务大类<select id="taskPriceRuleCategoryInput" onchange="syncTaskPriceRuleSecondaryOptions()">${renderTaskPriceRuleCategoryOptions(selectedCategory)}</select></label>
-          <label>二级分类<select id="taskPriceRuleSecondaryInput" onchange="syncTaskPriceRuleTertiaryOptions()">${renderTaskPriceRuleSecondaryOptions(selectedCategory, selectedSecondary)}</select></label>
-          <label>三级分类<select id="taskPriceRuleTertiaryInput">${renderTaskPriceRuleTertiaryOptions(selectedCategory, selectedSecondary, selectedTertiary)}</select></label>
-          <label>计价方式<select id="taskPriceRuleModeInput"><option value="fixed" ${rule?.pricing_mode === "fixed" ? "selected" : ""}>固定单价</option><option value="quantity" ${rule?.pricing_mode === "quantity" ? "selected" : ""}>按数量</option><option value="time_rate" ${rule?.pricing_mode === "time_rate" ? "selected" : ""}>按分钟/时间</option></select></label>
-          <label>单价<input id="taskPriceRuleUnitPriceInput" type="number" min="0" step="0.01" value="${escapeAttr(rule?.unit_price || "0.00")}" /></label>
-          <label>生效日期<input id="taskPriceRuleFromInput" type="date" value="${escapeAttr(String(rule?.effective_from || "").slice(0, 10))}" /></label>
-          <label>失效日期<input id="taskPriceRuleToInput" type="date" value="${escapeAttr(String(rule?.effective_to || "").slice(0, 10))}" /></label>
-          <label>版本号<input id="taskPriceRuleVersionInput" type="number" min="1" step="1" value="${escapeAttr(rule?.version_no || 1)}" /></label>
-          <label>状态<select id="taskPriceRuleStatusInput"><option value="active" ${rule?.status !== "inactive" ? "selected" : ""}>启用</option><option value="inactive" ${rule?.status === "inactive" ? "selected" : ""}>停用</option></select></label>
+          <label>价格<input id="taskPriceRuleUnitPriceInput" type="number" min="0" step="0.01" value="${escapeAttr(rule?.unit_price || "0.00")}" /></label>
         </div>
-        <label>价格说明<textarea id="taskPriceRuleRemarkInput" placeholder="例如：含税、适用于标准交付，不含临时加急">${escapeHtml(rule?.remark || "")}</textarea></label>
-        <div class="btns"><button class="btn primary" onclick="saveTaskPriceRule()">保存价格规则</button><button class="btn" onclick="cancelTaskPriceRuleEdit()">${rule ? "取消编辑" : "关闭"}</button></div>`;
+        <input id="taskPriceRuleCategoryInput" type="hidden" value="${escapeAttr(selectedCategory)}" />
+        <input id="taskPriceRuleSecondaryInput" type="hidden" value="${escapeAttr(selectedSecondary)}" />
+        <input id="taskPriceRuleTertiaryInput" type="hidden" value="${escapeAttr(selectedTertiary)}" />
+        <div class="btns"><button class="btn primary" onclick="saveTaskPriceRule()">保存</button><button class="btn" onclick="cancelTaskPriceRuleEdit()">${rule ? "取消编辑" : "关闭"}</button></div>`;
     }
     function cancelTaskPriceRuleEdit() {
       state.editingTaskPriceRuleId = null;
@@ -8259,7 +8260,7 @@
       const menu = qs("standardContextMenu");
       if (!rule || !menu) return;
       state.standardContext = { type: "price-rule", code: id };
-      menu.innerHTML = `<button onclick="closeStandardContextMenu(); editTaskPriceRule('${escapeAttr(id)}')">编辑价格规则</button><button class="danger" onclick="closeStandardContextMenu(); disableTaskPriceRule('${escapeAttr(id)}')">删除（停用）价格规则</button>`;
+      menu.innerHTML = `<button onclick="closeStandardContextMenu(); editTaskPriceRule('${escapeAttr(id)}')">编辑基金价格</button><button class="danger" onclick="closeStandardContextMenu(); disableTaskPriceRule('${escapeAttr(id)}')">删除（停用）基金价格</button>`;
       menu.classList.remove("hidden");
       const margin = 10;
       const rect = menu.getBoundingClientRect();
@@ -8323,18 +8324,10 @@
     }
     function prepareTaskPriceRuleCreate(categoryCode, secondaryCode, tertiaryCode) {
       state.editingTaskPriceRuleId = null;
-      renderTaskPriceEditor();
+      renderTaskPriceEditor(null, { categoryCode, secondaryCode, tertiaryCode });
       const customerSelect = qs("taskPriceRuleCustomerInput");
       const customerFilter = qs("taskPriceCustomerInput")?.value || "";
       if (customerSelect) customerSelect.value = customerFilter || configFundCustomers()[0]?.customer_code || "";
-      const categorySelect = qs("taskPriceRuleCategoryInput");
-      if (categorySelect) categorySelect.value = categoryCode;
-      syncTaskPriceRuleSecondaryOptions();
-      const secondarySelect = qs("taskPriceRuleSecondaryInput");
-      if (secondarySelect) secondarySelect.value = secondaryCode;
-      syncTaskPriceRuleTertiaryOptions();
-      const tertiarySelect = qs("taskPriceRuleTertiaryInput");
-      if (tertiarySelect) tertiarySelect.value = tertiaryCode;
       qs("taskPriceRuleEditor")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
     function openTaskPriceRuleCreateContext(event, categoryCode, secondaryCode, tertiaryCode) {
@@ -8345,8 +8338,8 @@
       state.standardContext = { type: "price-create", code: tertiaryCode };
       const customerCode = qs("taskPriceCustomerInput")?.value || "";
       const matchingRules = (state.taskPriceRules || []).filter(rule => rule.tertiary_category_code === tertiaryCode && (!customerCode || rule.customer_code === customerCode || rule.customer_code === "*"));
-      const editButtons = matchingRules.slice(0, 5).map(rule => `<button onclick="closeStandardContextMenu(); editTaskPriceRule('${escapeAttr(rule.id)}')">编辑价格规则${matchingRules.length > 1 ? `（${escapeHtml(rule.customer_code === "*" ? "全部基金" : rule.customer_code)}）` : ""}</button>`).join("");
-      menu.innerHTML = `${editButtons}<button onclick="closeStandardContextMenu(); prepareTaskPriceRuleCreate('${escapeAttr(categoryCode)}', '${escapeAttr(secondaryCode)}', '${escapeAttr(tertiaryCode)}')">新增价格规则</button>${matchingRules.length ? `<button class="danger" onclick="closeStandardContextMenu(); disableTaskPriceRule('${escapeAttr(matchingRules[0].id)}')">删除（停用）价格规则</button>` : ""}`;
+       const editButtons = matchingRules.slice(0, 5).map(rule => `<button onclick="closeStandardContextMenu(); editTaskPriceRule('${escapeAttr(rule.id)}')">编辑基金价格${matchingRules.length > 1 ? `（${escapeHtml(rule.customer_code === "*" ? "全部基金" : rule.customer_code)}）` : ""}</button>`).join("");
+       menu.innerHTML = `${editButtons}<button onclick="closeStandardContextMenu(); prepareTaskPriceRuleCreate('${escapeAttr(categoryCode)}', '${escapeAttr(secondaryCode)}', '${escapeAttr(tertiaryCode)}')">新增基金价格</button>${matchingRules.length ? `<button class="danger" onclick="closeStandardContextMenu(); disableTaskPriceRule('${escapeAttr(matchingRules[0].id)}')">删除（停用）基金价格</button>` : ""}`;
       menu.classList.remove("hidden");
       const margin = 10;
       const rect = menu.getBoundingClientRect();
@@ -8415,19 +8408,14 @@
       const secondaryCategoryCode = qs("taskPriceRuleSecondaryInput")?.value || "";
       const tertiaryCategoryCode = qs("taskPriceRuleTertiaryInput")?.value || "";
       const unitPrice = qs("taskPriceRuleUnitPriceInput")?.value.trim() || "";
-      if (!customerCode || !businessCategoryCode || !secondaryCategoryCode || !tertiaryCategoryCode || !unitPrice) return toast("请完整填写基金、分类和单价");
+       const priceValue = Number(unitPrice);
+       if (!customerCode || !businessCategoryCode || !secondaryCategoryCode || !tertiaryCategoryCode || !unitPrice || !Number.isFinite(priceValue) || priceValue < 0) return toast("请填写有效的基金和价格");
       const body = {
         customerCode,
         businessCategoryCode,
         secondaryCategoryCode,
         tertiaryCategoryCode,
-        pricingMode: qs("taskPriceRuleModeInput")?.value || "fixed",
-        unitPrice: Number(unitPrice).toFixed(2),
-        effectiveFrom: qs("taskPriceRuleFromInput")?.value || null,
-        effectiveTo: qs("taskPriceRuleToInput")?.value || null,
-        versionNo: Number(qs("taskPriceRuleVersionInput")?.value || 1),
-        status: qs("taskPriceRuleStatusInput")?.value || "active",
-        remark: qs("taskPriceRuleRemarkInput")?.value.trim() || null,
+         unitPrice: priceValue.toFixed(2),
       };
       try {
         const id = state.editingTaskPriceRuleId;
