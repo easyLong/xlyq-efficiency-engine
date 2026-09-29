@@ -5070,6 +5070,7 @@
     }
     function dimensionEmployeeOptions() {
       return state.users
+        .filter(user => user.status !== "inactive")
         .map(user => ({ value: user.id, label: userDisplayName(user) }))
         .sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN"));
     }
