@@ -1,5 +1,5 @@
 export const HUITIANFU_TEMPLATE_CODE = 'china_universal';
-export const HUITIANFU_TEMPLATE_VERSION = 2;
+export const HUITIANFU_TEMPLATE_VERSION = 3;
 export const HUITIANFU_CUSTOMER_CODE = 'China Universal';
 
 export const HUITIANFU_COLUMNS = [
@@ -58,7 +58,7 @@ SELECT
     ELSE NULL
   END AS unit_price,
   (
-    SELECT COALESCE(SUM(GREATEST(COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(r.tertiary_category_quantities_json) THEN r.tertiary_category_quantities_json ELSE '{}' END, CONCAT('$\"', codes.tertiary_code, '\"'))) AS DECIMAL(14, 2)), 1), 1)), 1)
+    SELECT COALESCE(SUM(GREATEST(COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(r.tertiary_category_quantities_json) THEN r.tertiary_category_quantities_json ELSE '{}' END, CONCAT('$.\"', codes.tertiary_code, '\"'))) AS DECIMAL(14, 2)), 1), 1)), 1)
     FROM JSON_TABLE(
       CASE WHEN JSON_VALID(r.tertiary_category_codes_json) THEN r.tertiary_category_codes_json ELSE '[]' END,
       '$[*]' COLUMNS (tertiary_code VARCHAR(64) PATH '$')
@@ -80,7 +80,7 @@ SELECT
           AND (rule.effective_to IS NULL OR rule.effective_to >= COALESCE(t.actual_end_at, t.planned_end_at, r.created_at, NOW()))
         ORDER BY (rule.customer_code = r.customer_code) DESC, rule.version_no DESC, rule.effective_from DESC
         LIMIT 1
-      ), 0) * GREATEST(COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(r.tertiary_category_quantities_json) THEN r.tertiary_category_quantities_json ELSE '{}' END, CONCAT('$\"', codes.tertiary_code, '\"'))) AS DECIMAL(14, 2)), 1), 1)
+      ), 0) * GREATEST(COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(r.tertiary_category_quantities_json) THEN r.tertiary_category_quantities_json ELSE '{}' END, CONCAT('$.\"', codes.tertiary_code, '\"'))) AS DECIMAL(14, 2)), 1), 1)
     ), 0)
     FROM JSON_TABLE(
       CASE WHEN JSON_VALID(r.tertiary_category_codes_json) THEN r.tertiary_category_codes_json ELSE '[]' END,

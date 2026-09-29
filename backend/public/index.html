@@ -9073,7 +9073,6 @@
           summary: buildSettlementSummary(rows),
         };
         renderSettlementStatement();
-        await loadSettlementTemplatePreview(customerId);
         if (showToast) toast("结算统计已刷新");
       } catch (error) {
         toast(error.message);
@@ -9506,8 +9505,17 @@
       `;
     }
     async function exportSettlementDetailsToExcel() {
-      if (state.settlementTemplate) {
-        const template = state.settlementTemplate;
+      let template = state.settlementTemplate;
+      if (!template && state.settlementCustomerId && state.settlementCustomerId !== "all") {
+        try {
+          const templates = await request(`/settlement/templates?customerCode=${encodeURIComponent(state.settlementCustomerId)}`);
+          template = Array.isArray(templates) ? templates[0] : null;
+        } catch (error) {
+          toast(error.message || "模板加载失败");
+          return;
+        }
+      }
+      if (template) {
         try {
           const response = await fetch(`${apiBase}/settlement/templates/${encodeURIComponent(template.id)}/export?${settlementTemplateQueryParams()}`, {
             headers: state.accessToken ? { Authorization: `Bearer ${state.accessToken}` } : {},
