@@ -2,7 +2,7 @@
 
 结算金额概览继续沿用现有统计逻辑。选中基金后，明细表与 Excel 从同一个后端 SQL 模板取数；未配置模板的基金仍使用原通用明细。
 
-服务启动时创建 `settlement_sql_templates`，首次为客户编码 `China Universal` 写入汇添富模板 v1。模板包含 `customer_code`、`template_code`、`name`、`version`、`status`、`sql_text` 和 `columns_json`。同一 `template_code` 可有多个版本；列表默认取已发布的最高版本。发布或回滚由数据库管理员维护，目前**没有网页 SQL 编辑器**。
+服务启动时创建 `settlement_sql_templates`，首次为客户编码 `China Universal` 写入汇添富模板 v2；已有 v1 会自动升级到 v2。模板包含 `customer_code`、`template_code`、`name`、`version`、`status`、`sql_text` 和 `columns_json`。同一 `template_code` 可有多个版本；列表默认取已发布的最高版本。发布或回滚由数据库管理员维护，目前**没有网页 SQL 编辑器**。
 
 SQL 必须是单条 `SELECT`，返回对外列配置所需的字段，并返回以下内部字段，供服务端绑定筛选和稳定分页：
 
