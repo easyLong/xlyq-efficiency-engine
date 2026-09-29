@@ -9080,22 +9080,23 @@
     }
     function settlementBusinessCategoryCode(value) {
       const matched = (state.categoryTree || []).find(item => item.code === value || item.name === value);
-      return matched?.code || "";
+      return matched?.code || normalizedBusinessCategoryCode(value);
     }
     function settlementClassification(task, requirement, project) {
       const rawBusinessCategory = task?.business_category || task?.businessCategory || requirement?.business_category || project?.project_type || "";
       const businessCategoryCode = settlementBusinessCategoryCode(rawBusinessCategory);
       const category = categoryTreeNode(businessCategoryCode);
       const rawSecondaryCategory = task?.secondary_category || task?.secondaryCategory || requirement?.secondary_category || "";
-      const secondary = (category?.secondaries || []).find(item => item.code === rawSecondaryCategory || item.name === rawSecondaryCategory);
+      const secondary = (category?.secondaries || []).find(item => item.code === rawSecondaryCategory || item.name === rawSecondaryCategory)
+        || (state.categoryTree || []).flatMap(item => item.secondaries || []).find(item => item.code === rawSecondaryCategory || item.name === rawSecondaryCategory);
       const rawTertiaryCategory = task?.tertiary_category || task?.tertiaryCategory || requirement?.tertiary_category || "";
       const tertiaryValues = String(rawTertiaryCategory).split(/[、,，]/).map(item => item.trim()).filter(Boolean);
-      const configuredCodes = parseTertiaryCategoryCodes(requirement);
+      const configuredValues = parseTertiaryCategoryCodes(requirement);
       const configuredQuantities = parseTertiaryCategoryQuantities(requirement);
-      const tertiaryCodes = (configuredCodes.length ? configuredCodes : tertiaryValues.map(value => {
+      const tertiaryCodes = (configuredValues.length ? configuredValues : tertiaryValues).map(value => {
         const item = (secondary?.tertiaries || []).find(candidate => candidate.code === value || candidate.name === value);
         return item?.code || value;
-      })).filter(Boolean);
+      }).filter(Boolean);
       const tertiaryNames = tertiaryCodes.map(code => {
         const item = (secondary?.tertiaries || []).find(candidate => candidate.code === code || candidate.name === code);
         return item?.name || code;
@@ -9206,9 +9207,16 @@
       const row = state.settlementPricingTargets.get(key);
       if (!row) return toast("未找到待定价任务");
       if (!canView("standard-config")) return toast("当前账号没有基金定价权限");
+      if (!state.categoryTree?.length) await reloadCategoryTree(false);
+      const freshClassification = settlementClassification(row.task, row.requirement, projectForTask(row.task));
+      const tertiaryLabels = String(row.tertiaryCategory || "").split(/[、,，]/).map(item => item.trim()).filter(Boolean);
+      const fallbackPath = classificationConfigRows().find(item => tertiaryLabels.includes(item.tertiary.code) || tertiaryLabels.includes(item.tertiary.name));
+      const businessCategoryCode = freshClassification.businessCategoryCode || row.businessCategoryCode || fallbackPath?.category?.code || "";
+      const secondaryCategoryCode = freshClassification.secondaryCategoryCode || row.secondaryCategoryCode || fallbackPath?.secondary?.code || "";
+      const tertiaryCodes = freshClassification.tertiaryCodes?.length ? freshClassification.tertiaryCodes : (row.tertiaryCodes || []);
       const unresolvedPrice = (row.priceBreakdown || []).find(item => !item.ruleId || Number(item.unitPrice || 0) <= 0);
-      const tertiaryCode = unresolvedPrice?.tertiaryCode || row.tertiaryCodes?.[0] || "";
-      if (!row.businessCategoryCode || !row.secondaryCategoryCode || !tertiaryCode) return toast("该任务缺少完整的三级分类，无法定位基金定价");
+      const tertiaryCode = unresolvedPrice?.tertiaryCode || tertiaryCodes[0] || fallbackPath?.tertiary?.code || "";
+      if (!businessCategoryCode || !secondaryCategoryCode || !tertiaryCode) return toast("该任务缺少完整的三级分类，无法定位基金定价");
       switchView("standard-config");
       setStandardConfigTab("price");
       renderTaskPriceCustomerOptions();
@@ -9216,7 +9224,7 @@
       if (customerFilter && [...customerFilter.options].some(option => option.value === row.customerId)) customerFilter.value = row.customerId;
       await loadTaskPriceRules(false);
       if (unresolvedPrice?.ruleId) editTaskPriceRule(unresolvedPrice.ruleId);
-      else prepareTaskPriceRuleCreate(row.businessCategoryCode, row.secondaryCategoryCode, tertiaryCode);
+      else prepareTaskPriceRuleCreate(businessCategoryCode, secondaryCategoryCode, tertiaryCode);
       toast(`已定位到“${row.tertiaryCategory || tertiaryCode}”的基金定价`);
     }
     function buildSettlementSummary(rows) {
