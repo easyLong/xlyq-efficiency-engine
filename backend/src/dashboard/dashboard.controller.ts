@@ -11,4 +11,9 @@ export class DashboardController {
   overview(@Req() request?: Request & { user?: UserEntity }) {
     return this.dashboardService.overview(request?.user ?? null);
   }
+
+  @Get('analytics')
+  analytics(@Req() request?: Request & { user?: UserEntity }) {
+    return this.dashboardService.analytics(request?.user ?? null);
+  }
 }

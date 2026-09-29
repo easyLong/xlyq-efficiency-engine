@@ -210,7 +210,11 @@ export class TasksService implements OnModuleInit {
       order: { created_at: 'DESC' },
     });
     const scoped = await this.scopeTasksForUser(tasks, currentUser ?? null);
-    return this.taskWorkflowRuntime.decorateTasks(scoped, currentUser ?? null);
+    return this.taskWorkflowRuntime.decorateTasks(
+      scoped,
+      currentUser ?? null,
+      'compact',
+    );
   }
 
   async findOne(id: string) {
@@ -313,6 +317,7 @@ export class TasksService implements OnModuleInit {
     const decoratedTasks = await this.taskWorkflowRuntime.decorateTasks(
       tasks,
       currentUser ?? null,
+      'compact',
     );
     const rows = decoratedTasks.map((task) => ({
       ...task,

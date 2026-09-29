@@ -33,11 +33,20 @@ export class RequirementsController {
   @Get('history-board')
   historyBoard(
     @Query('scope') scope?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('workflow') workflow?: string,
     @Req() request?: Request & { user?: UserEntity },
   ) {
     return this.requirementsService.historyBoard(
       request?.user ?? null,
       scope === 'global',
+      {
+        page: page ? Number(page) : undefined,
+        pageSize: pageSize ? Number(pageSize) : undefined,
+        workflow:
+          workflow === 'none' || workflow === 'full' ? workflow : 'compact',
+      },
     );
   }
 

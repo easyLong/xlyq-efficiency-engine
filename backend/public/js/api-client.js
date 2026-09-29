@@ -75,7 +75,7 @@
         request("/customers"),
         request("/contact-contexts?status=active").catch(() => []),
         request("/users"),
-        request("/requirements/history-board"),
+        request("/requirements/history-board?page=1&pageSize=80&workflow=compact"),
         aiPreviewVisible
           ? request("/requirements/ai-preview-candidates?limit=12&scope=mine").catch(() => [])
           : Promise.resolve([]),
@@ -102,6 +102,7 @@
         tasks: unwrap(historyBoard?.tasks),
         quotations: unwrap(quotations),
         quoteMappings: unwrap(historyBoard?.quoteMappings),
+        requirementPagination: historyBoard?.pagination || null,
         aiPreviewCandidates: unwrap(aiPreviewCandidates),
         businessPlatformDimensions: unwrap(businessPlatformDimensions),
         businessCategoryRelations: unwrap(businessCategoryRelations),

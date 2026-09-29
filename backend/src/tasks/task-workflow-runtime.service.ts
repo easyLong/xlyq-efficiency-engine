@@ -65,6 +65,8 @@ export type TaskWorkflowView = {
   riskTags: string[];
 };
 
+export type TaskWorkflowDecorationMode = 'full' | 'compact';
+
 type QueryExecutor = Pick<DataSource, 'query'> | Pick<EntityManager, 'query'>;
 
 type TaskFacts = {
@@ -702,6 +704,7 @@ export class TaskWorkflowRuntimeService {
   async decorateTasks(
     tasks: TaskEntity[],
     currentUser: UserEntity | null,
+    mode: TaskWorkflowDecorationMode = 'full',
   ): Promise<Array<TaskEntity & { workflow_view: TaskWorkflowView }>> {
     if (!tasks.length) return [];
     const taskIds = tasks.map((task) => task.id);
@@ -719,9 +722,8 @@ export class TaskWorkflowRuntimeService {
       rows.push(item);
       itemsByTaskId.set(item.taskId, rows);
     }
-    return tasks.map((task) =>
-      Object.assign(task, {
-        workflow_view: buildTaskWorkflowView(
+    return tasks.map((task) => {
+      const workflowView = buildTaskWorkflowView(
           task,
           itemsByTaskId.get(task.id) ?? [],
           currentUser,
@@ -731,9 +733,22 @@ export class TaskWorkflowRuntimeService {
             customerCode: null,
           },
           overdueTaskIds.has(task.id),
-        ),
-      }),
-    );
+        );
+      if (mode === 'compact' && workflowView.roleStates) {
+        const activeReviewerRole =
+          task.review_stage === TaskReviewStage.ProductReview
+            ? 'first_reviewer'
+            : task.review_stage === TaskReviewStage.CustomerReview
+              ? 'second_reviewer'
+              : null;
+        workflowView.roleStates = activeReviewerRole
+          ? workflowView.roleStates.filter(
+              (state) => state.roleCode === activeReviewerRole,
+            )
+          : [];
+      }
+      return Object.assign(task, { workflow_view: workflowView });
+    });
   }
 
   private async resolveOverdueTaskIds(tasks: TaskEntity[]) {

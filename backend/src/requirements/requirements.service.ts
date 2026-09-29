@@ -183,6 +183,12 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
   async historyBoard(
     currentUser: UserEntity | null = null,
     requestGlobalDashboard = false,
+    options: {
+      page?: number;
+      pageSize?: number;
+      workflow?: 'full' | 'compact' | 'none';
+      includeQuoteMappings?: boolean;
+    } = {},
   ) {
     const profile = currentUser
       ? await buildAccessProfile(this.dataSource, currentUser)
@@ -192,9 +198,9 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         profile &&
         hasPermission(profile, 'dashboard.view_global'),
     );
-    const quoteVisible = profile?.dataScope.quotes === 'all';
-    // The history board is grouped by customer/status on the client. Keep all
-    // authorized rows so a global limit cannot remove an older customer group.
+    const quoteVisible =
+      options.includeQuoteMappings !== false &&
+      profile?.dataScope.quotes === 'all';
     let requirements = await this.findAllForHistoryBoard();
     const requirementIds = requirements.map((requirement) => requirement.id);
     if (requirementIds.length === 0) {
@@ -203,6 +209,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         requirementItems: [],
         tasks: [],
         quoteMappings: [],
+        pagination: this.historyBoardPagination(options, 0),
       };
     }
 
@@ -212,11 +219,22 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     });
     const requirementItemIds = requirementItems.map((item) => item.id);
     if (requirementItemIds.length === 0) {
+      const pagination = this.historyBoardPagination(
+        options,
+        requirements.length,
+      );
+      const visibleRequirements = pagination
+        ? requirements.slice(
+            (pagination.page - 1) * pagination.pageSize,
+            pagination.page * pagination.pageSize,
+          )
+        : requirements;
       return {
-        requirements,
+        requirements: visibleRequirements,
         requirementItems,
         tasks: [],
         quoteMappings: [],
+        pagination,
       };
     }
 
@@ -240,9 +258,28 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       currentUser,
       globalDashboardRead,
     );
-    requirements = scoped.requirements;
-    const scopedRequirementItems = scoped.requirementItems;
-    const scopedTasks = scoped.tasks;
+    // Apply paging after access scoping so each page is full and cannot leak
+    // the existence or count of rows outside the current user's data scope.
+    const total = scoped.requirements.length;
+    const pagination = this.historyBoardPagination(options, total);
+    requirements = pagination
+      ? scoped.requirements.slice(
+          (pagination.page - 1) * pagination.pageSize,
+          pagination.page * pagination.pageSize,
+        )
+      : scoped.requirements;
+    const visibleRequirementIds = new Set(
+      requirements.map((requirement) => requirement.id),
+    );
+    const scopedRequirementItems = scoped.requirementItems.filter((item) =>
+      visibleRequirementIds.has(item.requirement_id),
+    );
+    const visibleItemIds = new Set(scopedRequirementItems.map((item) => item.id));
+    const scopedTasks = scoped.tasks.filter(
+      (task) =>
+        Boolean(task.requirement_item_id) &&
+        visibleItemIds.has(task.requirement_item_id as string),
+    );
     const scopedItemIds = new Set(
       scopedRequirementItems.map((item) => item.id),
     );
@@ -269,15 +306,40 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         : 'hidden';
     }
 
-    const presentedTasks = await this.taskWorkflowRuntime.decorateTasks(
-      scopedTasks,
-      currentUser,
-    );
+    const presentedTasks =
+      options.workflow === 'none'
+        ? scopedTasks
+        : await this.taskWorkflowRuntime.decorateTasks(
+            scopedTasks,
+            currentUser,
+            options.workflow === 'full' ? 'full' : 'compact',
+          );
     return {
       requirements,
       requirementItems: scopedRequirementItems,
       tasks: presentedTasks,
       quoteMappings: scopedQuoteMappings,
+      pagination,
+    };
+  }
+
+  private historyBoardPagination(
+    options: { page?: number; pageSize?: number },
+    total: number,
+  ) {
+    if (!Number.isFinite(options.page) && !Number.isFinite(options.pageSize)) {
+      return null;
+    }
+    const page = Math.max(1, Math.floor(Number(options.page) || 1));
+    const pageSize = Math.min(
+      200,
+      Math.max(1, Math.floor(Number(options.pageSize) || 80)),
+    );
+    return {
+      page,
+      pageSize,
+      total,
+      hasMore: page * pageSize < total,
     };
   }
 

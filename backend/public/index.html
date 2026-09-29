@@ -3258,6 +3258,9 @@
       requirementKeyword: "",
       requirementKeywordTimer: null,
       requirementVisibleLimit: 80,
+      requirementPagination: null,
+      requirementRefreshInFlight: false,
+      requirementRefreshPending: false,
       requirementFilterUiKey: "",
       quoteEditingItemId: null,
       quoteSelectedQuotationByItemId: {},
@@ -3290,6 +3293,9 @@
         endDate: "",
       },
       analyticsRequestSeq: 0,
+      analyticsRefreshInFlight: false,
+      analyticsRefreshPending: false,
+      analyticsData: null,
       employeeLoad: null,
       employeeLoadCategory: "all",
       employeeLoadSort: "recommended",
@@ -3687,6 +3693,7 @@
       state.aiPreviewCandidates = appData.aiPreviewCandidates || [];
       state.quotations = appData.quotations;
       state.quoteMappings = appData.quoteMappings;
+      state.requirementPagination = appData.requirementPagination || null;
       invalidateLookupMaps();
       qs("healthPill").textContent = `后端 ${appData.health.status} / 数据库 ${appData.health.database}`;
       renderBootstrap();
@@ -4620,12 +4627,13 @@
     function startAutoRefresh() {
       if (state.refreshTimer) clearInterval(state.refreshTimer);
       state.refreshTimer = setInterval(() => {
+        if (document.visibilityState !== "visible") return;
         const appVisible = !qs("appView").classList.contains("hidden");
         const onRequirementPage = !qs("view-requirements").classList.contains("hidden");
         const onDashboardPage = !qs("view-dashboard").classList.contains("hidden");
         if (appVisible && onRequirementPage) refreshRequirementBoard();
         if (appVisible && onDashboardPage) refreshAnalytics();
-      }, 30000);
+      }, 120000);
     }
     function switchView(view) {
       if (!canView(view)) {
@@ -5219,20 +5227,20 @@
           state.dimensionFilters[childKey] = "all";
         }
       }
-      refreshAnalytics();
+      refreshAnalytics({ reuseData: true });
     }
     function setDashboardDateFilter(key, value) {
       state.dashboardDateFilters = state.dashboardDateFilters || { startDate: "", endDate: "" };
       state.dashboardDateFilters[key] = value || "";
-      refreshAnalytics();
+      refreshAnalytics({ reuseData: true });
     }
     function setDashboardDatePreset(preset) {
       state.dashboardDateFilters = datePresetRange(preset);
-      refreshAnalytics();
+      refreshAnalytics({ reuseData: true });
     }
     function clearDashboardDateFilters() {
       state.dashboardDateFilters = { startDate: "", endDate: "" };
-      refreshAnalytics();
+      refreshAnalytics({ reuseData: true });
     }
     function drillDashboardDimension(key, value) {
       if (!key || !value || value === "-") return;
@@ -5245,7 +5253,7 @@
       dashboardDimensionOrder().forEach(key => state.dimensionFilters[key] = "all");
       state.dimensionFilters.contactContextId = "all";
       syncPrimaryCustomerSelects("all");
-      refreshAnalytics();
+      refreshAnalytics({ reuseData: true });
     }
     function setSettlementDimensionFilter(key, value) {
       state.dimensionFilters[key] = value || "all";
@@ -5255,7 +5263,7 @@
       syncPrimaryCustomerSelects(customerId || "all");
       state.requirementVisibleLimit = 80;
       renderRequirementBoard();
-      refreshAnalytics();
+      refreshAnalytics({ reuseData: true });
     }
     function setSettlementPrimaryCustomer(customerId) {
       syncPrimaryCustomerSelects(customerId || "all");
@@ -5898,28 +5906,77 @@
       const force = Boolean(options.force);
       const preserveScroll = Boolean(options.preserveScroll);
       if (state.editingRequirementId || (state.busyActionId && !force)) return;
-      const scrollY = preserveScroll ? window.scrollY : null;
-      let historyBoard = null;
-      try {
-        historyBoard = await request("/requirements/history-board");
-      } catch (error) {
-        const [requirements, requirementItems, tasks, quoteMappings] = await Promise.all([
-          request("/requirements"),
-          request("/requirement-items"),
-          request("/tasks"),
-          can("quote.view_all") ? request("/quote-mappings").catch(() => []) : Promise.resolve([]),
-        ]);
-        historyBoard = { requirements, requirementItems, tasks, quoteMappings };
+      if (state.requirementRefreshInFlight) {
+        if (force) state.requirementRefreshPending = true;
+        return;
       }
-      state.requirements = unwrap(historyBoard?.requirements);
-      state.requirementItems = unwrap(historyBoard?.requirementItems);
-      state.tasks = unwrap(historyBoard?.tasks);
-      state.quoteMappings = unwrap(historyBoard?.quoteMappings);
-      await refreshAiPreviewBoard();
-      invalidateLookupMaps();
-      renderRequirementBoard();
-      if (scrollY !== null) {
-        requestAnimationFrame(() => window.scrollTo(0, scrollY));
+      state.requirementRefreshInFlight = true;
+      const scrollY = preserveScroll ? window.scrollY : null;
+      try {
+        let historyBoard = null;
+        try {
+          historyBoard = await request("/requirements/history-board?page=1&pageSize=80&workflow=compact");
+        } catch (error) {
+          const [requirements, requirementItems, tasks, quoteMappings] = await Promise.all([
+            request("/requirements"),
+            request("/requirement-items"),
+            request("/tasks"),
+            can("quote.view_all") ? request("/quote-mappings").catch(() => []) : Promise.resolve([]),
+          ]);
+          historyBoard = { requirements, requirementItems, tasks, quoteMappings, pagination: null };
+        }
+        state.requirements = unwrap(historyBoard?.requirements);
+        state.requirementItems = unwrap(historyBoard?.requirementItems);
+        state.tasks = unwrap(historyBoard?.tasks);
+        state.quoteMappings = unwrap(historyBoard?.quoteMappings);
+        state.requirementPagination = historyBoard?.pagination || null;
+        await refreshAiPreviewBoard();
+        invalidateLookupMaps();
+        renderRequirementBoard();
+        if (scrollY !== null) {
+          requestAnimationFrame(() => window.scrollTo(0, scrollY));
+        }
+      } finally {
+        state.requirementRefreshInFlight = false;
+        if (state.requirementRefreshPending) {
+          state.requirementRefreshPending = false;
+          refreshRequirementBoard({ force: true, preserveScroll: true });
+        }
+      }
+    }
+
+    function mergeRowsById(currentRows, incomingRows) {
+      const rows = new Map((currentRows || []).map(row => [row.id, row]));
+      for (const row of incomingRows || []) rows.set(row.id, row);
+      return [...rows.values()];
+    }
+
+    async function loadMoreRequirements() {
+      const pagination = state.requirementPagination;
+      if (!pagination?.hasMore || state.requirementRefreshInFlight) return;
+      state.requirementRefreshInFlight = true;
+      try {
+        const params = new URLSearchParams({
+          page: String(Number(pagination.page || 1) + 1),
+          pageSize: String(Number(pagination.pageSize || 80)),
+          workflow: "compact",
+        });
+        const historyBoard = await request(`/requirements/history-board?${params.toString()}`);
+        state.requirements = mergeRowsById(state.requirements, unwrap(historyBoard?.requirements));
+        state.requirementItems = mergeRowsById(state.requirementItems, unwrap(historyBoard?.requirementItems));
+        state.tasks = mergeRowsById(state.tasks, unwrap(historyBoard?.tasks));
+        state.quoteMappings = mergeRowsById(state.quoteMappings, unwrap(historyBoard?.quoteMappings));
+        state.requirementPagination = historyBoard?.pagination || null;
+        invalidateLookupMaps();
+        renderRequirementBoard();
+      } catch (error) {
+        toast(error.message || "加载更多需求失败");
+      } finally {
+        state.requirementRefreshInFlight = false;
+        if (state.requirementRefreshPending) {
+          state.requirementRefreshPending = false;
+          refreshRequirementBoard({ force: true, preserveScroll: true });
+        }
       }
     }
     async function refreshAiPreviewBoard() {
@@ -6525,12 +6582,14 @@
           <div class="empty-list">
             还没有符合条件的需求。
             <button class="btn" onclick="clearRequirementFilters()">查看全部</button>
+            ${state.requirementPagination?.hasMore ? `<button class="btn" onclick="loadMoreRequirements()">继续加载历史需求</button>` : ""}
           </div>
         `;
         return;
       }
-      const visibleRows = filteredRows.slice(0, state.requirementVisibleLimit);
-      const hasMoreRows = visibleRows.length < filteredRows.length;
+      const visibleRows = filteredRows;
+      const hasMoreRows = Boolean(state.requirementPagination?.hasMore);
+      const totalRows = Number(state.requirementPagination?.total || state.requirements.length || filteredRows.length);
       boardEl.innerHTML = `
         <div class="requirement-list">
           ${visibleRows.map(row => `
@@ -6572,14 +6631,13 @@
           `).join("")}
         </div>
         <div class="history-load-row">
-          <span>已显示 ${visibleRows.length} / ${filteredRows.length} 条</span>
-          ${hasMoreRows ? `<button class="btn" onclick="showMoreRequirements()">加载更多</button>` : ""}
+          <span>当前筛选 ${visibleRows.length} 条 · 已加载 ${state.requirements.length} / ${totalRows} 条需求</span>
+          ${hasMoreRows ? `<button class="btn" onclick="loadMoreRequirements()">加载更多</button>` : ""}
         </div>
       `;
     }
     function showMoreRequirements() {
-      state.requirementVisibleLimit += 80;
-      renderRequirementBoard();
+      loadMoreRequirements();
     }
     function clearRequirementFilters() {
       state.requirementFilter = "all";
@@ -9057,13 +9115,9 @@
         const taskRows = Object.entries(board).flatMap(([status, tasks]) => (tasks || []).map(task => ({ status, ...task })));
         const priceRules = unwrap(await request("/dimensions/task-price-rules?status=active"));
         state.settlementPriceRules = Array.isArray(priceRules) ? priceRules : [];
-        let requirements = state.requirements || [];
-        let requirementItems = state.requirementItems || [];
-        if (!requirements.length || !requirementItems.length) {
-          const historyBoard = await request("/requirements/history-board");
-          requirements = unwrap(historyBoard?.requirements);
-          requirementItems = unwrap(historyBoard?.requirementItems);
-        }
+        const historyBoard = await request("/requirements/history-board?workflow=none");
+        const requirements = unwrap(historyBoard?.requirements);
+        const requirementItems = unwrap(historyBoard?.requirementItems);
         const requirementById = new Map(requirements.map(requirement => [requirement.id, requirement]));
         const requirementByItemId = new Map(requirementItems
           .map(item => [item.id, requirementById.get(item.requirement_id)])
@@ -9849,7 +9903,12 @@
         renderRequirementBoard();
       }
     }
-    async function refreshAnalytics() {
+    async function refreshAnalytics(options = {}) {
+      if (state.analyticsRefreshInFlight) {
+        state.analyticsRefreshPending = true;
+        return;
+      }
+      state.analyticsRefreshInFlight = true;
       const requestSeq = ++state.analyticsRequestSeq;
       state.dimensionFilters.contactContextId = "all";
       state.dimensionFilters.assigneeUserId = "all";
@@ -9858,30 +9917,16 @@
       syncPrimaryCustomerSelects(customerId);
       renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", true, true);
       renderDashboardDrillPath();
-      const query = new URLSearchParams({ liveAssetCount: "true" });
-      if (customerId !== "all") query.set("customerCode", customerId);
-      const canViewGlobalDashboard = can("dashboard.view_global");
-      if (canViewGlobalDashboard) query.set("scope", "global");
       qs("metrics").innerHTML = `<div class="panel metric"><span>正在刷新</span><strong>...</strong><span>同步需求进度和资产交付</span></div>`;
       try {
         const analyticsCustomers = selectedAnalyticsCustomers(customerId);
         state.businessWorkdayCache = new Map();
-        const boardPromise = request(`/tasks/board?${query.toString()}`);
-        const employeeBoardPromise = customerId === "all"
-          ? boardPromise
-          : request(`/tasks/board?${new URLSearchParams({ liveAssetCount: "true", ...(canViewGlobalDashboard ? { scope: "global" } : {}) }).toString()}`);
-        const employeeLoadPromise = can("dashboard.employee_detail")
-          ? request("/tasks/dashboard/employees")
-          : Promise.resolve(null);
-        const dashboardHistoryPromise = canViewGlobalDashboard
-          ? request("/requirements/history-board?scope=global")
-          : Promise.resolve(null);
-        const [board, employeeBoard, employeeLoad, dashboardHistory] = await Promise.all([
-          boardPromise,
-          employeeBoardPromise,
-          employeeLoadPromise,
-          dashboardHistoryPromise,
-        ]);
+        const analyticsData = options.reuseData && state.analyticsData
+          ? state.analyticsData
+          : await request("/dashboard/analytics");
+        state.analyticsData = analyticsData;
+        if (requestSeq !== state.analyticsRequestSeq) return;
+        const employeeLoad = analyticsData?.employeeLoad || null;
         if (can("dashboard.employee_detail")) {
           state.employeeLoad = employeeLoad;
           renderEmployeeLoad();
@@ -9889,22 +9934,15 @@
           state.employeeLoad = null;
           renderEmployeeLoad();
         }
-        if (requestSeq !== state.analyticsRequestSeq) return;
-        if (dashboardHistory) {
-          state.requirements = unwrap(dashboardHistory.requirements);
-          state.requirementItems = unwrap(dashboardHistory.requirementItems);
-          state.tasks = unwrap(dashboardHistory.tasks);
-          state.quoteMappings = unwrap(dashboardHistory.quoteMappings);
-          invalidateLookupMaps();
-        }
+        state.requirements = unwrap(analyticsData?.requirements);
+        state.requirementItems = unwrap(analyticsData?.requirementItems);
+        state.tasks = unwrap(analyticsData?.tasks);
+        invalidateLookupMaps();
         const customerCodes = new Set(analyticsCustomers.map(customer => customer.customer_code));
-        const employeeTopTasks = Object.entries(employeeBoard)
-          .flatMap(([status, tasks]) => (tasks || []).map(t => ({ status, ...t })))
+        const employeeTopTasks = state.tasks
           .filter(task => dashboardDateMatches(requirementForTask(task), task));
         state.employeeHistoryTasks = employeeTopTasks;
-        const rows = Object.entries(board)
-          .flatMap(([status, tasks]) => (tasks || []).map(t => ({ status, ...t })))
-          .filter(task => {
+        const rows = state.tasks.filter(task => {
             const taskCustomerId = projectForTask(task)?.customer_code;
             const requirement = requirementForTask(task);
             return (!taskCustomerId || customerCodes.has(taskCustomerId))
@@ -9958,6 +9996,12 @@
         renderKeyTaskBoard(analyticsContext);
       } catch (error) {
         toast(error.message);
+      } finally {
+        state.analyticsRefreshInFlight = false;
+        if (state.analyticsRefreshPending) {
+          state.analyticsRefreshPending = false;
+          refreshAnalytics();
+        }
       }
     }
     function selectedAnalyticsCustomers(customerId) {
