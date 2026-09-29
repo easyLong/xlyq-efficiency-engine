@@ -1,8 +1,8 @@
 export const HUITIANFU_TEMPLATE_CODE = 'china_universal';
-export const HUITIANFU_TEMPLATE_VERSION = 4;
+export const HUITIANFU_TEMPLATE_VERSION = 5;
 export const HUITIANFU_CUSTOMER_CODE = 'China Universal';
 export const DEFAULT_SETTLEMENT_TEMPLATE_CODE = 'default_settlement';
-export const DEFAULT_SETTLEMENT_TEMPLATE_VERSION = 2;
+export const DEFAULT_SETTLEMENT_TEMPLATE_VERSION = 3;
 export const DEFAULT_SETTLEMENT_CUSTOMER_CODE = '*';
 export const DEFAULT_SETTLEMENT_TEMPLATE_NAME = '通用结算明细';
 
@@ -33,7 +33,7 @@ SELECT
   COALESCE(d1.dimension_code, r.business_category, p.project_type, '') AS __business_category,
   COALESCE(d2.dimension_name, r.secondary_category, '') AS __secondary_category,
   COALESCE(r.tertiary_category, '') AS __tertiary_category,
-  DATE_FORMAT(COALESCE(t.planned_end_at, t.actual_end_at), '%Y-%m-%d') AS usage_date,
+  DATE_FORMAT(COALESCE(t.planned_end_at, t.actual_end_at, r.created_at), '%Y-%m-%d') AS usage_date,
   p.project_name AS project_name,
   COALESCE(d1.dimension_name, r.business_category, p.project_type) AS primary_category,
   COALESCE(d2.dimension_name, r.secondary_category) AS secondary_category,
