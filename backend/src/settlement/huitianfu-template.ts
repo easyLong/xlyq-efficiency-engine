@@ -1,8 +1,8 @@
 export const HUITIANFU_TEMPLATE_CODE = 'china_universal';
-export const HUITIANFU_TEMPLATE_VERSION = 3;
+export const HUITIANFU_TEMPLATE_VERSION = 4;
 export const HUITIANFU_CUSTOMER_CODE = 'China Universal';
 export const DEFAULT_SETTLEMENT_TEMPLATE_CODE = 'default_settlement';
-export const DEFAULT_SETTLEMENT_TEMPLATE_VERSION = 1;
+export const DEFAULT_SETTLEMENT_TEMPLATE_VERSION = 2;
 export const DEFAULT_SETTLEMENT_CUSTOMER_CODE = '*';
 export const DEFAULT_SETTLEMENT_TEMPLATE_NAME = '通用结算明细';
 
@@ -28,12 +28,12 @@ export const HUITIANFU_SQL = `
 SELECT
   t.id AS __task_id,
   r.customer_code AS __customer_code,
-  DATE(COALESCE(t.actual_end_at, t.planned_end_at, r.created_at)) AS __filter_date,
+  DATE(COALESCE(t.planned_end_at, t.actual_end_at, r.created_at)) AS __filter_date,
   COALESCE(r.business_platform, ctx.business_platform, '') AS __business_platform,
   COALESCE(d1.dimension_code, r.business_category, p.project_type, '') AS __business_category,
   COALESCE(d2.dimension_name, r.secondary_category, '') AS __secondary_category,
   COALESCE(r.tertiary_category, '') AS __tertiary_category,
-  DATE_FORMAT(t.actual_end_at, '%Y-%m-%d') AS usage_date,
+  DATE_FORMAT(COALESCE(t.planned_end_at, t.actual_end_at), '%Y-%m-%d') AS usage_date,
   p.project_name AS project_name,
   COALESCE(d1.dimension_name, r.business_category, p.project_type) AS primary_category,
   COALESCE(d2.dimension_name, r.secondary_category) AS secondary_category,
@@ -54,8 +54,8 @@ SELECT
         AND rule.tertiary_category_code = one_code.tertiary_code
         AND rule.status = 'active'
         AND rule.deleted_at IS NULL
-        AND (rule.effective_from IS NULL OR rule.effective_from <= COALESCE(t.actual_end_at, t.planned_end_at, r.created_at, NOW()))
-        AND (rule.effective_to IS NULL OR rule.effective_to >= COALESCE(t.actual_end_at, t.planned_end_at, r.created_at, NOW()))
+        AND (rule.effective_from IS NULL OR rule.effective_from <= COALESCE(t.planned_end_at, t.actual_end_at, r.created_at, NOW()))
+        AND (rule.effective_to IS NULL OR rule.effective_to >= COALESCE(t.planned_end_at, t.actual_end_at, r.created_at, NOW()))
       ORDER BY (rule.customer_code = r.customer_code) DESC, rule.version_no DESC, rule.effective_from DESC
       LIMIT 1
     )
@@ -80,8 +80,8 @@ SELECT
           AND rule.tertiary_category_code = codes.tertiary_code
           AND rule.status = 'active'
           AND rule.deleted_at IS NULL
-          AND (rule.effective_from IS NULL OR rule.effective_from <= COALESCE(t.actual_end_at, t.planned_end_at, r.created_at, NOW()))
-          AND (rule.effective_to IS NULL OR rule.effective_to >= COALESCE(t.actual_end_at, t.planned_end_at, r.created_at, NOW()))
+        AND (rule.effective_from IS NULL OR rule.effective_from <= COALESCE(t.planned_end_at, t.actual_end_at, r.created_at, NOW()))
+        AND (rule.effective_to IS NULL OR rule.effective_to >= COALESCE(t.planned_end_at, t.actual_end_at, r.created_at, NOW()))
         ORDER BY (rule.customer_code = r.customer_code) DESC, rule.version_no DESC, rule.effective_from DESC
         LIMIT 1
       ), 0) * GREATEST(COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(r.tertiary_category_quantities_json) THEN r.tertiary_category_quantities_json ELSE '{}' END, CONCAT('$.\"', codes.tertiary_code, '\"'))) AS DECIMAL(14, 2)), 1), 1)

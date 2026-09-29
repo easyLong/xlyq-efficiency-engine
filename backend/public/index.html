@@ -9177,7 +9177,7 @@
     }
     function settlementPriceForTask(task, requirement, classification, priceRules = []) {
       const customerCode = requirement?.customer_code || projectForTask(task)?.customer_code || "";
-      const effectiveAt = new Date(task?.actual_end_at || task?.planned_end_at || Date.now());
+      const effectiveAt = new Date(task?.planned_end_at || task?.actual_end_at || Date.now());
       const codes = classification?.tertiaryCodes || [];
       if (!customerCode || !classification?.businessCategoryCode || !classification?.secondaryCategoryCode || !codes.length) {
         return { amount: 0, unitPrice: 0, quantity: 1, missing: true, breakdown: [] };
@@ -9366,7 +9366,7 @@
       renderValueBarList(amountBox, amountRows, "暂无可结算金额数据");
     }
     function settlementRowDateValue(row) {
-      return row.task?.actual_end_at || row.task?.actualEndAt || row.task?.planned_end_at || row.task?.plannedEndAt || row.requirement?.created_at || "";
+      return row.task?.planned_end_at || row.task?.plannedEndAt || row.task?.actual_end_at || row.task?.actualEndAt || row.requirement?.created_at || "";
     }
     function settlementRowDateKey(row) {
       const raw = settlementRowDateValue(row);
