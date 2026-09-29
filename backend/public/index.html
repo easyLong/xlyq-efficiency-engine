@@ -9514,9 +9514,8 @@
         try {
           const templates = await request(`/settlement/templates?customerCode=${encodeURIComponent(customerCode)}`);
           template = Array.isArray(templates) ? templates[0] : null;
-        } catch (error) {
-          toast(error.message || "模板加载失败");
-          return;
+        } catch {
+          template = null;
         }
       }
       if (template) {
