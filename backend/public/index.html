@@ -2368,7 +2368,7 @@
         <button data-view="attendance" onclick="switchView('attendance')">考勤统计</button>
         <button data-view="groups" onclick="switchView('groups')">群管理</button>
         <button data-view="workflow" onclick="switchView('workflow')">人员配置</button>
-        <button data-view="standard-config" onclick="switchView('standard-config')">标准配置</button>
+        <button data-view="standard-config" onclick="switchView('standard-config')">任务标准</button>
         <button data-view="messages" onclick="switchView('messages')">消息记录</button>
       </nav>
       <button id="logoutButton" class="btn warn" onclick="logout()">退出登录</button>
@@ -3047,12 +3047,12 @@
         <div class="panel standard-config-panel">
           <div class="standard-config-head">
             <div class="kicker">Standard Configuration</div>
-            <h3>标准配置中心</h3>
-            <p>集中维护三级分类的说明、工时、贡献分和基金任务价格。分类编码由系统保存，页面只展示可读配置。</p>
+            <h3>任务标准</h3>
+            <p>维护分类交付标准、工作量、贡献分和基金差异化定价规则。</p>
           </div>
           <div class="standard-config-tabs" role="tablist">
-            <button id="standardConfigWorkloadTab" class="active" onclick="setStandardConfigTab('workload')">工作量标准</button>
-            <button id="standardConfigPriceTab" onclick="setStandardConfigTab('price')">基金任务价格</button>
+            <button id="standardConfigWorkloadTab" class="active" onclick="setStandardConfigTab('workload')">分类标准</button>
+            <button id="standardConfigPriceTab" onclick="setStandardConfigTab('price')">基金定价</button>
           </div>
           <div id="standardConfigWorkloadPanel" class="standard-config-body">
             <div class="standard-config-toolbar">
@@ -4627,7 +4627,7 @@
         attendance: ["考勤统计", "按本月、本周或指定起止日期查看员工考勤汇总与明细。"],
         groups: ["群管理", "拉DP入群-->新增群信息-->DP微信号备注客户真名"],
         workflow: ["人员配置", "按基金和业务大类维护派发、一审与二审人员。"],
-        "standard-config": ["标准配置", "维护分类说明、工时、贡献分和基金任务价格。"],
+        "standard-config": ["任务标准", "维护分类交付标准、工作量、贡献分和基金差异化定价规则。"],
         messages: ["消息记录", "查看员工收到的站内消息和飞书投递结果。"],
       };
       qs("pageTitle").textContent = titles[view][0];

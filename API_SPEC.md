@@ -59,7 +59,7 @@
 - `GET /api/v1/dimensions`：查询维度字典，支持按 `type`、`parentCode`、`status` 过滤；业务平台使用 `GET /api/v1/dimensions?type=business_platform`。
 - `GET /api/v1/dimensions/grouped`：按类型分组返回业务平台、业务大类、二级分类等字典。
 - `GET /api/v1/dimensions/business-category-relations`：返回业务大类与二级分类关系，用于需求录入二级分类联动。
-- `GET /api/v1/dimensions/category-tree`：返回业务大类、二级分类、三级分类树，供需求录入和“标准配置”页面使用。
+- `GET /api/v1/dimensions/category-tree`：返回业务大类、二级分类、三级分类树，供需求录入和“任务标准”页面使用。
 - `POST /api/v1/dimensions`：新增或更新字典项。
 - `PATCH /api/v1/dimensions/{id}`：更新字典项名称、排序、状态等。
 - `GET /api/v1/dimensions/task-price-rules?customerCode=<code>&status=active|inactive|all`：查询基金维度的三级分类价格规则。
