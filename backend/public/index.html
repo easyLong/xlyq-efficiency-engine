@@ -2190,19 +2190,20 @@
     .price-rule-table .actions { white-space: nowrap; }
     .price-tree { display: grid; gap: 4px; min-width: 760px; }
     .price-tree-node { position: relative; }
-    .price-tree-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 40px; padding: 6px 9px; border: 1px solid transparent; border-radius: 9px; }
+    .price-tree-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 6px; align-items: center; min-height: 34px; padding: 4px 8px; border: 1px solid transparent; border-radius: 8px; line-height: 1.35; }
     .price-tree-row:hover { background: #f3f8f0; border-color: #dce8d7; }
-    .price-tree-row.customer { background: #eef5eb; font-weight: 800; }
+    .price-tree-row.customer { background: #eef5eb; font-weight: 700; }
     .price-tree-row.category { margin-left: 24px; background: #fafcf8; }
     .price-tree-row.secondary { margin-left: 48px; }
     .price-tree-row.rule { margin-left: 72px; }
-    .price-tree-toggle { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #56705a; cursor: pointer; }
+    .price-tree-toggle { width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #56705a; font-size: 12px; cursor: pointer; }
     .price-tree-toggle:hover { background: #e0ecdd; }
-    .price-tree-label { min-width: 0; display: flex; align-items: center; gap: 8px; }
-    .price-tree-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .price-tree-label span { color: #788276; font-size: 12px; }
-    .price-tree-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; color: #61705f; font-size: 12px; }
-    .price-tree-meta .tag { min-width: 0; padding: 3px 7px; }
+    .price-tree-label { min-width: 0; display: flex; align-items: baseline; gap: 6px; font-size: 12px; }
+    .price-tree-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+    .price-tree-row.customer .price-tree-label strong { font-size: 14px; }
+    .price-tree-label span { color: #788276; font-size: 11px; }
+    .price-tree-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; color: #61705f; font-size: 11px; }
+    .price-tree-meta .tag { min-width: 0; padding: 2px 5px; }
     .price-tree-rule { position: relative; }
     .price-hover-card { display: none; position: absolute; z-index: 40; right: 12px; bottom: calc(100% + 8px); width: min(390px, calc(100vw - 80px)); padding: 12px 14px; border: 1px solid #cddbc9; border-radius: 11px; background: #fffefb; box-shadow: 0 14px 34px rgba(35, 51, 39, .18); color: #4e5e50; font-size: 12px; line-height: 1.55; pointer-events: none; }
     .price-tree-rule:hover .price-hover-card { display: block; }
@@ -2211,18 +2212,19 @@
     #taskPriceRuleBoard { overflow: visible; }
     .standard-tree { display: grid; gap: 4px; min-width: 680px; }
     .standard-tree-node { position: relative; }
-    .standard-tree-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 40px; padding: 6px 9px; border: 1px solid transparent; border-radius: 9px; }
+    .standard-tree-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 6px; align-items: center; min-height: 34px; padding: 4px 8px; border: 1px solid transparent; border-radius: 8px; line-height: 1.35; }
     .standard-tree-row:hover { background: #f3f8f0; border-color: #dce8d7; }
-    .standard-tree-row.category { background: #eef5eb; font-weight: 800; }
+    .standard-tree-row.category { background: #eef5eb; font-weight: 700; }
     .standard-tree-row.secondary { margin-left: 24px; background: #fafcf8; }
     .standard-tree-row.tertiary { margin-left: 48px; }
-    .standard-tree-toggle { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #56705a; cursor: pointer; }
+    .standard-tree-toggle { width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #56705a; font-size: 12px; cursor: pointer; }
     .standard-tree-toggle:hover { background: #e0ecdd; }
-    .standard-tree-label { min-width: 0; display: flex; align-items: center; gap: 8px; }
-    .standard-tree-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .standard-tree-label span { color: #788276; font-size: 12px; }
-    .standard-tree-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; color: #61705f; font-size: 12px; }
-    .standard-tree-meta .tag { min-width: 0; padding: 3px 7px; }
+    .standard-tree-label { min-width: 0; display: flex; align-items: baseline; gap: 6px; font-size: 12px; }
+    .standard-tree-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+    .standard-tree-row.category .standard-tree-label strong { font-size: 14px; }
+    .standard-tree-label span { color: #788276; font-size: 11px; }
+    .standard-tree-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; color: #61705f; font-size: 11px; }
+    .standard-tree-meta .tag { min-width: 0; padding: 2px 5px; }
     .standard-tree-tertiary { position: relative; }
     .standard-hover-card { display: none; position: absolute; z-index: 30; left: 58px; top: 34px; width: min(430px, calc(100vw - 70px)); padding: 12px 14px; border: 1px solid #cddbc9; border-radius: 11px; background: #fffefb; box-shadow: 0 14px 34px rgba(35, 51, 39, .18); color: #4e5e50; font-size: 12px; line-height: 1.55; pointer-events: none; }
     .standard-tree-tertiary:hover .standard-hover-card { display: block; }
