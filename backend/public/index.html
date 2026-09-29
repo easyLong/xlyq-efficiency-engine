@@ -9112,7 +9112,7 @@
       const effectiveAt = new Date(task?.actual_end_at || task?.planned_end_at || Date.now());
       const codes = classification?.tertiaryCodes || [];
       if (!customerCode || !classification?.businessCategoryCode || !classification?.secondaryCategoryCode || !codes.length) {
-        return { amount: 0, missing: true, breakdown: [] };
+        return { amount: 0, unitPrice: 0, quantity: 1, missing: true, breakdown: [] };
       }
       let amount = 0;
       let missing = false;
@@ -9138,7 +9138,8 @@
         amount += lineAmount;
         return { tertiaryCode: code, quantity, unitPrice, amount: lineAmount, ruleId: rule?.id || null };
       });
-      return { amount: Number(amount.toFixed(2)), missing, breakdown };
+      const quantity = breakdown.reduce((sum, item) => sum + item.quantity, 0) || 1;
+      return { amount: Number(amount.toFixed(2)), unitPrice: Number((amount / quantity).toFixed(2)), quantity, missing, breakdown };
     }
     function settlementDimensionMatchesRow(row) {
       const values = {
@@ -9156,13 +9157,13 @@
       return (tasks || []).map(task => {
         const requirement = requirementByItemId.get(task?.requirement_item_id || task?.requirementItemId) || null;
         const project = projectForTask(task);
-        const assetCount = Number(task?.asset_count ?? task?.assetCount ?? 0);
+        const deliveryAssetCount = Number(task?.asset_count ?? task?.assetCount ?? 0);
         const contactContext = contactContextForRequirement(requirement);
         const customerId = requirement?.customer_code || project?.customer_code || "";
         const classification = settlementClassification(task, requirement, project);
         const resolvedPrice = settlementPriceForTask(task, requirement, classification, priceRules);
-        const taskPrice = resolvedPrice.amount;
-        const status = settlementRowStatus(task, assetCount, taskPrice, resolvedPrice.missing);
+        const taskPrice = resolvedPrice.unitPrice;
+        const status = settlementRowStatus(task, deliveryAssetCount, resolvedPrice.amount, resolvedPrice.missing);
         return {
           customerId,
           customerName: customerName(customerId) || project?.project_name || "-",
@@ -9172,7 +9173,8 @@
           requirementItemTitle: requirement?.title || task?.task_name || "-",
           taskNo: task?.task_no || "-",
           taskName: task?.task_name || "-",
-          assetCount,
+          assetCount: resolvedPrice.quantity || 1,
+          deliveryAssetCount,
           businessPlatform: task?.business_platform || task?.businessPlatform || requirement?.business_platform || contactContext?.business_platform || "-",
           businessCategoryCode: classification.businessCategoryCode,
           businessCategory: classification.businessCategory,
@@ -9184,17 +9186,17 @@
           priceMissing: resolvedPrice.missing,
           employeeName: assigneeName(task?.assignee_user_id),
           taskPrice,
-          amount: status === "可结算" ? taskPrice : 0,
+          amount: status === "可结算" ? resolvedPrice.amount : 0,
           status,
           requirement,
           task,
         };
       });
     }
-    function settlementRowStatus(task, assetCount, taskPrice, priceMissing = false) {
+    function settlementRowStatus(task, deliveryAssetCount, totalAmount, priceMissing = false) {
       if (priceMissing) return "待定价";
-      if (!Number.isFinite(taskPrice) || taskPrice <= 0) return "待定价";
-      if (assetCount <= 0 && task?.status !== "completed") return "待交付";
+      if (!Number.isFinite(totalAmount) || totalAmount <= 0) return "待定价";
+      if (deliveryAssetCount <= 0 && task?.status !== "completed") return "待交付";
       return "可结算";
     }
     function buildSettlementSummary(rows) {
@@ -9215,7 +9217,7 @@
         : `${statement.customerId === "all" ? "全部基金" : customerName(statement.customerId)}`;
       qs("settlementMetrics").innerHTML = [
         ["预计结算金额", formatMoney(summary.amount || 0)],
-        ["可结算资产", summary.assetCount || 0],
+        ["可结算数量", summary.assetCount || 0],
         ["可结算任务", summary.billableCount || 0],
         ["待处理任务", summary.pendingCount || 0],
       ].map(([label, value]) => `<div class="mini-metric"><span>${label}</span><strong>${value}</strong></div>`).join("");
