@@ -70,6 +70,12 @@ describe('workflow access profile', () => {
       ]),
     );
     expect(profile.dispatchCustomerCodes).toEqual(['Wanjia']);
+    expect(profile.dataScope).toEqual({
+      requirements: 'owned',
+      tasks: 'owned',
+      quotes: 'none',
+      settlement: 'all',
+    });
     expect(profile.productReviewTypes).toEqual(['design']);
     expect(profile.customerReviewCodes).toEqual(['Bosera']);
     expect(profile.permissions).toEqual(

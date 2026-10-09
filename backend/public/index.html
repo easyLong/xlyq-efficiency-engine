@@ -3257,10 +3257,12 @@
       requirementDateFilters: { startDate: "", endDate: "" },
       requirementKeyword: "",
       requirementKeywordTimer: null,
+      requirementKeywordVersion: 0,
       requirementVisibleLimit: 80,
       requirementPagination: null,
       requirementRefreshInFlight: false,
       requirementRefreshPending: false,
+      requirementRefreshPendingOptions: null,
       requirementFilterUiKey: "",
       quoteEditingItemId: null,
       quoteSelectedQuotationByItemId: {},
@@ -3714,7 +3716,7 @@
       qs("quoteCustomerSelect").innerHTML = fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
       qs("mappingCustomerSelect").innerHTML = fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
       qs("mappingQuarterSelect").innerHTML = quarterOptions().map(item => `<option value="${item.value}">${item.label}</option>`).join("");
-      qs("settlementCustomerSelect").innerHTML = [`<option value="all">全部基金客户</option>`, ...fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`)].join("");
+      qs("settlementCustomerSelect").innerHTML = [`<option value="all">全部基金客户</option>`, ...customers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`)].join("");
       state.mappingCustomerId ||= fundScopedCustomers[0]?.customer_code || null;
       state.mappingQuarter ||= currentQuarter();
       if (state.mappingCustomerId) qs("mappingCustomerSelect").value = state.mappingCustomerId;
@@ -5063,8 +5065,7 @@
         .map(([value, label]) => ({ value, label }));
     }
     function dimensionCustomerOptions() {
-      const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
-      return [...(fundCustomers.length ? fundCustomers : state.customers)]
+      return [...state.customers]
         .sort((a, b) => (a.customer_code || "").localeCompare(b.customer_code || ""))
         .map(customer => ({ value: customer.customer_code, label: `${customer.customer_code || "基金"} · ${customer.customer_name}` }));
     }
@@ -5891,33 +5892,49 @@
     }
     function setRequirementKeyword(value, immediate = false) {
       state.requirementKeyword = value || "";
+      state.requirementKeywordVersion += 1;
       if (state.requirementKeywordTimer) clearTimeout(state.requirementKeywordTimer);
-      if (immediate) {
-        state.requirementVisibleLimit = 80;
-        renderRequirementBoard();
-        return;
-      }
-      state.requirementKeywordTimer = setTimeout(() => {
+      state.requirementKeywordTimer = null;
+      const applySearch = () => {
         state.requirementKeywordTimer = null;
         state.requirementVisibleLimit = 80;
-        renderRequirementBoard();
-      }, 10000);
+        refreshRequirementBoard({ force: true, preserveScroll: true, refreshAiPreview: false });
+      };
+      if (qs("requirementSearchStatus")) qs("requirementSearchStatus").textContent = "搜索中…";
+      if (immediate) applySearch();
+      else state.requirementKeywordTimer = setTimeout(applySearch, 350);
+    }
+    function normalizeRequirementSearchText(value) {
+      return String(value ?? "").normalize("NFKC").trim().toLowerCase();
+    }
+    function requirementKeywordMatches(row, keyword = state.requirementKeyword) {
+      const terms = normalizeRequirementSearchText(keyword).split(/\s+/).filter(Boolean);
+      const fields = [row.requirement?.requirement_code, row.requirement?.title, row.item?.item_title, row.task?.task_name, row.task?.task_no].map(normalizeRequirementSearchText);
+      return terms.every(term => fields.some(field => field.includes(term)));
     }
     async function refreshRequirementBoard(options = {}) {
       const force = Boolean(options.force);
       const preserveScroll = Boolean(options.preserveScroll);
       if (state.editingRequirementId || (state.busyActionId && !force)) return;
       if (state.requirementRefreshInFlight) {
-        if (force) state.requirementRefreshPending = true;
+        if (force) {
+          state.requirementRefreshPending = true;
+          state.requirementRefreshPendingOptions = options;
+        }
         return;
       }
       state.requirementRefreshInFlight = true;
+      const keyword = state.requirementKeyword.trim();
+      const keywordVersion = state.requirementKeywordVersion;
       const scrollY = preserveScroll ? window.scrollY : null;
       try {
         let historyBoard = null;
         try {
-          historyBoard = await request("/requirements/history-board?page=1&pageSize=80&workflow=compact");
+          const params = new URLSearchParams({ page: "1", pageSize: "80", workflow: "compact" });
+          if (keyword) params.set("keyword", keyword);
+          historyBoard = await request(`/requirements/history-board?${params.toString()}`);
         } catch (error) {
+          if (keyword) throw error;
           const [requirements, requirementItems, tasks, quoteMappings] = await Promise.all([
             request("/requirements"),
             request("/requirement-items"),
@@ -5926,22 +5943,29 @@
           ]);
           historyBoard = { requirements, requirementItems, tasks, quoteMappings, pagination: null };
         }
+        if (keywordVersion !== state.requirementKeywordVersion) return;
         state.requirements = unwrap(historyBoard?.requirements);
         state.requirementItems = unwrap(historyBoard?.requirementItems);
         state.tasks = unwrap(historyBoard?.tasks);
         state.quoteMappings = unwrap(historyBoard?.quoteMappings);
         state.requirementPagination = historyBoard?.pagination || null;
-        await refreshAiPreviewBoard();
+        if (options.refreshAiPreview !== false) await refreshAiPreviewBoard();
+        if (keywordVersion !== state.requirementKeywordVersion) return;
         invalidateLookupMaps();
         renderRequirementBoard();
         if (scrollY !== null) {
           requestAnimationFrame(() => window.scrollTo(0, scrollY));
         }
+      } catch (error) {
+        if (keywordVersion === state.requirementKeywordVersion) toast(error.message || "需求列表搜索失败");
       } finally {
         state.requirementRefreshInFlight = false;
+        if (keywordVersion === state.requirementKeywordVersion && qs("requirementSearchStatus")) qs("requirementSearchStatus").textContent = "";
         if (state.requirementRefreshPending) {
+          const pendingOptions = state.requirementRefreshPendingOptions || {};
           state.requirementRefreshPending = false;
-          refreshRequirementBoard({ force: true, preserveScroll: true });
+          state.requirementRefreshPendingOptions = null;
+          refreshRequirementBoard({ ...pendingOptions, force: true, preserveScroll: true });
         }
       }
     }
@@ -5956,13 +5980,16 @@
       const pagination = state.requirementPagination;
       if (!pagination?.hasMore || state.requirementRefreshInFlight) return;
       state.requirementRefreshInFlight = true;
+      const keywordVersion = state.requirementKeywordVersion;
       try {
         const params = new URLSearchParams({
           page: String(Number(pagination.page || 1) + 1),
           pageSize: String(Number(pagination.pageSize || 80)),
           workflow: "compact",
         });
+        if (state.requirementKeyword.trim()) params.set("keyword", state.requirementKeyword.trim());
         const historyBoard = await request(`/requirements/history-board?${params.toString()}`);
+        if (keywordVersion !== state.requirementKeywordVersion) return;
         state.requirements = mergeRowsById(state.requirements, unwrap(historyBoard?.requirements));
         state.requirementItems = mergeRowsById(state.requirementItems, unwrap(historyBoard?.requirementItems));
         state.tasks = mergeRowsById(state.tasks, unwrap(historyBoard?.tasks));
@@ -5975,8 +6002,10 @@
       } finally {
         state.requirementRefreshInFlight = false;
         if (state.requirementRefreshPending) {
+          const pendingOptions = state.requirementRefreshPendingOptions || {};
           state.requirementRefreshPending = false;
-          refreshRequirementBoard({ force: true, preserveScroll: true });
+          state.requirementRefreshPendingOptions = null;
+          refreshRequirementBoard({ ...pendingOptions, force: true, preserveScroll: true });
         }
       }
     }
@@ -6510,16 +6539,20 @@
         quoteVisible,
         canManageAssignment,
       });
-      if (filtersEl && state.requirementFilterUiKey !== filterUiKey) {
+      const searchInput = qs("requirementSearchInput");
+      const searchFocused = document.activeElement === searchInput && Boolean(searchInput);
+      const searchSelection = searchFocused ? [searchInput.selectionStart, searchInput.selectionEnd] : null;
+      if (filtersEl && state.requirementFilterUiKey !== filterUiKey && searchInput?.dataset.composing !== "1") {
         state.requirementFilterUiKey = filterUiKey;
         filtersEl.innerHTML = `
           <div class="quick-filter-row">
             ${visibleFilters.map(([key, label]) => `<button class="${state.requirementFilter === key ? "active" : ""}" onclick="setRequirementFilter('${key}')">${label}</button>`).join("")}
-            <input class="filter-search" value="${escapeAttr(state.requirementKeyword)}" placeholder="搜索需求名称"
+            <input id="requirementSearchInput" class="filter-search" type="search" autocomplete="off" value="${escapeAttr(state.requirementKeyword)}" placeholder="搜索需求编号或任务标题"
               oncompositionstart="this.dataset.composing='1'"
               oncompositionend="this.dataset.composing='0'; setRequirementKeyword(this.value, true)"
               oninput="if (this.dataset.composing !== '1') setRequirementKeyword(this.value)"
-              onkeydown="if (event.key === 'Enter') setRequirementKeyword(this.value, true)" />
+              onkeydown="if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); setRequirementKeyword(this.value, true); }" />
+            <span id="requirementSearchStatus" class="muted" aria-live="polite">${state.requirementKeyword.trim() && state.requirementRefreshInFlight ? "搜索中…" : ""}</span>
             <button onclick="clearRequirementFilters()">清空筛选</button>
             <details class="advanced-filter">
               <summary>高级筛选</summary>
@@ -6547,19 +6580,15 @@
             <label class="history-date-input">至 <input type="date" value="${escapeAttr(state.requirementDateFilters.endDate)}" onchange="setRequirementDateFilter('endDate', this.value, this)" /></label>
           </div>
         `;
+        if (searchFocused) {
+          const nextSearchInput = qs("requirementSearchInput");
+          nextSearchInput?.focus({ preventScroll: true });
+          if (nextSearchInput && searchSelection) nextSearchInput.setSelectionRange(...searchSelection);
+        }
       }
 
       const filteredRows = rows.filter(row => {
-        const keyword = state.requirementKeyword.trim().toLowerCase();
-        if (keyword) {
-          const haystack = [
-            row.requirement.title,
-            row.requirement.requirement_code,
-            row.item?.item_title,
-            row.task?.task_name,
-          ].filter(Boolean).join(" ").toLowerCase();
-          if (!haystack.includes(keyword)) return false;
-        }
+        if (!requirementKeywordMatches(row)) return false;
         if (personalWorkflowView) {
           const myState = primaryWorkflowState(row);
           if (state.requirementFilter === "my_todo") return Boolean(myState?.actionable);
@@ -6644,6 +6673,7 @@
       state.requirementFilter = "all";
       state.requirementDateFilters = { startDate: "", endDate: "" };
       state.requirementKeyword = "";
+      state.requirementKeywordVersion += 1;
       state.requirementVisibleLimit = 80;
       if (state.requirementKeywordTimer) {
         clearTimeout(state.requirementKeywordTimer);
@@ -6653,6 +6683,7 @@
       renderRequirementBoard();
       renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", true, true);
       renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
+      refreshRequirementBoard({ force: true, preserveScroll: true, refreshAiPreview: false });
     }
     function renderRequirementEditAction(row) {
       const canDeleteRequirement = can("requirement.delete_owned") || can("requirement.delete_all");
@@ -8202,8 +8233,8 @@
       }
     }
     function configFundCustomers() {
-      const funds = (state.customers || []).filter(item => item.status !== "inactive" && item.industry === "公募基金");
-      return funds.length ? funds : (state.customers || []).filter(item => item.status !== "inactive");
+      // Historical settlement pricing also needs customers with no industry or an inactive status.
+      return [...(state.customers || [])];
     }
     function renderTaskPriceCustomerOptions() {
       const select = qs("taskPriceCustomerInput");
@@ -8253,7 +8284,7 @@
       const selectedCategory = rule?.business_category_code || context?.categoryCode || state.categoryTree?.[0]?.code || "";
       const selectedSecondary = rule?.secondary_category_code || context?.secondaryCode || categoryTreeNode(selectedCategory)?.secondaries?.[0]?.code || "";
       const selectedTertiary = rule?.tertiary_category_code || context?.tertiaryCode || (categoryTreeNode(selectedCategory)?.secondaries || []).find(item => item.code === selectedSecondary)?.tertiaries?.[0]?.code || "";
-      const selectedCustomer = rule?.customer_code || qs("taskPriceCustomerInput")?.value || configFundCustomers()[0]?.customer_code || "";
+      const selectedCustomer = rule?.customer_code || context?.customerCode || qs("taskPriceCustomerInput")?.value || "";
       const classification = findClassificationRow(selectedTertiary);
       const categoryName = classification?.category?.name || categoryTreeNode(selectedCategory)?.name || selectedCategory;
       const secondaryName = classification?.secondary?.name || (categoryTreeNode(selectedCategory)?.secondaries || []).find(item => item.code === selectedSecondary)?.name || selectedSecondary;
@@ -8263,7 +8294,7 @@
         <p>基金价格只配置在三级分类叶子节点；业务大类和二级分类用于定位层级。</p>
         <div class="standard-detail-path"><span>业务大类</span><strong>${escapeHtml(categoryName)}</strong><span>/</span><span>二级分类</span><strong>${escapeHtml(secondaryName)}</strong><span>/</span><span>三级分类</span><strong>${escapeHtml(tertiaryName)}</strong></div>
         <div class="form-grid">
-          <label>基金<select id="taskPriceRuleCustomerInput">${configFundCustomers().map(item => `<option value="${escapeAttr(item.customer_code || "")}" ${item.customer_code === selectedCustomer ? "selected" : ""}>${escapeHtml(item.customer_name || item.customer_code || "未命名基金")}</option>`).join("")}</select></label>
+          <label>基金<select id="taskPriceRuleCustomerInput"><option value="">请选择基金</option>${selectedCustomer === "*" ? '<option value="*" selected>全部基金（通用价格）</option>' : ""}${configFundCustomers().map(item => `<option value="${escapeAttr(item.customer_code || "")}" ${item.customer_code === selectedCustomer ? "selected" : ""}>${escapeHtml(item.customer_name || item.customer_code || "未命名基金")}</option>`).join("")}</select></label>
           <label>价格<input id="taskPriceRuleUnitPriceInput" type="number" min="0" step="0.01" value="${escapeAttr(rule?.unit_price || "0.00")}" /></label>
         </div>
         <input id="taskPriceRuleCategoryInput" type="hidden" value="${escapeAttr(selectedCategory)}" />
@@ -8388,12 +8419,9 @@
       }).join("");
       board.innerHTML = customerMarkup ? `<div class="price-tree">${customerMarkup}</div>` : `<div class="empty-list">暂无基金价格规则，请先新增。</div>`;
     }
-    function prepareTaskPriceRuleCreate(categoryCode, secondaryCode, tertiaryCode) {
+    function prepareTaskPriceRuleCreate(categoryCode, secondaryCode, tertiaryCode, customerCode = "") {
       state.editingTaskPriceRuleId = null;
-      renderTaskPriceEditor(null, { categoryCode, secondaryCode, tertiaryCode });
-      const customerSelect = qs("taskPriceRuleCustomerInput");
-      const customerFilter = qs("taskPriceCustomerInput")?.value || "";
-      if (customerSelect) customerSelect.value = customerFilter || configFundCustomers()[0]?.customer_code || "";
+      renderTaskPriceEditor(null, { categoryCode, secondaryCode, tertiaryCode, customerCode });
       qs("taskPriceRuleEditor")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
     function openTaskPriceRuleCreateContext(event, categoryCode, secondaryCode, tertiaryCode) {
@@ -8716,7 +8744,7 @@
     function parseTertiaryCategoryCodes(requirement) {
       try {
         const parsed = JSON.parse(requirement?.tertiary_category_codes_json || "[]");
-        return Array.isArray(parsed) ? parsed.map(String) : [];
+        return Array.isArray(parsed) ? parsed.map(value => String(value ?? "").trim()).filter(Boolean) : [];
       } catch (_) {
         return [];
       }
@@ -9097,7 +9125,7 @@
     async function loadSettlementStatement(showToast = true) {
       if (!can("settlement.view_all")) {
         state.settlementStatement = null;
-        if (showToast) toast("仅管理员可以查看结算统计。");
+        if (showToast) toast("当前账号没有结算统计权限。");
         return;
       }
       const requestSeq = ++state.settlementRequestSeq;
@@ -9123,7 +9151,10 @@
         const taskRows = Object.entries(board).flatMap(([status, tasks]) => (tasks || []).map(task => ({ status, ...task })));
         const priceRules = unwrap(await request("/dimensions/task-price-rules?status=active"));
         state.settlementPriceRules = Array.isArray(priceRules) ? priceRules : [];
-        const historyBoard = await request("/requirements/history-board?workflow=none");
+        const historyBoard = await request(`/requirements/history-board?${new URLSearchParams({
+          workflow: "none",
+          ...(can("dashboard.view_global") ? { scope: "global" } : {}),
+        }).toString()}`);
         const requirements = unwrap(historyBoard?.requirements);
         const requirementItems = unwrap(historyBoard?.requirementItems);
         const requirementById = new Map(requirements.map(requirement => [requirement.id, requirement]));
@@ -9148,10 +9179,10 @@
       return matched?.code || normalizedBusinessCategoryCode(value);
     }
     function settlementClassification(task, requirement, project) {
-      const rawBusinessCategory = task?.business_category || task?.businessCategory || requirement?.business_category || project?.project_type || "";
+      const rawBusinessCategory = String(task?.business_category || task?.businessCategory || requirement?.business_category || project?.project_type || "").trim();
       const businessCategoryCode = settlementBusinessCategoryCode(rawBusinessCategory);
       const category = categoryTreeNode(businessCategoryCode);
-      const rawSecondaryCategory = task?.secondary_category || task?.secondaryCategory || requirement?.secondary_category || "";
+      const rawSecondaryCategory = String(task?.secondary_category || task?.secondaryCategory || requirement?.secondary_category || "").trim();
       const secondary = (category?.secondaries || []).find(item => item.code === rawSecondaryCategory || item.name === rawSecondaryCategory)
         || (state.categoryTree || []).flatMap(item => item.secondaries || []).find(item => item.code === rawSecondaryCategory || item.name === rawSecondaryCategory);
       const rawTertiaryCategory = task?.tertiary_category || task?.tertiaryCategory || requirement?.tertiary_category || "";
@@ -9162,15 +9193,16 @@
         const item = (secondary?.tertiaries || []).find(candidate => candidate.code === value || candidate.name === value);
         return item?.code || value;
       }).filter(Boolean);
-      const tertiaryNames = tertiaryCodes.map(code => {
+      const tertiaryNames = tertiaryCodes.map((code, index) => {
         const item = (secondary?.tertiaries || []).find(candidate => candidate.code === code || candidate.name === code);
-        return item?.name || code;
+        const originalName = tertiaryValues.length === tertiaryCodes.length ? tertiaryValues[index] : "";
+        return item?.name || originalName || code;
       }).filter(Boolean);
       return {
         businessCategoryCode,
-        businessCategory: category?.name || "未分类",
+        businessCategory: category?.name || rawBusinessCategory || "未分类",
         secondaryCategoryCode: secondary?.code || rawSecondaryCategory,
-        secondaryCategory: secondary?.name || "未分类",
+        secondaryCategory: secondary?.name || rawSecondaryCategory || "未分类",
         tertiaryCategory: tertiaryNames.length ? tertiaryNames.join("、") : "未分类",
         tertiaryCodes,
         tertiaryQuantities: configuredQuantities,
@@ -9282,14 +9314,17 @@
       const unresolvedPrice = (row.priceBreakdown || []).find(item => !item.ruleId || Number(item.unitPrice || 0) <= 0);
       const tertiaryCode = unresolvedPrice?.tertiaryCode || tertiaryCodes[0] || fallbackPath?.tertiary?.code || "";
       if (!businessCategoryCode || !secondaryCategoryCode || !tertiaryCode) return toast("该任务缺少完整的三级分类，无法定位基金定价");
+      const customerCode = String(row.customerId || "").trim();
+      if (!customerCode || !configFundCustomers().some(customer => customer.customer_code === customerCode)) return toast("未找到该任务对应的基金，请检查客户配置");
       switchView("standard-config");
       setStandardConfigTab("price");
       renderTaskPriceCustomerOptions();
       const customerFilter = qs("taskPriceCustomerInput");
-      if (customerFilter && [...customerFilter.options].some(option => option.value === row.customerId)) customerFilter.value = row.customerId;
+      if (customerFilter) customerFilter.value = customerCode;
       await loadTaskPriceRules(false);
-      if (unresolvedPrice?.ruleId) editTaskPriceRule(unresolvedPrice.ruleId);
-      else prepareTaskPriceRuleCreate(businessCategoryCode, secondaryCategoryCode, tertiaryCode);
+      const existingRule = (state.taskPriceRules || []).find(rule => rule.id === unresolvedPrice?.ruleId && rule.customer_code === customerCode);
+      if (existingRule) editTaskPriceRule(existingRule.id);
+      else prepareTaskPriceRuleCreate(businessCategoryCode, secondaryCategoryCode, tertiaryCode, customerCode);
       toast(`已定位到“${row.tertiaryCategory || tertiaryCode}”的基金定价`);
     }
     function buildSettlementSummary(rows) {
@@ -9953,7 +9988,7 @@
         const rows = state.tasks.filter(task => {
             const taskCustomerId = projectForTask(task)?.customer_code;
             const requirement = requirementForTask(task);
-            return (!taskCustomerId || customerCodes.has(taskCustomerId))
+            return (customerId === "all" || !taskCustomerId || customerCodes.has(taskCustomerId))
               && dimensionMatchesRequirement(requirement, task)
               && dashboardDateMatches(requirement, task);
           });
@@ -9967,7 +10002,7 @@
         });
         const completedDemandCount = completedRequirementIds.size + completedUnlinkedTasks;
         const scopedRequirements = state.requirements.filter(requirement => {
-          if (!customerCodes.has(requirement.customer_code)) return false;
+          if (customerId !== "all" && !customerCodes.has(requirement.customer_code)) return false;
           const task = taskForRequirement(requirement.id);
           if (!dimensionMatchesRequirement(requirement, task)) return false;
           if (!dashboardDateMatches(requirement, task)) return false;
@@ -10013,9 +10048,8 @@
       }
     }
     function selectedAnalyticsCustomers(customerId) {
-      const fundCustomers = state.customers.filter(customer => customer.industry === "公募基金");
       if (customerId !== "all") return state.customers.filter(customer => customer.customer_code === customerId);
-      return fundCustomers.length ? fundCustomers : state.customers;
+      return state.customers;
     }
     function buildAnalyticsFactRows(requirementItems, tasks) {
       const taskByRequirementItemId = new Map(tasks.filter(task => task.requirement_item_id).map(task => [task.requirement_item_id, task]));

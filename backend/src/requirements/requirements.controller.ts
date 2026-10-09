@@ -36,12 +36,14 @@ export class RequirementsController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('workflow') workflow?: string,
+    @Query('keyword') keyword?: string,
     @Req() request?: Request & { user?: UserEntity },
   ) {
     return this.requirementsService.historyBoard(
       request?.user ?? null,
       scope === 'global',
       {
+        keyword,
         page: page ? Number(page) : undefined,
         pageSize: pageSize ? Number(pageSize) : undefined,
         workflow:

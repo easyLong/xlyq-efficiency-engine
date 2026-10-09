@@ -20,7 +20,7 @@
 ### 需求与任务
 
 - `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务；创建时必须传入任务价格 `priceAmount`。
-- `GET /api/v1/requirements/history-board`：返回当前账号有权查看的需求、需求项和任务。管理端“任务需求列表”的创建日期快捷选项及起止日期在已授权数据上筛选，不额外扩展接口权限；列表上方数量与日期范围联动。
+- `GET /api/v1/requirements/history-board`：返回当前账号有权查看的需求、需求项和任务。支持 `keyword` 按需求编号、需求标题、任务标题和任务编号模糊匹配；忽略大小写，兼容全角字符，多个词以空格分隔并同时匹配。搜索在权限裁剪后、分页前执行，`pagination.total` 为当前账号的匹配总数。管理端“任务需求列表”的创建日期快捷选项及起止日期在已授权数据上筛选，不额外扩展接口权限；列表上方数量与日期范围联动。
 - `GET /api/v1/workflow-config`：查询基金派发者、业务大类一审人员和基金二审人员配置。
 - `PUT /api/v1/workflow-config/customer-dispatchers/{customerCode}`：覆盖某基金的派发候选人。
 - `PUT /api/v1/workflow-config/product-reviewers/{reviewType}`：覆盖某业务大类的一审候选人。

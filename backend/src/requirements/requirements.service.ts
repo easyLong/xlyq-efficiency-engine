@@ -43,6 +43,7 @@ import { UpdateRequirementDto } from './dto/update-requirement.dto';
 import { UpdateRequirementItemDto } from './dto/update-requirement-item.dto';
 import { RequirementItemEntity } from './entities/requirement-item.entity';
 import { RequirementEntity } from './entities/requirement.entity';
+import { searchHistoryRequirements } from './requirement-history-search';
 
 type AiPreviewRejectDto = {
   rejectReasons?: unknown;
@@ -188,6 +189,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       pageSize?: number;
       workflow?: 'full' | 'compact' | 'none';
       includeQuoteMappings?: boolean;
+      keyword?: string;
     } = {},
   ) {
     const profile = currentUser
@@ -218,32 +220,14 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       order: { created_at: 'ASC' },
     });
     const requirementItemIds = requirementItems.map((item) => item.id);
-    if (requirementItemIds.length === 0) {
-      const pagination = this.historyBoardPagination(
-        options,
-        requirements.length,
-      );
-      const visibleRequirements = pagination
-        ? requirements.slice(
-            (pagination.page - 1) * pagination.pageSize,
-            pagination.page * pagination.pageSize,
-          )
-        : requirements;
-      return {
-        requirements: visibleRequirements,
-        requirementItems,
-        tasks: [],
-        quoteMappings: [],
-        pagination,
-      };
-    }
-
     const [tasks, quoteMappings] = await Promise.all([
-      this.tasksRepository.find({
-        where: { requirement_item_id: In(requirementItemIds) },
-        order: { created_at: 'DESC' },
-      }),
-      quoteVisible
+      requirementItemIds.length
+        ? this.tasksRepository.find({
+            where: { requirement_item_id: In(requirementItemIds) },
+            order: { created_at: 'DESC' },
+          })
+        : Promise.resolve([]),
+      quoteVisible && requirementItemIds.length
         ? this.mappingsRepository.find({
             where: { requirement_item_id: In(requirementItemIds) },
             order: { created_at: 'DESC' },
@@ -258,16 +242,21 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
       currentUser,
       globalDashboardRead,
     );
-    // Apply paging after access scoping so each page is full and cannot leak
-    // the existence or count of rows outside the current user's data scope.
-    const total = scoped.requirements.length;
+    // Search within the user's visible records before paging historical results.
+    const matchingRequirements = searchHistoryRequirements(
+      scoped.requirements,
+      scoped.requirementItems,
+      scoped.tasks,
+      options.keyword,
+    );
+    const total = matchingRequirements.length;
     const pagination = this.historyBoardPagination(options, total);
     requirements = pagination
-      ? scoped.requirements.slice(
+      ? matchingRequirements.slice(
           (pagination.page - 1) * pagination.pageSize,
           pagination.page * pagination.pageSize,
         )
-      : scoped.requirements;
+      : matchingRequirements;
     const visibleRequirementIds = new Set(
       requirements.map((requirement) => requirement.id),
     );

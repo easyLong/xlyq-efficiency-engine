@@ -163,10 +163,11 @@ export async function buildAccessProfile(
     effectiveRoles,
     permissions: [...permissionSet],
     dataScope: {
+      // Dispatch work is scoped by customer; settlement and dashboard reads are global for dispatchers.
       requirements: hasScopedRole ? 'owned' : 'assigned',
       tasks: hasScopedRole ? 'owned' : 'assigned',
       quotes: 'none',
-      settlement: 'none',
+      settlement: dispatcher ? 'all' : 'none',
     },
     ownedBusinessCategoryCodes,
     dispatchCustomerCodes,
