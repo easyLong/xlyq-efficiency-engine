@@ -5907,9 +5907,20 @@
     function normalizeRequirementSearchText(value) {
       return String(value ?? "").normalize("NFKC").trim().toLowerCase();
     }
+    function hasRequirementTertiaryCategory(requirement) {
+      if (String(requirement?.tertiary_category || "").split(/[、,，]/).some(value => value.trim())) return true;
+      try {
+        const codes = JSON.parse(requirement?.tertiary_category_codes_json || "[]");
+        return Array.isArray(codes) && codes.length > 0;
+      } catch {
+        return false;
+      }
+    }
     function requirementKeywordMatches(row, keyword = state.requirementKeyword) {
       const terms = normalizeRequirementSearchText(keyword).split(/\s+/).filter(Boolean);
-      const fields = [row.requirement?.requirement_code, row.requirement?.title, row.item?.item_title, row.task?.task_name, row.task?.task_no].map(normalizeRequirementSearchText);
+      const requirement = row.requirement || {};
+      const fields = [requirement.requirement_code, requirement.title, requirement.secondary_category, requirement.tertiary_category, requirement.tertiary_category_codes_json, row.item?.item_title, row.task?.task_name, row.task?.task_no].map(normalizeRequirementSearchText);
+      if (!String(requirement.secondary_category || "").trim() || !hasRequirementTertiaryCategory(requirement)) fields.push("未分类");
       return terms.every(term => fields.some(field => field.includes(term)));
     }
     async function refreshRequirementBoard(options = {}) {
@@ -6547,7 +6558,7 @@
         filtersEl.innerHTML = `
           <div class="quick-filter-row">
             ${visibleFilters.map(([key, label]) => `<button class="${state.requirementFilter === key ? "active" : ""}" onclick="setRequirementFilter('${key}')">${label}</button>`).join("")}
-            <input id="requirementSearchInput" class="filter-search" type="search" autocomplete="off" value="${escapeAttr(state.requirementKeyword)}" placeholder="搜索需求编号或任务标题"
+            <input id="requirementSearchInput" class="filter-search" type="search" autocomplete="off" value="${escapeAttr(state.requirementKeyword)}" placeholder="搜索编号、标题或二/三级分类"
               oncompositionstart="this.dataset.composing='1'"
               oncompositionend="this.dataset.composing='0'; setRequirementKeyword(this.value, true)"
               oninput="if (this.dataset.composing !== '1') setRequirementKeyword(this.value)"

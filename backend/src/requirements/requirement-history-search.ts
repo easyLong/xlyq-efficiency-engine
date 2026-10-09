@@ -9,8 +9,29 @@ export function normalizeRequirementSearchText(value: unknown) {
     .toLowerCase();
 }
 
+function hasConfiguredTertiaryCategory(requirement: {
+  tertiary_category?: string | null;
+  tertiary_category_codes_json?: string | null;
+}) {
+  if (normalizeRequirementSearchText(requirement.tertiary_category)) return true;
+  try {
+    const codes = JSON.parse(requirement.tertiary_category_codes_json || '[]');
+    return Array.isArray(codes) && codes.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export function searchHistoryRequirements<
-  T extends Pick<RequirementEntity, 'id' | 'title' | 'requirement_code'>,
+  T extends Pick<RequirementEntity, 'id' | 'title' | 'requirement_code'> &
+    Partial<
+      Pick<
+        RequirementEntity,
+        | 'secondary_category'
+        | 'tertiary_category'
+        | 'tertiary_category_codes_json'
+      >
+    >,
 >(
   requirements: T[],
   items: Pick<RequirementItemEntity, 'id' | 'requirement_id' | 'item_title'>[],
@@ -27,9 +48,25 @@ export function searchHistoryRequirements<
       requirement.id,
       [requirement.requirement_code, requirement.title].map(
         normalizeRequirementSearchText,
+      ).concat(
+        [
+          requirement.secondary_category,
+          requirement.tertiary_category,
+          requirement.tertiary_category_codes_json,
+        ].map(normalizeRequirementSearchText),
       ),
     ]),
   );
+  for (const requirement of requirements) {
+    const fields = fieldsByRequirement.get(requirement.id);
+    if (!fields) continue;
+    if (!normalizeRequirementSearchText(requirement.secondary_category)) {
+      fields.push(normalizeRequirementSearchText('未分类'));
+    }
+    if (!hasConfiguredTertiaryCategory(requirement)) {
+      fields.push(normalizeRequirementSearchText('未分类'));
+    }
+  }
   const requirementByItem = new Map<string, string>();
   for (const item of items) {
     requirementByItem.set(item.id, item.requirement_id);
