@@ -3879,7 +3879,7 @@
       renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
       renderContactContextOptions();
       renderGroupManagement();
-      qs("projectTypeSelect").innerHTML = businessCategoryOptions(qs("projectTypeSelect")?.value || projectTypes[0]?.value || "", null);
+      qs("projectTypeSelect").innerHTML = businessCategoryOptions(qs("projectTypeSelect")?.value || businessCategoryDefinitions()[0]?.value || "", null);
       qs("businessPlatformInput").innerHTML = businessPlatformOptions("");
       syncProjectSelection(false);
       syncQuoteProjectSelection(false);
@@ -4982,7 +4982,21 @@
       return state.customers.find(c => c.customer_code === qs("customerSelect").value);
     }
     function selectedProjectType() {
-      return projectTypes.find(t => t.value === qs("projectTypeSelect").value) || projectTypes[0];
+      return projectTypeDefinition(qs("projectTypeSelect")?.value || "");
+    }
+    function projectTypeDefinition(value) {
+      if (value === "quotation_contract") {
+        return { value, label: "合同报价", budgetAmount: "0", description: "合同报价后台挂靠，不作为业务筛选维度。" };
+      }
+      const category = businessCategoryDefinitions().find(item => item.value === value || item.label === value);
+      const defaults = projectTypes.find(item => item.value === (category?.value || value));
+      if (!category && !defaults) return null;
+      return {
+        value: category?.value || defaults.value,
+        label: category?.label || defaults.label,
+        budgetAmount: defaults?.budgetAmount || "0",
+        description: defaults?.description || (category.label + "任务，分类与指标由任务标准配置。"),
+      };
     }
     function projectTypeLabel(type) {
       return businessCategoryDefinitions().find(t => t.value === type)?.label || projectTypes.find(t => t.value === type)?.label || type || "未分类";
@@ -7125,12 +7139,12 @@
       return customers.map(customer => `<option value="${customer.customer_code}" ${customer.customer_code === selectedCustomerId ? "selected" : ""}>${customer.customer_code || "客户"} · ${customer.customer_name}</option>`).join("");
     }
     function editProjectTypeOptions(selectedProjectType) {
-      return projectTypes.map(type => `<option value="${type.value}" ${type.value === selectedProjectType ? "selected" : ""}>${type.label}</option>`).join("");
+      return businessCategoryOptions(selectedProjectType, null);
     }
     function editProjectHint(customerId, projectType) {
       const customer = state.customers.find(item => item.customer_code === customerId);
-      const type = projectTypes.find(item => item.value === projectType) || projectTypes[0];
-      const project = state.projects.find(item => item.customer_code === customerId && item.project_type === type?.value);
+      const type = projectTypeDefinition(projectType);
+      const project = state.projects.find(item => item.customer_code === customerId && item.project_type === projectType);
       if (project) return `后台挂靠：${project.project_name}`;
       return `保存时会自动创建后台挂靠：${customer?.customer_name || ""}${type?.label || ""}`;
     }
@@ -7422,10 +7436,7 @@
     }
     async function ensureProjectForContext(customerId, projectType) {
       const customer = state.customers.find(item => item.customer_code === customerId);
-      const type = projectTypes.find(item => item.value === projectType)
-        || (projectType === "quotation_contract"
-          ? { value: "quotation_contract", label: "合同报价", budgetAmount: "0", description: "合同报价后台挂靠，不作为业务筛选维度。" }
-          : null);
+      const type = projectTypeDefinition(projectType);
       if (!customer || !type) return null;
       let project = state.projects.find(item => item.customer_code === customerId && item.project_type === projectType);
       if (project) return project;
@@ -8229,6 +8240,13 @@
       ].join("");
     }
     function businessCategoryDefinitions() {
+      if (state.categoryTree?.length) {
+        return state.categoryTree.map(category => ({
+          value: category.code,
+          label: category.name,
+          secondaries: (category.secondaries || []).map(secondary => secondary.name),
+        }));
+      }
       const rows = [...(state.businessCategoryRelations || [])]
         .filter(row => row.status !== "inactive")
         .sort((a, b) =>
@@ -8382,8 +8400,25 @@
     async function reloadCategoryTree(showToast = true) {
       try {
         state.categoryTree = unwrap(await request("/dimensions/category-tree"));
+        const projectTypeSelect = qs("projectTypeSelect");
+        if (projectTypeSelect) {
+          projectTypeSelect.innerHTML = businessCategoryOptions(projectTypeSelect.value, null);
+        }
+        await syncProjectSelection(false);
+        const editingId = state.editingRequirementId;
+        const editCategorySelect = editingId ? qs("edit-project-type-" + editingId) : null;
+        if (editCategorySelect) {
+          editCategorySelect.innerHTML = editProjectTypeOptions(editCategorySelect.value);
+          const editSecondarySelect = qs("edit-secondary-category-" + editingId);
+          if (editSecondarySelect) {
+            editSecondarySelect.innerHTML = secondaryCategoryOptions(editCategorySelect.value, editSecondarySelect.value);
+          }
+          renderEditTertiaryCategories(editingId);
+          renderEditProjectHint(editingId);
+        }
+        renderDimensionFilters("analyticsDimensionFilters", "setDashboardDimensionFilter", true, true);
+        renderDimensionFilters("settlementDimensionFilters", "setSettlementDimensionFilter", false);
         renderClassificationConfig();
-        renderSecondaryCategorySelect(qs("projectTypeSelect")?.value || "", qs("secondaryCategoryInput")?.value || "");
         renderTaskPriceRules();
         if (showToast) toast("分类标准已刷新");
       } catch (error) {
