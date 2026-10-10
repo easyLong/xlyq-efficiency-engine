@@ -75,4 +75,22 @@ describe('SettlementService', () => {
       20, 3, 20,
     ]);
   });
+
+  it('marks a fund template as preferred and the wildcard template as fallback', async () => {
+    const query = jest.fn().mockResolvedValue([
+      { ...template, customer_code: 'China Universal' },
+      {
+        ...template,
+        id: 'default-template',
+        customer_code: '*',
+        template_code: 'default_settlement',
+      },
+    ]);
+    const service = new SettlementService({ query } as unknown as DataSource);
+    const rows = await service.listTemplates('China Universal');
+    expect(rows.map((row) => [row.customer_code, row.is_fallback])).toEqual([
+      ['China Universal', false],
+      ['*', true],
+    ]);
+  });
 });

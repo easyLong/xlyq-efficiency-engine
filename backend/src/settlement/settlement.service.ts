@@ -5,6 +5,8 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { extname, resolve, sep } from 'node:path';
 import { DataSource } from 'typeorm';
 import ExcelJS from 'exceljs';
 import {
@@ -12,12 +14,44 @@ import {
   DEFAULT_SETTLEMENT_TEMPLATE_CODE,
   DEFAULT_SETTLEMENT_TEMPLATE_NAME,
   DEFAULT_SETTLEMENT_TEMPLATE_VERSION,
+  DEFAULT_SETTLEMENT_COLUMNS,
+  DEFAULT_SETTLEMENT_SQL,
   HUITIANFU_COLUMNS,
   HUITIANFU_CUSTOMER_CODE,
   HUITIANFU_SQL,
   HUITIANFU_TEMPLATE_CODE,
   HUITIANFU_TEMPLATE_VERSION,
+  HUAXIA_SETTLEMENT_COLUMNS,
+  HUAXIA_SETTLEMENT_CUSTOMER_CODE,
+  HUAXIA_SETTLEMENT_TEMPLATE_CODE,
+  HUAXIA_SETTLEMENT_TEMPLATE_VERSION,
+  XINGZHENG_SETTLEMENT_COLUMNS,
+  XINGZHENG_SETTLEMENT_CUSTOMER_CODE,
+  XINGZHENG_SETTLEMENT_TEMPLATE_CODE,
+  XINGZHENG_SETTLEMENT_TEMPLATE_VERSION,
+  HAITONG_FUHAI_SETTLEMENT_COLUMNS,
+  HAITONG_FUHAI_SETTLEMENT_CUSTOMER_CODE,
+  HAITONG_FUHAI_SETTLEMENT_TEMPLATE_CODE,
+  HAITONG_FUHAI_SETTLEMENT_TEMPLATE_VERSION,
+  CHANGSHENG_SETTLEMENT_COLUMNS,
+  CHANGSHENG_SETTLEMENT_CUSTOMER_CODE,
+  CHANGSHENG_SETTLEMENT_TEMPLATE_CODE,
+  CHANGSHENG_SETTLEMENT_TEMPLATE_VERSION,
+  CICC_SETTLEMENT_COLUMNS,
+  CICC_SETTLEMENT_CUSTOMER_CODE,
+  CICC_SETTLEMENT_TEMPLATE_CODE,
+  CICC_SETTLEMENT_TEMPLATE_VERSION,
+  EFUND_SETTLEMENT_COLUMNS,
+  EFUND_SETTLEMENT_CUSTOMER_CODE,
+  EFUND_SETTLEMENT_TEMPLATE_CODE,
+  EFUND_SETTLEMENT_TEMPLATE_VERSION,
 } from './huitianfu-template';
+import { HUAXIA_SETTLEMENT_SQL } from './huaxia-template';
+import { XINGZHENG_SETTLEMENT_SQL } from './xingzheng-template';
+import { HAITONG_FUHAI_SETTLEMENT_SQL } from './haitong-fuhai-template';
+import { CHANGSHENG_SETTLEMENT_SQL } from './changsheng-template';
+import { CICC_SETTLEMENT_SQL } from './cicc-template';
+import { EFUND_SETTLEMENT_SQL } from './efund-template';
 
 type TemplateRecord = {
   id: string;
@@ -35,6 +69,11 @@ type TemplateColumn = {
   label: string;
   width: number;
   numeric?: boolean;
+  percent?: boolean;
+  image?: boolean;
+  mergeBy?: string;
+  headerWrap?: boolean;
+  headerHeight?: number;
 };
 
 export type SettlementFilters = {
@@ -72,45 +111,69 @@ export class SettlementService implements OnModuleInit {
         KEY idx_settlement_template_customer (customer_code, status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    const existing = await this.queryRows<{ id: string; version: number }>(
-      'SELECT id, version FROM settlement_sql_templates WHERE template_code = ? LIMIT 1',
-      [HUITIANFU_TEMPLATE_CODE],
-    );
-    if (existing.length === 0) {
-      await this.dataSource.query(
-        `INSERT IGNORE INTO settlement_sql_templates
-         (id, customer_code, template_code, name, version, status, sql_text, columns_json)
-         VALUES (?, ?, ?, ?, ?, 'published', ?, ?)`,
-        [
-          randomUUID(),
-          HUITIANFU_CUSTOMER_CODE,
-          HUITIANFU_TEMPLATE_CODE,
-          '汇添富结算明细',
-          HUITIANFU_TEMPLATE_VERSION,
-          HUITIANFU_SQL,
-          JSON.stringify(HUITIANFU_COLUMNS),
-        ],
-      );
-    } else if (Number(existing[0].version) < HUITIANFU_TEMPLATE_VERSION) {
-      await this.dataSource.query(
-        `UPDATE settlement_sql_templates
-         SET version = ?, status = 'published', sql_text = ?, columns_json = ?
-         WHERE id = ?`,
-        [
-          HUITIANFU_TEMPLATE_VERSION,
-          HUITIANFU_SQL,
-          JSON.stringify(HUITIANFU_COLUMNS),
-          existing[0].id,
-        ],
-      );
-    }
+    await this.ensureBuiltInTemplate({
+      customerCode: HUITIANFU_CUSTOMER_CODE,
+      templateCode: HUITIANFU_TEMPLATE_CODE,
+      name: '汇添富结算明细',
+      version: HUITIANFU_TEMPLATE_VERSION,
+      sql: HUITIANFU_SQL,
+      columns: HUITIANFU_COLUMNS,
+    });
     await this.ensureBuiltInTemplate({
       customerCode: DEFAULT_SETTLEMENT_CUSTOMER_CODE,
       templateCode: DEFAULT_SETTLEMENT_TEMPLATE_CODE,
       name: DEFAULT_SETTLEMENT_TEMPLATE_NAME,
       version: DEFAULT_SETTLEMENT_TEMPLATE_VERSION,
-      sql: HUITIANFU_SQL,
-      columns: HUITIANFU_COLUMNS,
+      sql: DEFAULT_SETTLEMENT_SQL,
+      columns: DEFAULT_SETTLEMENT_COLUMNS,
+    });
+    await this.ensureBuiltInTemplate({
+      customerCode: HUAXIA_SETTLEMENT_CUSTOMER_CODE,
+      templateCode: HUAXIA_SETTLEMENT_TEMPLATE_CODE,
+      name: '华夏结算明细',
+      version: HUAXIA_SETTLEMENT_TEMPLATE_VERSION,
+      sql: HUAXIA_SETTLEMENT_SQL,
+      columns: HUAXIA_SETTLEMENT_COLUMNS,
+    });
+    await this.ensureBuiltInTemplate({
+      customerCode: XINGZHENG_SETTLEMENT_CUSTOMER_CODE,
+      templateCode: XINGZHENG_SETTLEMENT_TEMPLATE_CODE,
+      name: '兴全结算明细',
+      version: XINGZHENG_SETTLEMENT_TEMPLATE_VERSION,
+      sql: XINGZHENG_SETTLEMENT_SQL,
+      columns: XINGZHENG_SETTLEMENT_COLUMNS,
+    });
+    await this.ensureBuiltInTemplate({
+      customerCode: HAITONG_FUHAI_SETTLEMENT_CUSTOMER_CODE,
+      templateCode: HAITONG_FUHAI_SETTLEMENT_TEMPLATE_CODE,
+      name: '海富通结算明细',
+      version: HAITONG_FUHAI_SETTLEMENT_TEMPLATE_VERSION,
+      sql: HAITONG_FUHAI_SETTLEMENT_SQL,
+      columns: HAITONG_FUHAI_SETTLEMENT_COLUMNS,
+    });
+    await this.ensureBuiltInTemplate({
+      customerCode: CHANGSHENG_SETTLEMENT_CUSTOMER_CODE,
+      templateCode: CHANGSHENG_SETTLEMENT_TEMPLATE_CODE,
+      name: '长盛结算明细',
+      version: CHANGSHENG_SETTLEMENT_TEMPLATE_VERSION,
+      sql: CHANGSHENG_SETTLEMENT_SQL,
+      columns: CHANGSHENG_SETTLEMENT_COLUMNS,
+    });
+    await this.ensureBuiltInTemplate({
+      customerCode: CICC_SETTLEMENT_CUSTOMER_CODE,
+      templateCode: CICC_SETTLEMENT_TEMPLATE_CODE,
+      name: '中金结算明细',
+      version: CICC_SETTLEMENT_TEMPLATE_VERSION,
+      sql: CICC_SETTLEMENT_SQL,
+      columns: CICC_SETTLEMENT_COLUMNS,
+    });
+    await this.ensureBuiltInTemplate({
+      customerCode: EFUND_SETTLEMENT_CUSTOMER_CODE,
+      templateCode: EFUND_SETTLEMENT_TEMPLATE_CODE,
+      name: '易方达结算明细',
+      version: EFUND_SETTLEMENT_TEMPLATE_VERSION,
+      sql: EFUND_SETTLEMENT_SQL,
+      columns: EFUND_SETTLEMENT_COLUMNS,
     });
   }
 
@@ -123,7 +186,7 @@ export class SettlementService implements OnModuleInit {
     columns: readonly unknown[];
   }) {
     const existing = await this.queryRows<{ id: string; version: number }>(
-      'SELECT id, version FROM settlement_sql_templates WHERE template_code = ? LIMIT 1',
+      'SELECT id, version FROM settlement_sql_templates WHERE template_code = ? ORDER BY version DESC LIMIT 1',
       [input.templateCode],
     );
     if (existing.length === 0) {
@@ -142,17 +205,29 @@ export class SettlementService implements OnModuleInit {
         ],
       );
     } else if (Number(existing[0].version) < input.version) {
-      await this.dataSource.query(
-        `UPDATE settlement_sql_templates
-         SET version = ?, status = 'published', sql_text = ?, columns_json = ?
-         WHERE id = ?`,
-        [
-          input.version,
-          input.sql,
-          JSON.stringify(input.columns),
-          existing[0].id,
-        ],
-      );
+      // Preserve the previous SQL for rollback and publish the new version
+      // atomically so a failed insert does not leave the fund without a template.
+      await this.dataSource.transaction(async (manager) => {
+        await manager.query(
+          `UPDATE settlement_sql_templates SET status = 'archived'
+           WHERE template_code = ? AND status = 'published'`,
+          [input.templateCode],
+        );
+        await manager.query(
+          `INSERT INTO settlement_sql_templates
+           (id, customer_code, template_code, name, version, status, sql_text, columns_json)
+           VALUES (?, ?, ?, ?, ?, 'published', ?, ?)`,
+          [
+            randomUUID(),
+            input.customerCode,
+            input.templateCode,
+            input.name,
+            input.version,
+            input.sql,
+            JSON.stringify(input.columns),
+          ],
+        );
+      });
     }
   }
 
@@ -166,11 +241,19 @@ export class SettlementService implements OnModuleInit {
       [customerCode, DEFAULT_SETTLEMENT_CUSTOMER_CODE, customerCode],
     );
     const seen = new Set<string>();
-    return rows.filter((row) => {
+    const visibleRows = rows.filter((row) => {
       if (seen.has(row.template_code)) return false;
       seen.add(row.template_code);
       return true;
     });
+    // Keep the fallback relationship explicit so callers never need to infer it
+    // from SQL ordering when selecting the effective template.
+    return visibleRows.map((row) => ({
+      ...row,
+      is_fallback:
+        customerCode !== 'all' &&
+        row.customer_code === DEFAULT_SETTLEMENT_CUSTOMER_CODE,
+    }));
   }
 
   private async template(id: string, customerCode: string) {
@@ -244,17 +327,24 @@ export class SettlementService implements OnModuleInit {
     };
   }
 
+  private settlementOrder(template: Pick<TemplateRecord, 'template_code'>) {
+    return template.template_code === EFUND_SETTLEMENT_TEMPLATE_CODE
+      ? 'v.__efund_contact_group, v.__efund_assignee_group, v.__filter_date DESC, v.__task_id'
+      : 'v.__filter_date DESC, v.__task_id';
+  }
+
   async preview(id: string, filters: SettlementFilters, page = 1) {
     const template = await this.template(id, filters.customerCode);
     const pageNumber = Math.max(1, Math.min(10000, Number(page) || 1));
     const { from, params } = this.filteredQuery(template.sql, filters);
+    const orderBy = this.settlementOrder(template);
     const [counts, result] = await Promise.all([
       this.queryRows<{ total: number | string }>(
         `SELECT COUNT(*) AS total ${from}`,
         params,
       ),
       this.queryRows<Record<string, unknown>>(
-        `SELECT v.* ${from} ORDER BY v.__filter_date DESC, v.__task_id LIMIT ? OFFSET ?`,
+        `SELECT v.* ${from} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
         [...params, 100, (pageNumber - 1) * 100],
       ),
     ]);
@@ -275,6 +365,7 @@ export class SettlementService implements OnModuleInit {
   async exportExcel(id: string, filters: SettlementFilters) {
     const template = await this.template(id, filters.customerCode);
     const { from, params } = this.filteredQuery(template.sql, filters);
+    const orderBy = this.settlementOrder(template);
     const counts = await this.queryRows<{ total: number | string }>(
       `SELECT COUNT(*) AS total ${from}`,
       params,
@@ -283,7 +374,7 @@ export class SettlementService implements OnModuleInit {
     if (total > 5000)
       throw new BadRequestException('单次导出最多 5000 条，请缩小时间范围');
     const rows = await this.queryRows<Record<string, unknown>>(
-      `SELECT v.* ${from} ORDER BY v.__filter_date DESC, v.__task_id LIMIT 5000`,
+      `SELECT v.* ${from} ORDER BY ${orderBy} LIMIT 5000`,
       params,
     );
     const workbook = new ExcelJS.Workbook();
@@ -295,6 +386,20 @@ export class SettlementService implements OnModuleInit {
     }));
     sheet.getRow(1).font = { bold: true };
     sheet.getRow(1).alignment = { vertical: 'middle' };
+    const headerHeight = Math.max(
+      0,
+      ...template.columns.map((column) => column.headerHeight ?? 0),
+    );
+    if (headerHeight) sheet.getRow(1).height = headerHeight;
+    for (const [index, column] of template.columns.entries()) {
+      if (column.headerWrap) {
+        sheet.getCell(1, index + 1).alignment = {
+          vertical: 'middle',
+          horizontal: 'center',
+          wrapText: true,
+        };
+      }
+    }
     sheet.views = [{ state: 'frozen', ySplit: 1 }];
     sheet.autoFilter = {
       from: 'A1',
@@ -313,9 +418,67 @@ export class SettlementService implements OnModuleInit {
       );
     }
     for (const [index, column] of template.columns.entries()) {
+      if (!column.mergeBy) continue;
+      let start = 0;
+      while (start < rows.length) {
+        const groupValue = rows[start][column.mergeBy];
+        if (groupValue === null || groupValue === undefined) {
+          start += 1;
+          continue;
+        }
+        let end = start + 1;
+        while (end < rows.length && rows[end][column.mergeBy] === groupValue)
+          end += 1;
+        if (end - start > 1) {
+          sheet.mergeCells(start + 2, index + 1, end + 1, index + 1);
+          sheet.getCell(start + 2, index + 1).alignment = {
+            vertical: 'middle',
+            horizontal: 'center',
+          };
+        }
+        start = end;
+      }
+    }
+    for (const [index, column] of template.columns.entries()) {
       if (column.numeric)
-        sheet.getColumn(index + 1).numFmt =
-          column.key === 'quantity' ? '0' : '#,##0.00';
+        sheet.getColumn(index + 1).numFmt = column.percent
+          ? '0%'
+          : column.key === 'quantity'
+            ? '0'
+            : '#,##0.00';
+    }
+    const imageColumn = template.columns.findIndex((column) => column.image);
+    if (imageColumn >= 0) {
+      const imageTemplateColumn = template.columns[imageColumn];
+      for (const [rowIndex, row] of rows.entries()) {
+        const imageUrls = String(row[imageTemplateColumn.key] ?? '')
+          .split(/\r?\n|\\n/)
+          .map((url) => url.trim())
+          .filter(Boolean)
+          .slice(0, 2);
+        let embedded = 0;
+        for (const [imageIndex, imageUrl] of imageUrls.entries()) {
+          const image = await this.localExportImage(imageUrl);
+          if (!image) continue;
+          const imageId = workbook.addImage({
+            base64: `data:image/${image.extension};base64,${image.buffer.toString('base64')}`,
+            extension: image.extension,
+          });
+          const excelRow = rowIndex + 2;
+          sheet.addImage(imageId, {
+            tl: {
+              col: imageColumn + imageIndex * 0.3,
+              row: excelRow - 1 + 0.1,
+            },
+            ext: { width: 48, height: 42 },
+          });
+          embedded += 1;
+        }
+        if (embedded) {
+          sheet.getRow(rowIndex + 2).height = 36;
+          sheet.getCell(rowIndex + 2, imageColumn + 1).value = null;
+        }
+      }
     }
     const raw = await workbook.xlsx.writeBuffer();
     const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
@@ -339,5 +502,33 @@ export class SettlementService implements OnModuleInit {
         columns.map((column) => [column.key, row[column.key] ?? null]),
       ),
     );
+  }
+
+  private async localExportImage(fileUrl: string) {
+    if (!fileUrl.startsWith('/uploads/task-assets/')) return null;
+    const publicDir = resolve(process.cwd(), 'public');
+    const localPath = resolve(
+      publicDir,
+      fileUrl.split(/[?#]/)[0].replace(/^\/+/, ''),
+    );
+    if (
+      localPath === publicDir ||
+      !localPath.startsWith(`${publicDir}${sep}`)
+    ) {
+      return null;
+    }
+    const extension = extname(localPath).toLowerCase();
+    if (!['.png', '.jpg', '.jpeg'].includes(extension)) return null;
+    try {
+      return {
+        buffer: await readFile(localPath),
+        extension:
+          extension === '.jpg'
+            ? 'jpeg'
+            : (extension.slice(1) as 'png' | 'jpeg'),
+      };
+    } catch {
+      return null;
+    }
   }
 }
