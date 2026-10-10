@@ -3222,8 +3222,16 @@
               </div>
               <div class="btns classification-toolbar-actions">
                 <button class="btn" onclick="reloadCategoryTree()">刷新</button>
-                <button class="btn" onclick="toggleClassificationCreatePanel()">新增三级分类</button>
+                <button class="btn primary" onclick="toggleClassificationCategoryCreatePanel()">新增业务大类</button>
               </div>
+            </div>
+            <div id="classificationCategoryCreatePanel" class="standard-detail-panel hidden">
+              <h4>新增业务大类</h4>
+              <p>维护最高层级业务大类名称；新增后即可在此大类下增加二级分类与三级分类，并同步用于需求录入与效能统计。</p>
+              <div class="form-grid">
+                <label>业务大类名称<input id="classificationCategoryNameInput" placeholder="例如：AI与创新业务" /></label>
+              </div>
+              <div class="btns"><button class="btn primary" onclick="createBusinessCategory()">保存业务大类</button><button class="btn" onclick="toggleClassificationCategoryCreatePanel(false)">取消</button></div>
             </div>
             <div id="classificationCreatePanel" class="standard-detail-panel hidden">
               <h4>新增三级分类</h4>
@@ -8331,27 +8339,33 @@
       const keyword = (qs("classificationSearchInput")?.value || "").trim().toLowerCase();
       const visibleCategories = categories.filter(category => {
         if (selectedCategory && category.code !== selectedCategory) return false;
+        if (selectedSecondary) {
+          return (category.secondaries || []).some(secondary => secondary.code === selectedSecondary);
+        }
+        if (!keyword) return true;
+        if (standardClassificationMatches(keyword, category.name)) return true;
         return (category.secondaries || []).some(secondary => {
-          if (selectedSecondary && secondary.code !== selectedSecondary) return false;
-          return (secondary.tertiaries || []).some(tertiary => standardClassificationMatches(keyword, category.name, secondary.name, tertiary.name, tertiary.contentScope, tertiary.deliveryStandard, tertiary.acceptanceEvidence, tertiary.scoringBoundary, tertiary.remark));
+          return standardClassificationMatches(keyword, secondary.name) || (secondary.tertiaries || []).some(tertiary => standardClassificationMatches(keyword, secondary.name, tertiary.name, tertiary.contentScope, tertiary.deliveryStandard, tertiary.acceptanceEvidence, tertiary.scoringBoundary, tertiary.remark));
         });
       });
       const categoryMarkup = visibleCategories.map(category => {
         const categoryKeywordMatch = standardClassificationMatches(keyword, category.name);
-        const visibleSecondaries = (category.secondaries || []).filter(secondary => {
+        const secondaries = category.secondaries || [];
+        const visibleSecondaries = secondaries.filter(secondary => {
           if (selectedSecondary && secondary.code !== selectedSecondary) return false;
-          return categoryKeywordMatch || (secondary.tertiaries || []).some(tertiary => standardClassificationMatches(keyword, secondary.name, tertiary.name, tertiary.contentScope, tertiary.deliveryStandard, tertiary.acceptanceEvidence, tertiary.scoringBoundary, tertiary.remark));
+          return !keyword || categoryKeywordMatch || standardClassificationMatches(keyword, secondary.name) || (secondary.tertiaries || []).some(tertiary => standardClassificationMatches(keyword, tertiary.name, tertiary.contentScope, tertiary.deliveryStandard, tertiary.acceptanceEvidence, tertiary.scoringBoundary, tertiary.remark));
         });
         const categoryExpanded = state.classificationExpanded.has(standardTreeKey("category", category.code)) || Boolean(keyword);
-        const totalTertiaries = (category.secondaries || []).reduce((sum, item) => sum + (item.tertiaries || []).length, 0);
-        return `<div class="standard-tree-node"><div class="standard-tree-row category" oncontextmenu="openStandardContextMenu(event, 'category', '${escapeAttr(category.code)}')"><button class="standard-tree-toggle" onclick="event.stopPropagation(); toggleStandardTreeNode('category', '${escapeAttr(category.code)}')">${categoryExpanded ? "▾" : "▸"}</button><div class="standard-tree-label"><strong>${escapeHtml(category.name)}</strong><span>业务大类 · ${visibleSecondaries.length}/${(category.secondaries || []).length} 个二级分类</span></div><div class="standard-tree-meta"><span class="tag">${totalTertiaries} 个三级分类</span><span class="tag">右键管理</span></div></div>${categoryExpanded ? visibleSecondaries.map(secondary => {
+        const totalTertiaries = secondaries.reduce((sum, item) => sum + (item.tertiaries || []).length, 0);
+        return `<div class="standard-tree-node"><div class="standard-tree-row category" oncontextmenu="openStandardContextMenu(event, 'category', '${escapeAttr(category.code)}')"><button class="standard-tree-toggle" onclick="event.stopPropagation(); toggleStandardTreeNode('category', '${escapeAttr(category.code)}')">${categoryExpanded ? "▾" : "▸"}</button><div class="standard-tree-label"><strong>${escapeHtml(category.name)}</strong><span>业务大类 · ${visibleSecondaries.length}/${secondaries.length} 个二级分类</span></div><div class="standard-tree-meta"><span class="tag">${totalTertiaries} 个三级分类</span><span class="tag">右键管理</span></div></div>${categoryExpanded ? (visibleSecondaries.length ? visibleSecondaries.map(secondary => {
           const secondaryKeywordMatch = categoryKeywordMatch || standardClassificationMatches(keyword, secondary.name);
-          const visibleTertiaries = (secondary.tertiaries || []).filter(tertiary => standardClassificationMatches(keyword, category.name, secondary.name, tertiary.name, tertiary.contentScope, tertiary.deliveryStandard, tertiary.acceptanceEvidence, tertiary.scoringBoundary, tertiary.remark));
+          const tertiaries = secondary.tertiaries || [];
+          const visibleTertiaries = tertiaries.filter(tertiary => standardClassificationMatches(keyword, category.name, secondary.name, tertiary.name, tertiary.contentScope, tertiary.deliveryStandard, tertiary.acceptanceEvidence, tertiary.scoringBoundary, tertiary.remark));
           const secondaryExpanded = state.classificationExpanded.has(standardTreeKey("secondary", secondary.code)) || Boolean(keyword);
-          return `<div class="standard-tree-node"><div class="standard-tree-row secondary" oncontextmenu="openStandardContextMenu(event, 'secondary', '${escapeAttr(secondary.code)}')"><button class="standard-tree-toggle" onclick="event.stopPropagation(); toggleStandardTreeNode('secondary', '${escapeAttr(secondary.code)}')">${secondaryExpanded ? "▾" : "▸"}</button><div class="standard-tree-label"><strong>${escapeHtml(secondary.name)}</strong><span>二级分类 · ${visibleTertiaries.length}/${(secondary.tertiaries || []).length} 个三级分类</span></div><div class="standard-tree-meta"><span class="tag">${secondaryKeywordMatch ? "已匹配" : "分类"}</span><span class="tag">右键管理</span></div></div>${secondaryExpanded ? visibleTertiaries.map(tertiary => `<div class="standard-tree-tertiary"><div class="standard-tree-row tertiary" oncontextmenu="openStandardContextMenu(event, 'tertiary', '${escapeAttr(tertiary.code)}')"><span></span><div class="standard-tree-label"><strong>${escapeHtml(tertiary.name)}</strong><span>三级分类 · ${escapeHtml(tertiary.productCode || tertiary.code || "未配置编码")}</span></div><div class="standard-tree-meta"><span class="tag">${escapeHtml(tertiary.measureUnit || "项")}</span><span class="tag">${escapeHtml(tertiary.referenceMinutes ?? "-")} 分钟</span><span class="tag">${escapeHtml(tertiary.estimatedHours || "0.00")} 小时</span><span class="tag">${escapeHtml(tertiary.contributionPoints || "0.00")} 分</span></div></div>${classificationHoverCard(tertiary)}</div>`).join("") : ""}</div>`;
-        }).join("") : ""}</div>`;
+          return `<div class="standard-tree-node"><div class="standard-tree-row secondary" oncontextmenu="openStandardContextMenu(event, 'secondary', '${escapeAttr(secondary.code)}')"><button class="standard-tree-toggle" onclick="event.stopPropagation(); toggleStandardTreeNode('secondary', '${escapeAttr(secondary.code)}')">${secondaryExpanded ? "▾" : "▸"}</button><div class="standard-tree-label"><strong>${escapeHtml(secondary.name)}</strong><span>二级分类 · ${visibleTertiaries.length}/${tertiaries.length} 个三级分类</span></div><div class="standard-tree-meta"><span class="tag">${secondaryKeywordMatch ? "已匹配" : "分类"}</span><span class="tag">右键管理</span></div></div>${secondaryExpanded ? (visibleTertiaries.length ? visibleTertiaries.map(tertiary => `<div class="standard-tree-tertiary"><div class="standard-tree-row tertiary" oncontextmenu="openStandardContextMenu(event, 'tertiary', '${escapeAttr(tertiary.code)}')"><span></span><div class="standard-tree-label"><strong>${escapeHtml(tertiary.name)}</strong><span>三级分类 · ${escapeHtml(tertiary.productCode || tertiary.code || "未配置编码")}</span></div><div class="standard-tree-meta"><span class="tag">${escapeHtml(tertiary.measureUnit || "项")}</span><span class="tag">${escapeHtml(tertiary.referenceMinutes ?? "-")} 分钟</span><span class="tag">${escapeHtml(tertiary.estimatedHours || "0.00")} 小时</span><span class="tag">${escapeHtml(tertiary.contributionPoints || "0.00")} 分</span></div></div>${classificationHoverCard(tertiary)}</div>`).join("") : `<div class="standard-tree-empty-hint" style="padding: 8px 16px 8px 52px; color: var(--text-muted, #8c8c8c); font-size: 12px;">暂无三级分类，可右键此二级分类“新增三级分类”</div>`) : ""}</div>`;
+        }).join("") : `<div class="standard-tree-empty-hint" style="padding: 10px 16px 10px 36px; color: var(--text-muted, #8c8c8c); font-size: 13px;">暂无二级分类，可右键此业务大类“新增二级分类”</div>`) : ""}</div>`;
       }).join("");
-      board.innerHTML = categoryMarkup ? `<div class="standard-tree">${categoryMarkup}</div>` : `<div class="empty-list">暂无匹配的分类，请调整筛选条件或新增三级分类。</div>`;
+      board.innerHTML = categoryMarkup ? `<div class="standard-tree">${categoryMarkup}</div>` : `<div class="empty-list">暂无匹配的分类，请调整筛选条件或新增业务大类。</div>`;
     }
     function renderClassificationSecondaryOptions(shouldRender = true) {
       const categoryCode = qs("classificationCategoryInput")?.value || "";
@@ -8708,11 +8722,68 @@
         toast(error.message || "新增失败");
       }
     }
+    function toggleClassificationCategoryCreatePanel(force) {
+      const panel = qs("classificationCategoryCreatePanel");
+      if (!panel) return;
+      const show = force === undefined ? panel.classList.contains("hidden") : Boolean(force);
+      panel.classList.toggle("hidden", !show);
+      if (show) {
+        qs("classificationCreatePanel")?.classList.add("hidden");
+        qs("classificationDetailPanel")?.classList.add("hidden");
+        qs("classificationCategoryNameInput")?.focus();
+      }
+    }
+    async function createBusinessCategory() {
+      const nameInput = qs("classificationCategoryNameInput");
+      const name = nameInput?.value.trim() || "";
+      if (!name) return toast("请填写业务大类名称");
+      const maxSort = (state.categoryTree || []).reduce((max, c) => Math.max(max, Number(c.sortOrder || c.sort_order || 100)), 100);
+      const sortOrder = maxSort + 10;
+      const slug = String(name).trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "_").replace(/^_+|_+$/g, "") || "item";
+      const code = `cat_${slug}_${Date.now().toString(36)}`;
+      try {
+        await request("/dimensions", {
+          method: "POST",
+          body: {
+            dimensionType: "business_category",
+            dimensionCode: code,
+            dimensionName: name,
+            sortOrder,
+            status: "active",
+            remark: "custom",
+          },
+        });
+        if (nameInput) nameInput.value = "";
+        toggleClassificationCategoryCreatePanel(false);
+        state.classificationExpanded.add(standardTreeKey("category", code));
+        await reloadCategoryTree(false);
+        toast(`业务大类“${name}”已新增`);
+      } catch (error) {
+        toast(error.message || "新增业务大类失败");
+      }
+    }
+    async function editBusinessCategory(code) {
+      const category = findClassificationContextTarget("category", code);
+      const name = window.prompt("修改业务大类名称", category?.name || "");
+      if (!name?.trim() || !category) return;
+      try {
+        const dimensions = unwrap(await request("/dimensions?type=business_category&status=all"));
+        const entity = dimensions.find(item => (item.dimension_code || item.dimensionCode) === code);
+        if (!entity?.id) return toast("未找到业务大类配置记录");
+        await request(`/dimensions/${entity.id}`, { method: "PATCH", body: { dimensionName: name.trim() } });
+        await reloadCategoryTree(false);
+        toast("业务大类名称已更新");
+      } catch (error) { toast(error.message || "编辑业务大类失败"); }
+    }
     function toggleClassificationCreatePanel(force) {
       const panel = qs("classificationCreatePanel");
       if (!panel) return;
       const show = force === undefined ? panel.classList.contains("hidden") : Boolean(force);
       panel.classList.toggle("hidden", !show);
+      if (show) {
+        qs("classificationCategoryCreatePanel")?.classList.add("hidden");
+        qs("classificationDetailPanel")?.classList.add("hidden");
+      }
     }
     function closeStandardContextMenu() {
       const menu = qs("standardContextMenu");
@@ -8738,10 +8809,23 @@
       if (!menu || !target) return;
       state.standardContext = { type, code };
       const actions = type === "category"
-        ? [{ action: "add-secondary", label: "新增二级分类" }]
+        ? [
+            { action: "add-secondary", label: "新增二级分类" },
+            { action: "add-category", label: "新增业务大类" },
+            { action: "edit-category", label: "编辑业务大类" },
+            { action: "delete", label: "删除业务大类", danger: true }
+          ]
         : type === "secondary"
-          ? [{ action: "add-tertiary", label: "新增三级分类" }, { action: "edit-secondary", label: "编辑二级分类" }, { action: "disable", label: "删除（停用）二级分类", danger: true }]
-          : [{ action: "edit-tertiary", label: "编辑三级分类" }, { action: "add-sibling", label: "新增同级三级分类" }, { action: "disable", label: "删除（停用）三级分类", danger: true }];
+          ? [
+              { action: "add-tertiary", label: "新增三级分类" },
+              { action: "edit-secondary", label: "编辑二级分类" },
+              { action: "delete", label: "删除二级分类", danger: true }
+            ]
+          : [
+              { action: "edit-tertiary", label: "编辑三级分类" },
+              { action: "add-sibling", label: "新增同级三级分类" },
+              { action: "delete", label: "删除三级分类", danger: true }
+            ];
       menu.innerHTML = actions.map(item => `<button class="${item.danger ? "danger" : ""}" onclick="handleStandardContextAction('${item.action}')">${item.label}</button>`).join("");
       menu.classList.remove("hidden");
       const margin = 10;
@@ -8791,30 +8875,41 @@
         toast("二级分类名称已更新");
       } catch (error) { toast(error.message || "编辑二级分类失败"); }
     }
-    async function setClassificationStatus(type, code) {
+    async function deleteClassificationItem(type, code) {
       const target = findClassificationContextTarget(type, code);
-      const label = type === "secondary" ? target?.secondary?.name : target?.tertiary?.name;
+      const label = type === "category" ? target?.name : type === "secondary" ? target?.secondary?.name : target?.tertiary?.name;
+      const typeLabel = type === "category" ? "业务大类" : type === "secondary" ? "二级分类" : "三级分类";
       if (!label) return;
-      const confirmed = await confirmDialog({ title: "停用分类", message: `停用“${label}”后将不再出现在新任务选择器中，是否继续？`, okText: "确认停用" });
+      const confirmed = await confirmDialog({
+        title: `删除${typeLabel}`,
+        message: `确定要直接删除“${label}”吗？删除后将直接从分类标准中移除${type !== "tertiary" ? "，其下级子分类也将一并删除" : ""}。`,
+        okText: "确认删除"
+      });
       if (!confirmed) return;
       try {
-        const dimensionType = type === "secondary" ? "secondary_category" : "tertiary_category";
-        const dimensions = unwrap(await request(`/dimensions?type=${dimensionType}&status=all`));
-        const entity = dimensions.find(item => (item.dimension_code || item.dimensionCode) === code);
-        if (!entity?.id) return toast("未找到分类配置记录");
-        await request(`/dimensions/${entity.id}`, { method: "PATCH", body: { status: "inactive" } });
+        let entityId = type === "category" ? target?.id : type === "secondary" ? target?.secondary?.id : target?.tertiary?.id;
+        if (!entityId) {
+          const dimensionType = type === "category" ? "business_category" : type === "secondary" ? "secondary_category" : "tertiary_category";
+          const dimensions = unwrap(await request(`/dimensions?type=${dimensionType}&status=all`));
+          const entity = dimensions.find(item => (item.dimension_code || item.dimensionCode) === code);
+          entityId = entity?.id;
+        }
+        if (!entityId) return toast(`未找到${typeLabel}配置记录`);
+        await request(`/dimensions/${entityId}`, { method: "DELETE" });
         await reloadCategoryTree(false);
-        toast("分类已停用");
-      } catch (error) { toast(error.message || "停用分类失败"); }
+        toast(`已删除${typeLabel}“${label}”`);
+      } catch (error) { toast(error.message || `删除${typeLabel}失败`); }
     }
     async function handleStandardContextAction(action) {
       const context = state.standardContext;
       closeStandardContextMenu();
       if (!context) return;
       const target = findClassificationContextTarget(context.type, context.code);
+      if (action === "add-category") return toggleClassificationCategoryCreatePanel(true);
+      if (action === "edit-category") return editBusinessCategory(context.code);
       if (action === "add-secondary") return createSecondaryCategoryFromContext(context.code);
       if (action === "edit-secondary") return editSecondaryCategory(context.code);
-      if (action === "disable") return setClassificationStatus(context.type, context.code);
+      if (action === "delete" || action === "disable") return deleteClassificationItem(context.type, context.code);
       if (action === "edit-tertiary") return openClassificationDetails(context.code);
       if (action === "add-tertiary") return setClassificationCreateParent(target.category.code, target.secondary.code);
       if (action === "add-sibling") return setClassificationCreateParent(target.category.code, target.secondary.code);

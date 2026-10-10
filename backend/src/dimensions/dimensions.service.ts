@@ -66,7 +66,9 @@ export class DimensionsService implements OnModuleInit {
     const where = {
       ...(input?.dimensionType ? { dimension_type: input.dimensionType } : {}),
       ...(input?.parentCode ? { parent_code: input.parentCode } : {}),
-      ...(input?.status ? { status: input.status } : {}),
+      ...(input?.status && input.status !== 'all'
+        ? { status: input.status }
+        : {}),
     };
     return this.dimensionsRepository.find({
       where,
@@ -174,7 +176,37 @@ export class DimensionsService implements OnModuleInit {
           ? dto.referenceMinutes
           : (entity.reference_minutes ?? null),
     });
-    return this.dimensionsRepository.save(entity);
+    const saved = await this.dimensionsRepository.save(entity);
+    if (saved.dimension_type === 'secondary_category' && saved.parent_code) {
+      const parentDim = await this.dimensionsRepository.findOne({
+        where: {
+          dimension_type: 'business_category',
+          dimension_code: saved.parent_code,
+        },
+      });
+      const existingRel =
+        await this.businessCategorySecondaryRepository.findOne({
+          where: {
+            business_category_code: saved.parent_code,
+            secondary_category_code: saved.dimension_code,
+          },
+          withDeleted: true,
+        });
+      const rel =
+        existingRel ?? this.businessCategorySecondaryRepository.create();
+      Object.assign(rel, {
+        business_category_code: saved.parent_code,
+        business_category_name: parentDim?.dimension_name || saved.parent_code,
+        secondary_category_code: saved.dimension_code,
+        secondary_category_name: saved.dimension_name,
+        category_sort_order: parentDim?.sort_order ?? 100,
+        secondary_sort_order: saved.sort_order ?? 100,
+        status: saved.status ?? 'active',
+        deleted_at: null,
+      });
+      await this.businessCategorySecondaryRepository.save(rel);
+    }
+    return saved;
   }
 
   async update(id: string, dto: UpdateDimensionDictionaryDto) {
@@ -182,6 +214,9 @@ export class DimensionsService implements OnModuleInit {
     if (!entity) {
       throw new NotFoundException('Dimension dictionary item not found');
     }
+    const oldName = entity.dimension_name;
+    const oldCode = entity.dimension_code;
+    const oldType = entity.dimension_type;
     Object.assign(entity, {
       dimension_type: dto.dimensionType ?? entity.dimension_type,
       dimension_code: dto.dimensionCode ?? entity.dimension_code,
@@ -234,7 +269,86 @@ export class DimensionsService implements OnModuleInit {
           ? dto.referenceMinutes
           : entity.reference_minutes,
     });
-    return this.dimensionsRepository.save(entity);
+    const saved = await this.dimensionsRepository.save(entity);
+    if (oldType === 'business_category') {
+      if (dto.dimensionName && dto.dimensionName !== oldName) {
+        await this.businessCategorySecondaryRepository.update(
+          { business_category_code: oldCode },
+          { business_category_name: dto.dimensionName },
+        );
+      }
+      if (dto.status === 'inactive') {
+        await this.businessCategorySecondaryRepository.update(
+          { business_category_code: oldCode },
+          { status: 'inactive' },
+        );
+        const secondaries = await this.dimensionsRepository.find({
+          where: { dimension_type: 'secondary_category', parent_code: oldCode },
+        });
+        for (const sec of secondaries) {
+          await this.deactivateSecondaryTree(sec.dimension_code);
+        }
+      }
+    } else if (oldType === 'secondary_category') {
+      if (dto.dimensionName && dto.dimensionName !== oldName) {
+        await this.businessCategorySecondaryRepository.update(
+          { secondary_category_code: oldCode },
+          { secondary_category_name: dto.dimensionName },
+        );
+      }
+      if (dto.status === 'inactive') {
+        await this.businessCategorySecondaryRepository.update(
+          { secondary_category_code: oldCode },
+          { status: 'inactive' },
+        );
+        await this.deactivateSecondaryTree(oldCode);
+      }
+    }
+    return saved;
+  }
+
+  async remove(id: string) {
+    const entity = await this.dimensionsRepository.findOne({ where: { id } });
+    if (!entity) {
+      throw new NotFoundException('Dimension item not found');
+    }
+    const type = entity.dimension_type;
+    const code = entity.dimension_code;
+
+    entity.status = 'inactive';
+    await this.dimensionsRepository.save(entity);
+    await this.dimensionsRepository.softDelete(id);
+
+    if (type === 'business_category') {
+      await this.businessCategorySecondaryRepository.update(
+        { business_category_code: code },
+        { status: 'inactive' },
+      );
+      await this.businessCategorySecondaryRepository.softDelete({
+        business_category_code: code,
+      });
+      const secondaries = await this.dimensionsRepository.find({
+        where: { dimension_type: 'secondary_category', parent_code: code },
+      });
+      for (const sec of secondaries) {
+        await this.remove(sec.id);
+      }
+    } else if (type === 'secondary_category') {
+      await this.businessCategorySecondaryRepository.update(
+        { secondary_category_code: code },
+        { status: 'inactive' },
+      );
+      await this.businessCategorySecondaryRepository.softDelete({
+        secondary_category_code: code,
+      });
+      const tertiaries = await this.dimensionsRepository.find({
+        where: { dimension_type: 'tertiary_category', parent_code: code },
+      });
+      for (const ter of tertiaries) {
+        await this.remove(ter.id);
+      }
+    }
+    return { success: true };
   }
 
   async categoryTree() {
@@ -244,16 +358,19 @@ export class DimensionsService implements OnModuleInit {
       this.findAll({ dimensionType: 'tertiary_category', status: 'active' }),
     ]);
     return categories.map((category) => ({
+      id: category.id,
       code: category.dimension_code,
       name: category.dimension_name,
       secondaries: secondaries
         .filter((item) => item.parent_code === category.dimension_code)
         .map((secondary) => ({
+          id: secondary.id,
           code: secondary.dimension_code,
           name: secondary.dimension_name,
           tertiaries: tertiaries
             .filter((item) => item.parent_code === secondary.dimension_code)
             .map((tertiary) => ({
+              id: tertiary.id,
               code: tertiary.dimension_code,
               name: tertiary.dimension_name,
               productType: tertiary.product_type,
@@ -926,6 +1043,13 @@ export class DimensionsService implements OnModuleInit {
     });
     for (const category of existingCategories) {
       if (desiredCategoryCodes.has(category.dimension_code)) continue;
+      if (
+        category.remark === 'custom' ||
+        category.dimension_code.startsWith('custom_') ||
+        category.dimension_code.startsWith('cat_')
+      ) {
+        continue;
+      }
       category.status = 'inactive';
       await this.dimensionsRepository.save(category);
       const relations = await this.businessCategorySecondaryRepository.find({
@@ -992,6 +1116,13 @@ export class DimensionsService implements OnModuleInit {
         });
       for (const relation of existingRelations) {
         if (desiredSecondaryCodes.has(relation.secondary_category_code)) {
+          continue;
+        }
+        if (
+          relation.remark === 'custom' ||
+          relation.secondary_category_code.startsWith('custom_') ||
+          relation.secondary_category_code.startsWith('sec_')
+        ) {
           continue;
         }
         relation.status = 'inactive';

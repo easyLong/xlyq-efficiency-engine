@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -83,5 +84,11 @@ export class DimensionsController {
   @Permission('page.standard_config')
   update(@Param('id') id: string, @Body() dto: UpdateDimensionDictionaryDto) {
     return this.dimensionsService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @Permission('page.standard_config')
+  remove(@Param('id') id: string) {
+    return this.dimensionsService.remove(id);
   }
 }
