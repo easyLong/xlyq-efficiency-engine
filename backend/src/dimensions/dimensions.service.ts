@@ -1159,8 +1159,9 @@ export class DimensionsService implements OnModuleInit {
       ...[
         '招行',
         '工行',
-        '交行',
+        '中行',
         '建行',
+        '交行',
         '理财通',
         '蚂蚁',
         '天天基金',
@@ -1840,6 +1841,7 @@ export class DimensionsService implements OnModuleInit {
     const fixed: Record<string, string> = {
       招行: 'cmb',
       工行: 'icbc',
+      中行: 'boc',
       交行: 'bocom',
       建行: 'ccb',
       理财通: 'licaitong',
