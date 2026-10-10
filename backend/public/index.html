@@ -1387,7 +1387,7 @@
     .load-badge.busy { color: #8a5c21; background: #fff1d8; }
     .load-badge.full { color: #9b3a2d; background: #fff0eb; }
     .employee-detail-backdrop { position: fixed; inset: 0; z-index: 90; background: rgba(18, 29, 23, .28); backdrop-filter: blur(2px); }
-    .employee-detail-drawer { position: absolute; top: 0; right: 0; height: 100%; width: min(680px, 100%); overflow: auto; background: #fffdf9; box-shadow: -18px 0 55px rgba(22, 34, 27, .18); padding: 20px; }
+    .employee-detail-drawer { position: absolute; top: 0; right: 0; height: 100%; width: min(960px, 100%); overflow: auto; background: #fffdf9; box-shadow: -18px 0 55px rgba(22, 34, 27, .18); padding: 20px; }
     .employee-detail-head { display: flex; justify-content: space-between; align-items: start; gap: 14px; margin-bottom: 16px; }
     .employee-detail-head h3 { margin: 0 0 5px; }
     .employee-detail-head p { margin: 0; color: #687366; font-size: 13px; }
@@ -1398,6 +1398,150 @@
     .employee-detail-metric strong { display: block; margin-top: 5px; font-size: 20px; }
     .employee-detail-section { margin-top: 16px; }
     .employee-detail-section h4 { margin: 0 0 8px; }
+    .employee-history-detail-btn {
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid #cbdcc9;
+      border-radius: 8px;
+      background: #f1f7ef;
+      color: #356d45;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .employee-history-detail-btn:hover { background: #e7f1e4; border-color: #9ebd9c; }
+    .employee-history-task-table {
+      width: 100%;
+      min-width: 780px;
+      table-layout: fixed;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    .employee-history-task-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #faf8ee;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #556353;
+      border-bottom: 1px solid #d5dfce;
+      white-space: nowrap;
+    }
+    .employee-history-task-table tbody td {
+      padding: 7px 10px;
+      vertical-align: middle;
+      border-bottom: 1px solid #e7efe3;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.35;
+    }
+    .employee-history-task-row {
+      transition: background-color .15s ease;
+    }
+    .employee-history-task-row:hover td {
+      background: #f4f8f1;
+    }
+    .employee-history-task-row.has-desc {
+      cursor: pointer;
+    }
+    .employee-history-task-title-cell {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .employee-history-task-name {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 600;
+      color: #1e2e21;
+      font-size: 13px;
+    }
+    .employee-history-content-cell {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .employee-history-project-badge {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #eef4f9;
+      color: #335d82;
+      font-size: 11px;
+      line-height: 1.3;
+      border: 1px solid #d8e5f0;
+    }
+    .employee-history-content-text {
+      flex: 1 1 auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #49574a;
+      font-size: 12px;
+    }
+    .employee-history-category-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #5c6b5d;
+      font-size: 12px;
+    }
+    .employee-history-status-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      line-height: 1.3;
+    }
+    .employee-history-status-tag.completed { background: #e6f4ea; color: #1e7e34; }
+    .employee-history-status-tag.overdue { background: #fde8e8; color: #c53030; }
+    .employee-history-status-tag.in-progress { background: #e8f0fe; color: #1a73e8; }
+    .employee-history-status-tag.default { background: #f0f3ee; color: #556254; }
+    .employee-history-date-text {
+      display: inline-block;
+      font-size: 12px;
+      color: #556354;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .employee-history-points-val {
+      display: block;
+      text-align: right;
+      font-weight: 700;
+      color: #1b2e20;
+      font-variant-numeric: tabular-nums;
+    }
+    .employee-history-desc-row td {
+      padding: 6px 14px 10px;
+      background: #fbfdf9;
+      border-bottom: 1px solid #d8e4d4;
+      white-space: normal;
+    }
+    .employee-history-desc-content {
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #f4f8f1;
+      border: 1px solid #e1ebde;
+      color: #4d5c4e;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
     .employee-task-detail { min-width: 88px; }
     .employee-task-detail summary {
       display: inline-flex;
@@ -9487,7 +9631,7 @@
           selector.innerHTML = templates.map(template => `<option value="${escapeAttr(template.id)}">${safeText(template.name)} · v${template.version}</option>`).join("");
           selector.classList.toggle("hidden", templates.length <= 1);
         }
-        state.settlementTemplate = templates[0] || null;
+        state.settlementTemplate = selectEffectiveSettlementTemplate(templates, customerCode);
         if (!state.settlementTemplate) return;
         renderSettlementStatement();
         await refreshSettlementTemplatePreview(1);
@@ -9496,6 +9640,16 @@
         state.settlementTemplate = null;
         toast(error.message || "结算模板加载失败");
       }
+    }
+    function selectEffectiveSettlementTemplate(templates, customerCode = state.settlementCustomerId) {
+      const rows = Array.isArray(templates) ? templates : [];
+      if (!rows.length) return null;
+      if (customerCode && customerCode !== "all") {
+        return rows.find(template => template.customer_code === customerCode && !template.is_fallback)
+          || rows.find(template => template.is_fallback || template.customer_code === "*")
+          || null;
+      }
+      return rows.find(template => template.customer_code === "*" || template.is_fallback) || rows[0] || null;
     }
     function setSettlementTemplate(templateId) {
       state.settlementTemplate = state.settlementTemplates.find(template => template.id === templateId) || null;
@@ -9532,8 +9686,8 @@
     function settlementTemplateCellHtml(column, value) {
       const normalized = settlementTemplateValue(value);
       if (normalized === null) return `<span class="settlement-empty">—</span>`;
-      if (column.key === "image_urls") {
-        const links = String(normalized).split(/\n+/).map(item => item.trim()).filter(item => /^(https?:\/\/|\/)/i.test(item));
+      if (column.image || column.key === "image_urls") {
+        const links = String(normalized).split(/\r?\n|\\n/).map(item => item.trim()).filter(item => /^(https?:\/\/|\/)/i.test(item));
         return links.length
           ? `<div class="settlement-image-links">${links.map((url, index) => `<a class="settlement-image-link" href="${escapeAttr(url)}" target="_blank" rel="noopener">查看图片${links.length > 1 ? ` ${index + 1}` : ""}</a>`).join("")}</div>`
           : `<span class="settlement-empty">—</span>`;
@@ -9541,6 +9695,7 @@
       if (column.numeric) {
         const number = Number(normalized);
         if (Number.isFinite(number)) {
+          if (column.percent) return safeText(`${(number * 100).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}%`);
           return safeText(column.key === "quantity" ? number.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) : formatMoney(number));
         }
       }
@@ -9622,7 +9777,7 @@
       if (!template) {
         try {
           const templates = await request(`/settlement/templates?customerCode=${encodeURIComponent(customerCode)}`);
-          template = Array.isArray(templates) ? templates[0] : null;
+          template = selectEffectiveSettlementTemplate(templates, customerCode);
         } catch {
           toast("结算模板加载失败");
           return;
@@ -10791,6 +10946,109 @@
         state.employeeDetailBusy = false;
       }
     }
+    function toggleEmployeeHistoryTaskDesc(rowId) {
+      const row = qs(rowId);
+      if (row) row.classList.toggle("hidden");
+    }
+    function openEmployeeHistoryDetail(userId) {
+      if (!userId) return;
+      const user = getLookupMaps().userById.get(userId);
+      if (!user) return;
+      state.employeeDetail = null;
+      state.assignmentCandidates = null;
+      state.assignmentCandidateTaskId = null;
+      const tasks = (state.employeeHistoryTasks || [])
+        .filter(task => taskAssigneeUserId(task) === userId)
+        .sort((left, right) => String(left.planned_start_at || left.planned_end_at || "").localeCompare(
+          String(right.planned_start_at || right.planned_end_at || ""),
+        ));
+      const completed = tasks.filter(isTaskCompleted).length;
+      const overdue = tasks.filter(isTaskOverdue).length;
+      const points = tasks.reduce((sum, task) => sum + (Number(task.contribution_points ?? task.contributionPoints ?? 0) || 0), 0);
+      qs("employeeDetailBackdrop")?.classList.remove("hidden");
+      qs("employeeDetailTitle").textContent = userDisplayName(user) + " · 任务详情";
+      qs("employeeDetailSubtitle").textContent = "当前排行时间范围内共 " + tasks.length + " 项任务";
+      const body = qs("employeeDetailBody");
+      if (!body) return;
+      body.innerHTML = [
+        '<div class="employee-detail-metrics">',
+        '<div class="employee-detail-metric"><span>执行任务</span><strong>' + tasks.length + '</strong></div>',
+        '<div class="employee-detail-metric"><span>已完成</span><strong>' + completed + '</strong></div>',
+        '<div class="employee-detail-metric"><span>延期</span><strong>' + overdue + '</strong></div>',
+        '<div class="employee-detail-metric"><span>贡献分</span><strong>' + points.toFixed(2) + '</strong></div>',
+        '</div>',
+        '<div class="employee-detail-section">',
+        '<div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;"><h4>任务明细</h4><small style="color: #798677;">悬浮可查看完整内容，点击可展开说明</small></div>',
+        '<div class="table-wrap"><table class="employee-history-task-table"><thead><tr>' +
+        '<th style="width: 24%;">任务标题</th>' +
+        '<th style="width: 28%;">内容</th>' +
+        '<th style="width: 16%;">分类</th>' +
+        '<th style="width: 80px; text-align: center;">状态</th>' +
+        '<th style="width: 170px; text-align: center;">计划时间</th>' +
+        '<th style="width: 80px; text-align: right;">贡献分</th>' +
+        '</tr></thead><tbody>',
+        tasks.map((task, index) => {
+          const requirement = requirementForTask(task);
+          const itemId = task.requirement_item_id || task.requirementItemId;
+          const item = itemId ? getLookupMaps().requirementItemById.get(itemId) : null;
+          const project = projectForTask(task);
+          const itemTitle = item?.item_title || requirement?.title || "";
+          const requirementTitle = requirement?.title && requirement.title !== itemTitle ? requirement.title : "";
+          const description = taskDetailText(task, item, requirement);
+          const category = [
+            requirement?.business_category ? projectTypeLabel(requirement.business_category) : businessCategoryNameForProject(task.project_id),
+            requirement?.secondary_category,
+            requirement?.tertiary_category,
+          ].filter(value => value && value !== "未分类").join(" / ");
+          const plannedRange = task.planned_start_at || task.planned_end_at
+            ? (task.planned_start_at ? dateOnlyKey(task.planned_start_at) : "-") + " ~ " + (task.planned_end_at ? dateOnlyKey(task.planned_end_at) : "-")
+            : "-";
+          const projectName = project?.project_name || "";
+          const taskTitle = task.task_name || itemTitle || "未命名任务";
+          const contentText = (description && description !== "-")
+            ? description
+            : (itemTitle || requirementTitle || project?.project_name || "暂无内容");
+          const statusLabel = taskDisplayStatusLabel(task);
+          const statusClass = isTaskCompleted(task) ? "completed" : isTaskOverdue(task) ? "overdue" : "in-progress";
+          const hasDesc = (description && description !== "-") || (contentText && contentText !== "暂无内容" && contentText !== taskTitle);
+          const descRowId = "empTaskDesc_" + index;
+          const contentTooltip = [
+            projectName ? "项目: " + projectName : "",
+            requirementTitle ? "需求: " + requirementTitle : "",
+            item?.item_title ? "子需求: " + item.item_title : "",
+            contentText ? "内容: " + contentText : "",
+            hasDesc ? "(点击整行可展开/收起说明)" : "",
+          ].filter(Boolean).join("\n");
+          const mainRow = '<tr class="employee-history-task-row' + (hasDesc ? ' has-desc' : '') + '"' +
+            (hasDesc ? ' onclick="toggleEmployeeHistoryTaskDesc(\'' + descRowId + '\')"' : '') + '>' +
+            '<td><div class="employee-history-task-title-cell" title="' + escapeAttr(taskTitle) + '">' +
+              '<span class="employee-history-task-name">' + safeText(taskTitle) + '</span>' +
+            '</div></td>' +
+            '<td><div class="employee-history-content-cell" title="' + escapeAttr(contentTooltip) + '">' +
+              (projectName ? '<span class="employee-history-project-badge">' + safeText(projectName) + '</span>' : '') +
+              '<span class="employee-history-content-text">' + safeText(contentText) + '</span>' +
+            '</div></td>' +
+            '<td><div class="employee-history-category-text" title="' + escapeAttr(category || "未分类") + '">' +
+              safeText(category || "未分类") +
+            '</div></td>' +
+            '<td style="text-align: center;"><span class="employee-history-status-tag ' + statusClass + '">' +
+              safeText(statusLabel) +
+            '</span></td>' +
+            '<td style="text-align: center;"><span class="employee-history-date-text" title="' + escapeAttr(plannedRange) + '">' +
+              safeText(plannedRange) +
+            '</span></td>' +
+            '<td style="text-align: right;"><span class="employee-history-points-val">' +
+              (Number(task.contribution_points ?? task.contributionPoints ?? 0) || 0).toFixed(2) +
+            '</span></td>' +
+            '</tr>';
+          const descRow = hasDesc
+            ? '<tr id="' + descRowId + '" class="employee-history-desc-row hidden"><td colspan="6"><div class="employee-history-desc-content">' + safeText(contentText) + '</div></td></tr>'
+            : '';
+          return mainRow + descRow;
+        }).join("") || '<tr><td colspan="6" style="text-align: center; color: #889487; padding: 20px;">当前时间范围内没有任务</td></tr>',
+        '</tbody></table></div></div>',
+      ].join("");
+    }
     async function remindTaskDelivery(taskId) {
       if (!taskId || state.busyActionId) return;
       state.busyActionId = taskId;
@@ -11010,7 +11268,7 @@
       if (hint) hint.textContent = `按${metric.label}从高到低排名，共 ${rows.length} 名员工；${selectedCenter === "all" ? "全部中心" : selectedCenter}；平均贡献分：${averagePoints.toFixed(2)}；浅红色表示高于平均贡献分；仅受上方时间范围影响。`;
       const metricSelect = qs("employeeHistoryMetric");
       if (metricSelect) metricSelect.value = state.employeeHistoryMetric;
-      const headers = ["排名", "员工", metric.label, "执行任务", "已完成", "延期", "贡献分"];
+      const headers = ["排名", "员工", metric.label, "执行任务", "已完成", "延期", "贡献分", "详情"];
       const toCells = (row, index) => [
         employeeRankCell(index),
         personCellHtml(row.userId, row.name),
@@ -11019,6 +11277,7 @@
         row.completed,
         row.overdue,
         row.points.toFixed(2),
+        '<button class="employee-history-detail-btn" type="button" onclick="openEmployeeHistoryDetail(\'' + escapeAttr(row.userId) + '\')">详情</button>',
       ];
       const topRows = rows.slice(0, 10);
       const moreRows = rows.slice(10);
