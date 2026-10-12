@@ -17,6 +17,11 @@
 - `POST /api/v1/auth/login`：开发/应急选择用户登录，生产默认关闭。
 - 受保护接口需携带 `Authorization: Bearer <accessToken>`。
 
+### 人员离职归档
+
+- `PATCH /api/v1/users/{userId}/employment`：管理员维护 `employmentStatus`（`active/departed`）及可选 `departedAt`（`YYYY-MM-DD` 或 `null`），需要 `permission.manage`。归档关闭登录、新指派和员工通知，保留历史任务、交付与结算。不能归档当前登录的管理员。详见 [员工离职归档](EMPLOYEE_ARCHIVING.md)。
+- `GET /api/v1/users`：返回全部非删除员工（包括离职员工），供历史记录关联和人员归档使用；登录候选及实时负载只包含在职有效账号。
+
 ### 需求与任务
 
 - `POST /api/v1/requirements/with-task`：手动创建需求并自动生成一个任务；创建时必须传入任务价格 `priceAmount`。

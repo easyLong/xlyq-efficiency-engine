@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -20,6 +21,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { PasswordLoginDto } from './dto/password-login.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateEmployeeStatusDto } from './dto/update-employee-status.dto';
 import { RoleEntity } from './entities/role.entity';
 import { UserEntity } from './entities/user.entity';
 
@@ -43,14 +45,13 @@ export class UsersService implements OnModuleInit {
   async findAll() {
     const users = await this.usersRepository.find({
       order: { created_at: 'DESC' },
-      take: 50,
     });
     return this.attachRoleCodes(users);
   }
 
   async findLoginUsers() {
     const users = await this.usersRepository.find({
-      where: { status: 'active' },
+      where: { status: 'active', employment_status: 'active' },
       order: { created_at: 'DESC' },
       take: 50,
     });
@@ -67,7 +68,11 @@ export class UsersService implements OnModuleInit {
       throw new UnauthorizedException('Emergency user login is disabled');
     }
     const user = await this.usersRepository.findOne({
-      where: { username: dto.username, status: 'active' },
+      where: {
+        username: dto.username,
+        status: 'active',
+        employment_status: 'active',
+      },
     });
     if (!user) {
       throw new NotFoundException('Active user not found');
@@ -90,7 +95,11 @@ export class UsersService implements OnModuleInit {
   async loginWithPassword(dto: PasswordLoginDto) {
     const account = dto.account.trim();
     const user = await this.findUserByAccount(account);
-    if (!user || user.status !== 'active') {
+    if (
+      !user ||
+      user.status !== 'active' ||
+      user.employment_status === 'departed'
+    ) {
       throw new UnauthorizedException('Invalid account or password');
     }
     if (!(await this.canUsePasswordLogin(user))) {
@@ -128,7 +137,11 @@ export class UsersService implements OnModuleInit {
       throw new UnauthorizedException('飞书处理链接无效或已过期');
     }
     const user = await this.usersRepository.findOne({
-      where: { id: payload.userId, status: 'active' },
+      where: {
+        id: payload.userId,
+        status: 'active',
+        employment_status: 'active',
+      },
     });
     if (!user) {
       throw new UnauthorizedException('飞书账号未关联有效的系统用户');
@@ -172,6 +185,8 @@ export class UsersService implements OnModuleInit {
       mobile: dto.mobile ?? null,
       avatar_url: dto.avatarUrl ?? null,
       status: 'active',
+      employment_status: 'active',
+      departed_at: null,
       source: dto.source ?? 'local',
       feishu_open_id: dto.feishuOpenId ?? null,
       passwd: dto.password ?? dto.username,
@@ -195,12 +210,49 @@ export class UsersService implements OnModuleInit {
       feishu_open_id: dto.feishuOpenId ?? user.feishu_open_id,
       login_enabled: dto.loginEnabled ?? user.login_enabled,
     });
+    if (user.employment_status === 'departed') {
+      user.status = 'inactive';
+      user.login_enabled = false;
+    }
     if (dto.password) {
       user.passwd = dto.password;
       user.password_hash = null;
       user.password_updated_at = new Date();
     }
     return this.usersRepository.save(user);
+  }
+
+  async updateEmployment(
+    userId: string,
+    dto: UpdateEmployeeStatusDto,
+    actingUserId?: string,
+  ) {
+    if (userId === actingUserId && dto.employmentStatus === 'departed') {
+      throw new BadRequestException('不能归档当前登录的管理员账号');
+    }
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    const date = dto.departedAt?.slice(0, 10);
+    const today = new Date();
+    const todayKey = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-');
+    if (date && date > todayKey) {
+      throw new BadRequestException('离职日期不能晚于今天');
+    }
+    user.employment_status = dto.employmentStatus;
+    if (dto.employmentStatus === 'departed') {
+      user.departed_at =
+        dto.departedAt === undefined ? user.departed_at || null : date || null;
+      user.status = 'inactive';
+      user.login_enabled = false;
+    } else {
+      user.departed_at = null;
+      user.status = 'active';
+    }
+    return this.attachRoleCodesToUser(await this.usersRepository.save(user));
   }
 
   private isDevLoginEnabled(loginKey?: string) {
@@ -359,6 +411,16 @@ export class UsersService implements OnModuleInit {
   }
 
   private async ensureUsersAuthSchema() {
+    await this.ensureColumn(
+      'users',
+      'employment_status',
+      "VARCHAR(32) NOT NULL DEFAULT 'active' AFTER status",
+    );
+    await this.ensureColumn(
+      'users',
+      'departed_at',
+      'DATE NULL AFTER employment_status',
+    );
     await this.ensureColumn(
       'users',
       'passwd',

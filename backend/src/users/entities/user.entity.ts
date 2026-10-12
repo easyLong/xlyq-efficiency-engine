@@ -27,6 +27,12 @@ export class UserEntity extends BaseSoftDeleteEntity {
   @Column({ type: 'varchar', length: 32 })
   status!: string;
 
+  @Column({ type: 'varchar', length: 32, default: 'active' })
+  employment_status!: string;
+
+  @Column({ type: 'date', nullable: true })
+  departed_at!: string | null;
+
   @Column({ type: 'varchar', length: 32 })
   source!: string;
 

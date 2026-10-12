@@ -42,7 +42,7 @@ export class MvpAuthGuard implements CanActivate {
     const user = await this.dataSource.getRepository(UserEntity).findOne({
       where: { id: match[1], status: 'active' },
     });
-    if (!user) {
+    if (!user || user.employment_status === 'departed') {
       throw new UnauthorizedException('Invalid MVP access token');
     }
     request.user = user;

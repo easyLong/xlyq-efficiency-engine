@@ -119,7 +119,11 @@ export class FeishuUserSyncService {
       }
 
       for (const [openId, user] of syncedUsers) {
-        user.center_name = centerByOpenId.get(openId) ?? null;
+        if (user.employment_status !== 'departed') {
+          user.center_name = centerByOpenId.get(openId) ?? null;
+        } else if (!user.center_name) {
+          user.center_name = centerByOpenId.get(openId) ?? null;
+        }
         await this.usersRepository.save(user);
       }
 
@@ -304,8 +308,12 @@ export class FeishuUserSyncService {
         ? await this.usersRepository.findOne({ where: { email: item.email } })
         : null);
 
+    const employmentStatus =
+      existing?.employment_status === 'departed' || item.status?.is_resigned
+        ? 'departed'
+        : 'active';
     const status =
-      item.status?.is_resigned || item.status?.is_frozen
+      employmentStatus === 'departed' || item.status?.is_frozen
         ? 'inactive'
         : 'active';
     const username = this.buildUsername(item);
@@ -348,6 +356,9 @@ export class FeishuUserSyncService {
       source: 'feishu',
       feishu_open_id: openId,
       feishu_user_id: item.user_id ?? user.feishu_user_id,
+      employment_status: employmentStatus,
+      login_enabled:
+        employmentStatus === 'departed' ? false : user.login_enabled,
     });
 
     return this.usersRepository.save(user);

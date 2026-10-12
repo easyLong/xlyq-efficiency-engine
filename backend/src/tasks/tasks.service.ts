@@ -477,6 +477,7 @@ export class TasksService implements OnModuleInit {
          AND customer.deleted_at IS NULL
         WHERE employee.deleted_at IS NULL
           AND employee.status = 'active'
+          AND COALESCE(employee.employment_status, 'active') = 'active'
           ${userId ? 'AND employee.id = ?' : ''}
         ORDER BY employee.display_name ASC, task.planned_end_at IS NULL ASC,
           task.planned_end_at ASC, task.created_at DESC
@@ -999,6 +1000,12 @@ export class TasksService implements OnModuleInit {
     ) {
       throw new BadRequestException('审核中或已完成的任务不能改派');
     }
+    const assignee = await this.usersRepository.findOne({
+      where: { id: dto.assigneeUserId, status: 'active' },
+    });
+    if (!assignee || assignee.employment_status === 'departed') {
+      throw new BadRequestException('执行人已离职或停用，请选择在职员工');
+    }
     const shouldMarkAssigned = [
       TaskStatus.Todo,
       TaskStatus.Pending,
@@ -1041,7 +1048,9 @@ export class TasksService implements OnModuleInit {
       fromStatus,
       task.status,
       hadAssignee ? 'task_reassigned' : 'task_assigned',
-      null,
+      hadAssignee
+        ? `执行人由 ${current.assignee_user_id} 交接给 ${dto.assigneeUserId}`
+        : null,
     );
     if (hadAssignee) {
       await this.taskWorkflowRuntime.completeStep(
@@ -1128,7 +1137,7 @@ export class TasksService implements OnModuleInit {
 
   async getAssetSheetContext(id: string, token?: string) {
     const task = await this.findOne(id);
-    this.assertAssetSheetAccess(task, token);
+    await this.assertAssetSheetAccess(task, token);
     const [project, requirementItem, assignee, workspace, files] =
       await Promise.all([
         this.projectsRepository.findOne({ where: { id: task.project_id } }),
@@ -1193,7 +1202,7 @@ export class TasksService implements OnModuleInit {
 
   async startAssetSheetWork(id: string, token?: string) {
     const task = await this.findOne(id);
-    this.assertAssetSheetAccess(task, token);
+    await this.assertAssetSheetAccess(task, token);
     if (!task.assignee_user_id) {
       throw new BadRequestException('任务尚未指派执行人');
     }
@@ -1261,7 +1270,7 @@ export class TasksService implements OnModuleInit {
 
   async getProgressFeedbackContext(id: string, token?: string) {
     const task = await this.findOne(id);
-    this.assertAssetSheetAccess(task, token);
+    await this.assertAssetSheetAccess(task, token);
     const [project, requirementItem, assignee, workspace] = await Promise.all([
       this.projectsRepository.findOne({ where: { id: task.project_id } }),
       task.requirement_item_id
@@ -1566,7 +1575,7 @@ export class TasksService implements OnModuleInit {
     token?: string,
   ) {
     const task = await this.findOne(id);
-    this.assertAssetSheetAccess(task, token);
+    await this.assertAssetSheetAccess(task, token);
     const payload = this.localAssetSheetPayload(dto);
 
     const { savedTask, savedWorkspace } = await this.dataSource.transaction(
@@ -1620,7 +1629,7 @@ export class TasksService implements OnModuleInit {
     token?: string,
   ) {
     const task = await this.findOne(id);
-    this.assertAssetSheetAccess(task, token);
+    await this.assertAssetSheetAccess(task, token);
     this.assertTaskCanSubmitDelivery(task);
     const { assetUrls, imageUrls, linkUrls } = this.localAssetSheetPayload(dto);
     if (!assetUrls.length && !imageUrls.length && !linkUrls.length) {
@@ -1975,7 +1984,7 @@ export class TasksService implements OnModuleInit {
     token?: string,
   ) {
     const task = await this.findOne(id);
-    this.assertAssetSheetAccess(task, token);
+    await this.assertAssetSheetAccess(task, token);
     this.assertTaskCanSubmitDelivery(task);
     await this.assertUploadCapacity(task.id);
     if (!file?.buffer?.length) {
@@ -2229,7 +2238,7 @@ export class TasksService implements OnModuleInit {
     };
   }
 
-  private assertAssetSheetAccess(task: TaskEntity, token?: string) {
+  private async assertAssetSheetAccess(task: TaskEntity, token?: string) {
     const expected = this.assetSheetToken(task);
     if (!token || token.length !== expected.length) {
       throw new UnauthorizedException('Invalid task access token');
@@ -2237,6 +2246,12 @@ export class TasksService implements OnModuleInit {
     const ok = timingSafeEqual(Buffer.from(token), Buffer.from(expected));
     if (!ok) {
       throw new UnauthorizedException('Invalid task access token');
+    }
+    const assignee = task.assignee_user_id
+      ? await this.usersRepository.findOne({ where: { id: task.assignee_user_id } })
+      : null;
+    if (!assignee || assignee.status !== 'active' || assignee.employment_status === 'departed') {
+      throw new UnauthorizedException('执行人已离职或停用，请联系派发人员交接任务');
     }
   }
 
@@ -2406,7 +2421,7 @@ export class TasksService implements OnModuleInit {
     triggerSource: string,
     remark: string | null | undefined,
   ) {
-    if (fromStatus === toStatus) {
+    if (fromStatus === toStatus && triggerSource !== 'task_reassigned') {
       return null;
     }
     return this.taskStatusHistoriesRepository.save(
@@ -4453,6 +4468,10 @@ export class TasksService implements OnModuleInit {
       this.safeTokenEqual(token, this.assetReviewToken(task, reviewerId)),
     );
     if (matchedReviewerId) {
+      const reviewer = await this.usersRepository.findOne({ where: { id: matchedReviewerId } });
+      if (!reviewer || reviewer.status !== 'active' || reviewer.employment_status === 'departed') {
+        throw new UnauthorizedException('该员工已离职或停用');
+      }
       if (
         requireReviewPermission &&
         !(await this.canReviewCurrentStage(task, matchedReviewerId))

@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
+import { Permission } from '../common/decorators/permission.decorator';
+import { UpdateEmployeeStatusDto } from './dto/update-employee-status.dto';
 import { UserEntity } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
@@ -71,5 +73,15 @@ export class UsersController {
   @Patch('users/:userId')
   update(@Param('userId') userId: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(userId, dto);
+  }
+
+  @Patch('users/:userId/employment')
+  @Permission('permission.manage')
+  updateEmployment(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateEmployeeStatusDto,
+    @Req() request: Request & { user?: UserEntity },
+  ) {
+    return this.usersService.updateEmployment(userId, dto, request.user?.id);
   }
 }

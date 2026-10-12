@@ -337,6 +337,8 @@ business_category_owner_configs is legacy compatibility only
 | mobile | varchar(32) | null | 手机号 |
 | avatar_url | varchar(512) | null | 头像 |
 | status | varchar(32) | not null | `active/inactive/locked` |
+| employment_status | varchar(32) | not null, default active | `active/departed`，在职或离职归档；独立于账号停用状态 |
+| departed_at | date | null | 离职日期，可不填，不自动以操作日期代替 |
 | source | varchar(32) | not null | `local/feishu` |
 | feishu_open_id | varchar(128) | unique null | 飞书用户标识 |
 | feishu_user_id | varchar(128) | null | 飞书员工 ID，供考勤接口查询 |
@@ -352,6 +354,8 @@ business_category_owner_configs is legacy compatibility only
 - `uk_users_username`
 - `uk_users_feishu_open_id`
 - `idx_users_status`
+
+人员归档由 `PATCH /api/v1/users/:userId/employment` 管理，需 `permission.manage`。离职归档将账号设为 `inactive` 并关闭 `login_enabled`，保留用户 ID、所属中心、任务归属、交付与结算记录。服务启动自动补齐两个新增字段。飞书同步保留手动归档状态，不自动恢复在职。恢复在职须通过同一接口显式操作。
 
 ## 7.2 `roles`
 

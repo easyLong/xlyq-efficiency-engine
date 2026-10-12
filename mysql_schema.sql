@@ -67,6 +67,8 @@ CREATE TABLE `users` (
   `mobile` VARCHAR(32) NULL,
   `avatar_url` VARCHAR(512) NULL,
   `status` VARCHAR(32) NOT NULL,
+  `employment_status` VARCHAR(32) NOT NULL DEFAULT 'active',
+  `departed_at` DATE NULL,
   `source` VARCHAR(32) NOT NULL,
   `feishu_open_id` VARCHAR(128) NULL,
   `center_name` VARCHAR(128) NULL,

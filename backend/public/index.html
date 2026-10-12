@@ -1388,6 +1388,14 @@
     .load-badge.full { color: #9b3a2d; background: #fff0eb; }
     .employee-detail-backdrop { position: fixed; inset: 0; z-index: 90; background: rgba(18, 29, 23, .28); backdrop-filter: blur(2px); }
     .employee-detail-drawer { position: absolute; top: 0; right: 0; height: 100%; width: min(960px, 100%); overflow: auto; background: #fffdf9; box-shadow: -18px 0 55px rgba(22, 34, 27, .18); padding: 20px; }
+    .employee-insights-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12px; }
+    .employee-departed-switch { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; }
+    .employee-departed-switch input { width: 14px; height: 14px; min-height: 0; margin: 0; padding: 0; }
+    .employee-departed-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #f0ece5; color: #756d61; font-size: 11px; white-space: nowrap; }
+    #employeeManagementBody .employee-departure-date { width: 130px; min-height: 30px; padding: 4px 6px; font-size: 12px; }
+    #employeeManagementBackdrop { z-index: 75; }
+    #employeeHandoverPanel summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+    #employeeHandoverPanel td:nth-child(3) { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .employee-detail-head { display: flex; justify-content: space-between; align-items: start; gap: 14px; margin-bottom: 16px; }
     .employee-detail-head h3 { margin: 0 0 5px; }
     .employee-detail-head p { margin: 0; color: #687366; font-size: 13px; }
@@ -2919,7 +2927,11 @@
               <h3>员工负载与历史表现</h3>
               <p>把实时调度和历史任务统计放在同一处，默认优先查看历史表现。</p>
             </div>
-            <span class="tag">按上方时间范围联动</span>
+            <div class="employee-insights-actions">
+              <span id="employeeRankingScope" class="muted">排行仅显示在职员工</span>
+              <label class="employee-departed-switch"><input id="employeeIncludeDeparted" type="checkbox" onchange="setEmployeeHistoryIncludeDeparted(this.checked)" />包含离职员工</label>
+              <button id="employeeManagementButton" class="employee-history-detail-btn hidden" type="button" onclick="openEmployeeManagement()">人员归档</button>
+            </div>
           </div>
           <div class="employee-insights-tabs" role="tablist" aria-label="员工分析视图">
             <button id="employeeInsightHistoryTab" type="button" class="active" role="tab" aria-selected="true" onclick="setEmployeeInsightView('history')">员工效能排行</button>
@@ -2986,6 +2998,13 @@
             </section>
             <div id="employeeLoadUnavailable" class="empty-list hidden">当前账号暂无员工负载查看权限</div>
           </div>
+        </section>
+        <section id="employeeHandoverPanel" class="panel hidden">
+          <details>
+            <summary>离职员工待交接 <span id="employeeHandoverCount" class="tag">0</span></summary>
+            <p class="muted">列出当前权限内全部未完成任务，不受上方时间和基金筛选影响。进行中任务可改派，待审核任务继续审核；历史归属和结算保留。</p>
+            <div id="employeeHandoverBox" class="table-wrap"></div>
+          </details>
         </section>
         <div class="dashboard-board-grid">
           <div id="taskStatusOverview" class="panel dashboard-focus-card"></div>
@@ -3332,9 +3351,22 @@
     </aside>
   </div>
 
+  <div id="employeeManagementBackdrop" class="employee-detail-backdrop hidden" onclick="if(event.target === this) closeEmployeeManagement()">
+    <aside class="employee-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="employeeManagementTitle" onclick="event.stopPropagation()">
+      <div class="employee-detail-head">
+        <div><h3 id="employeeManagementTitle">人员归档</h3><p>归档保留历史任务和结算，停止登录、新指派和通知。</p></div>
+        <button class="employee-detail-close" type="button" aria-label="关闭" onclick="closeEmployeeManagement()">×</button>
+      </div>
+      <input id="employeeManagementSearch" type="search" placeholder="搜索员工、账号或中心" oninput="renderEmployeeManagement()" />
+      <p id="employeeManagementSummary" class="muted"></p>
+      <p id="employeeManagementFeedback" class="muted" role="status" aria-live="polite"></p>
+      <div id="employeeManagementBody" class="table-wrap"></div>
+    </aside>
+  </div>
   <script src="/js/app-shell.js"></script>
   <script src="/js/api-client.js"></script>
   <script src="/js/domain-config.js"></script>
+  <script src="/js/employee-lifecycle.js"></script>
   <script>
     const apiBase = "/api/v1";
     let businessPlatforms = [...window.XlyqDomainConfig.businessPlatforms];
@@ -3455,6 +3487,8 @@
       employeeLoadSort: "recommended",
       employeeHistoryMetric: "points",
       employeeHistoryCenter: "all",
+      employeeHistoryIncludeDeparted: false,
+      employeeManagementBusy: false,
       employeeHistoryTasks: [],
       employeeInsightView: "history",
       employeeDetail: null,
@@ -3528,6 +3562,7 @@
       return isAdminUser() || can("requirement.create");
     }
     function applyRoleVisibility() {
+      qs("employeeManagementButton")?.classList.toggle("hidden", !can("permission.manage"));
       const canCreateRequirement = can("requirement.create");
       const canCreateWorkReport = canManageInternalReports() && can("work_report.create");
       document.querySelectorAll("[data-view]").forEach(element => {
@@ -3777,7 +3812,9 @@
         }
         if (!qs("confirmBackdrop")?.classList.contains("hidden")) {
           resolveConfirmDialog(false);
+          return;
         }
+        closeEmployeeManagement();
       }
     });
     function addLog(title, data) {
@@ -5237,8 +5274,8 @@
     }
     function dimensionEmployeeOptions() {
       return state.users
-        .filter(user => user.status !== "inactive")
-        .map(user => ({ value: user.id, label: userDisplayName(user) }))
+        .filter(user => isActiveEmployee(user) || isDepartedEmployee(user))
+        .map(user => ({ value: user.id, label: employeeLabel(user.id) }))
         .sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN"));
     }
     function dashboardDimensionOrder() {
@@ -5482,7 +5519,7 @@
       }
     }
     function feishuUserOptions(selectedId) {
-      const users = state.users.filter(u => u.feishu_open_id);
+      const users = state.users.filter(u => u.feishu_open_id && isActiveEmployee(u));
       if (users.length === 0) return `<option value="">暂无飞书用户</option>`;
       return [`<option value="">选择员工</option>`, ...users.map(u => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""} title="${escapeAttr(u.feishu_open_id || "")}">${userDisplayName(u)}</option>`)].join("");
     }
@@ -5953,7 +5990,7 @@
     }
     function displayTaskStatus(task) {
       if (!task) return "未生成";
-      return taskDisplayStatusLabel(task);
+      return taskDisplayStatusLabel(task) + (isEmployeeHandoverTask(task) ? " · 待交接" : "");
     }
     function taskPersonalWorkflowStates(task) {
       return Array.isArray(task?.workflow_view?.myStates)
@@ -5977,6 +6014,7 @@
       const isCurrentExecutor = row.task?.assignee_user_id === state.user?.id;
       return [
         row.contactContext ? `需求方：${safeText(row.contactContext)}` : "",
+        isDepartedEmployee(getLookupMaps().userById.get(row.task?.assignee_user_id)) ? `执行人：${safeText(employeeLabel(row.task.assignee_user_id))}` : "",
         row.requirement.tertiary_category ? `三级分类：${safeText(row.requirement.tertiary_category)}` : "",
         row.task
           ? isCurrentExecutor
@@ -6816,7 +6854,7 @@
                     ${quoteVisible ? `<span class="tag">报价：${safeText(row.quoteStatus)}</span>` : ""}
                   </div>
                   <div class="row-sub">${isAdminUser()
-                    ? `派发人：${safeText(taskDispatcherName(row.task))} · 执行人：${safeText(assigneeName(row.task?.assignee_user_id))}`
+                    ? `派发人：${safeText(taskDispatcherName(row.task))} · 执行人：${safeText(employeeLabel(row.task?.assignee_user_id))}`
                     : row.task?.workflow_view?.primaryMyState
                       ? `我的角色：${safeText(row.task.workflow_view.primaryMyState.roleLabel)}`
                       : "当前账号暂无角色状态"}</div>
@@ -7191,6 +7229,7 @@
       return Boolean(customerCode) && new Set(state.user?.dispatch_customer_codes || []).has(customerCode);
     }
     function canCurrentUserRemindDelivery(task) {
+      if (isEmployeeHandoverTask(task)) return false;
       if (!task?.assignee_user_id || !can("task.remind_execution_owned")) return false;
       if (!isAdminUser() && task.dispatcher_user_id !== state.user?.id) return false;
       return ["assigned", "in_progress", "blocked", "returned"].includes(task.status);
@@ -7244,7 +7283,7 @@
       if (!canCurrentUserDispatchRow(row) && row.task.status !== "completed") {
         return `
           <div class="assign-action compact" onclick="event.stopPropagation()">
-            <span class="done-text">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
+            <span class="done-text">执行人：${safeText(employeeLabel(row.task.assignee_user_id))}</span>
             ${renderTaskAssetsButton(row.task)}
           </div>
         `;
@@ -7263,7 +7302,7 @@
       if (!isEditingAssignment) {
         return `
           <div class="assign-action compact" onclick="event.stopPropagation()">
-            <span class="quote-status-pill">执行人：${safeText(assigneeName(row.task.assignee_user_id))}</span>
+            <span class="quote-status-pill">执行人：${safeText(employeeLabel(row.task.assignee_user_id))}</span>
             <button class="btn" ${isBusy ? "disabled" : ""} onclick="startReassignTask('${row.task.id}')">${isBusy ? "处理中" : "改派"}</button>
             ${canCurrentUserRemindDelivery(row.task) ? `<button class="btn" ${isBusy ? "disabled" : ""} onclick="remindTaskDelivery('${row.task.id}')">催交付</button>` : ""}
             ${renderTaskAssetsButton(row.task)}
@@ -10277,6 +10316,7 @@
         state.requirementItems = unwrap(analyticsData?.requirementItems);
         state.tasks = unwrap(analyticsData?.tasks);
         invalidateLookupMaps();
+        renderEmployeeHandover();
         const customerCodes = new Set(analyticsCustomers.map(customer => customer.customer_code));
         const employeeTopTasks = state.tasks
           .filter(task => dashboardDateMatches(requirementForTask(task), task));
@@ -10983,7 +11023,7 @@
       const avatar = avatarUrl
         ? `<img class="table-avatar" src="${escapeAttr(avatarUrl)}" alt="" />`
         : `<span class="table-avatar">${escapeHtml(initial)}</span>`;
-      return `<div class="table-person">${avatar}<span>${safeText(label)}</span></div>`;
+      return `<div class="table-person">${avatar}<span>${safeText(label)}</span>${isDepartedEmployee(user) ? '<span class="employee-departed-badge">已离职</span>' : ''}</div>`;
     }
     function renderEmployeeLoad() {
       const panel = qs("employeeLoadPanel");
@@ -11366,8 +11406,7 @@
         });
       const metric = employeeHistoryMetricSpec();
       const groups = new Map();
-      const eligibleUsers = (state.users || [])
-        .filter(user => user.status !== "inactive")
+      const eligibleUsers = employeeRankingUsers()
         .filter(user => {
           if (selectedCenter === "all") return true;
           return employeeCenterLabel(user.center_name || user.centerName) === selectedCenter;
@@ -11443,7 +11482,8 @@
       return aliases[center] || center;
     }
     function renderEmployeeCenterOverview(tasks) {
-      const users = (state.users || []).filter(user => user.status !== "inactive");
+      const users = employeeRankingUsers();
+      const eligibleIds = new Set(users.map(user => user.id));
       const hasCenterMapping = users.some(user => employeeCenterLabel(user.center_name || user.centerName));
       const headers = ["\u6392\u540d", "\u4e2d\u5fc3", "\u603b\u8d21\u732e\u5206", "\u6267\u884c\u91cf", "\u5b8c\u6210\u91cf", "\u5b8c\u6210\u7387", "\u5e73\u5747\u8d21\u732e\u5206"];
       const toCells = (row, index) => [
@@ -11468,7 +11508,7 @@
       const userById = getLookupMaps().userById;
       const groups = new Map();
       for (const task of tasks || []) {
-        if (!task.assignee_user_id) continue;
+        if (!task.assignee_user_id || !eligibleIds.has(task.assignee_user_id)) continue;
         const user = userById.get(task.assignee_user_id);
         const center = employeeCenterLabel(user?.center_name || user?.centerName);
         if (!center) continue;

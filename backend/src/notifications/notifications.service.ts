@@ -122,6 +122,21 @@ export class NotificationsService implements OnModuleInit {
     const result: Record<string, unknown> = {
       in_app: channels.includes('in_app') ? 'saved' : 'skipped',
     };
+    const recipient = message.recipient_user_id
+      ? await this.usersRepository.findOne({
+          where: { id: message.recipient_user_id },
+        })
+      : null;
+    if (recipient?.employment_status === 'departed') {
+      message.status = 'skipped';
+      message.delivery_result_json = {
+        reason: 'recipient_departed',
+        in_app: 'skipped',
+        feishu_app: { status: 'skipped' },
+        feishu_bot: { status: 'skipped' },
+      };
+      return this.notificationsRepository.save(message);
+    }
     if (channels.includes('feishu_app')) {
       try {
         result.feishu_app = await this.sendFeishuAppMessage(message, {
@@ -1087,6 +1102,9 @@ export class NotificationsService implements OnModuleInit {
     });
     if (!user) {
       throw new NotFoundException('Recipient user not found');
+    }
+    if (user.employment_status === 'departed') {
+      return { status: 'skipped', reason: 'recipient_departed' };
     }
 
     const receiveIdType = user.feishu_open_id ? 'open_id' : 'email';
