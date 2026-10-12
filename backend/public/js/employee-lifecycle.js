@@ -26,6 +26,7 @@ function setEmployeeHistoryIncludeDeparted(checked) {
   state.employeeHistoryIncludeDeparted = Boolean(checked);
   renderEmployeeTop(state.employeeHistoryTasks || []);
   renderEmployeeCenterOverview(state.employeeHistoryTasks || []);
+  renderOwnerTaskBoard(state.employeeHistoryTasks || []);
   qs("employeeRankingScope").textContent = checked ? "排行包含离职员工" : "排行仅显示在职员工";
 }
 
@@ -129,6 +130,8 @@ async function updateEmployeeEmployment(userId, employmentStatus, dateOnly = fal
     });
     Object.assign(user, updated);
     invalidateLookupMaps();
+    state.loginUsers = unwrap(await request("/auth/login-users").catch(() => state.loginUsers));
+    renderLoginUsers();
     await refreshAnalytics();
     qs("employeeManagementFeedback").textContent = dateOnly ? "离职日期已保存" : (employmentStatus === "departed" ? "已归档，历史任务与结算已保留" : "已恢复在职");
   } catch (error) {

@@ -285,6 +285,11 @@ export class TaskWorkflowRuntimeService {
        AND member.role_code = 'dispatcher'
        AND member.status = 'active'
        AND member.deleted_at IS NULL
+      JOIN users candidate_user
+        ON candidate_user.id = member.user_id
+       AND candidate_user.status = 'active'
+       AND COALESCE(candidate_user.employment_status, 'active') = 'active'
+       AND candidate_user.deleted_at IS NULL
       WHERE item.deleted_at IS NULL
         AND item.status IN ('open', 'claimed')
         AND item.step_type = 'dispatch'
@@ -325,6 +330,11 @@ export class TaskWorkflowRuntimeService {
         END
        AND member.status = 'active'
        AND member.deleted_at IS NULL
+      JOIN users candidate_user
+        ON candidate_user.id = member.user_id
+       AND candidate_user.status = 'active'
+       AND COALESCE(candidate_user.employment_status, 'active') = 'active'
+       AND candidate_user.deleted_at IS NULL
       WHERE item.deleted_at IS NULL
         AND item.status IN ('open', 'claimed')
         AND item.step_type = 'first_review'
@@ -348,6 +358,11 @@ export class TaskWorkflowRuntimeService {
        AND member.role_code = 'customer_reviewer'
        AND member.status = 'active'
        AND member.deleted_at IS NULL
+      JOIN users candidate_user
+        ON candidate_user.id = member.user_id
+       AND candidate_user.status = 'active'
+       AND COALESCE(candidate_user.employment_status, 'active') = 'active'
+       AND candidate_user.deleted_at IS NULL
       WHERE item.deleted_at IS NULL
         AND item.status IN ('open', 'claimed')
         AND item.step_type = 'second_review'
@@ -834,6 +849,7 @@ export class TaskWorkflowRuntimeService {
           JOIN users user
             ON user.id = member.user_id
            AND user.status = 'active'
+           AND COALESCE(user.employment_status, 'active') = 'active'
            AND user.deleted_at IS NULL
           WHERE member.business_category_code = ?
             AND member.status = 'active'
@@ -878,6 +894,7 @@ export class TaskWorkflowRuntimeService {
         JOIN users user
           ON user.id = member.user_id
          AND user.status = 'active'
+         AND COALESCE(user.employment_status, 'active') = 'active'
          AND user.deleted_at IS NULL
         WHERE member.customer_code = ?
           AND member.role_code = ?

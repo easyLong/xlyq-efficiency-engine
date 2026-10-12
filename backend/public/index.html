@@ -702,6 +702,21 @@
       font-size: 12px;
       line-height: 1.25;
     }
+    .assign-action .employee-searchable-select { width: 148px; max-width: 148px; min-width: 0; }
+    .assign-action .employee-searchable-select input {
+      width: 148px;
+      max-width: 148px;
+      height: 26px;
+      min-height: 26px;
+      padding: 3px 24px 3px 7px;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 12px;
+      line-height: 1.25;
+    }
+    .assign-action .employee-searchable-select::after { right: 10px; top: 10px; width: 6px; height: 6px; }
+    .assign-action .employee-searchable-select .intake-searchable-options { min-width: 210px; max-height: 200px; }
+    .assign-action .employee-searchable-select .intake-searchable-option { padding: 6px 8px; font-size: 12px; }
     .assign-action .btn { min-width: 58px; white-space: nowrap; }
     .card-edit-actions { display: flex; gap: 2px; justify-content: flex-end; flex-wrap: nowrap; }
     .requirement-card-main .card-edit-actions { grid-column: auto; }
@@ -941,6 +956,15 @@
       padding: 12px 13px;
       outline: none;
     }
+    .intake-searchable-select { position: relative; }
+    .intake-searchable-select input { min-height: 44px; padding: 12px 38px 12px 13px; }
+    .intake-searchable-select::after { content: ""; position: absolute; right: 16px; top: 19px; width: 7px; height: 7px; border-right: 1.5px solid #687366; border-bottom: 1.5px solid #687366; transform: rotate(45deg); pointer-events: none; }
+    .intake-searchable-options { display: none; position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 240px; overflow: auto; padding: 5px; border: 1px solid #d5ddcd; border-radius: 12px; background: #fffdf7; box-shadow: 0 12px 28px rgba(24,35,29,.16); }
+    .intake-searchable-select.is-open .intake-searchable-options { display: grid; gap: 2px; }
+    .intake-searchable-option { width: 100%; border: 0; border-radius: 8px; padding: 9px 10px; background: transparent; color: #18231d; text-align: left; font-size: 13px; cursor: pointer; }
+    .intake-searchable-option:hover, .intake-searchable-option[aria-selected="true"] { background: #edf3e8; }
+    .intake-searchable-empty { padding: 9px 10px; color: #929b8d; font-size: 12px; }
+    .intake-searchable-store { display: none !important; }
     textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
     input:focus, textarea:focus, select:focus { border-color: #356d45; box-shadow: 0 0 0 4px rgba(53,109,69,.12); }
     .btns { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
@@ -2569,10 +2593,18 @@
               <div id="copySourceNote" class="copy-source-note"></div>
               <div class="form-grid">
                 <label>需求方
-                  <select id="contactContextSelect" onchange="applyContactContextSelection()"></select>
+                  <div id="contactContextPicker" class="intake-searchable-select">
+                    <input id="contactContextSearch" type="text" placeholder="选择或搜索需求方" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="contactContextOptions" onfocus="openIntakeSelect('contactContextSearch', 'contactContextSelect')" oninput="filterIntakeSelect('contactContextSearch', 'contactContextSelect')" onblur="setTimeout(() => clearIntakeSelectSearch('contactContextSearch', 'contactContextSelect'), 120)" onkeydown="handleIntakeSelectKeydown(event, 'contactContextSelect')" />
+                    <div id="contactContextOptions" class="intake-searchable-options" role="listbox"></div>
+                    <select id="contactContextSelect" class="intake-searchable-store" onchange="applyContactContextSelection(); clearIntakeSelectSearch('contactContextSearch', 'contactContextSelect')"></select>
+                  </div>
                 </label>
                 <label>客户
-                  <select id="customerSelect" onchange="syncProjectSelection(false)"></select>
+                  <div id="customerPicker" class="intake-searchable-select">
+                    <input id="customerSearch" type="text" placeholder="选择或搜索客户" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="customerOptions" onfocus="openIntakeSelect('customerSearch', 'customerSelect')" oninput="filterIntakeSelect('customerSearch', 'customerSelect')" onblur="setTimeout(() => clearIntakeSelectSearch('customerSearch', 'customerSelect'), 120)" onkeydown="handleIntakeSelectKeydown(event, 'customerSelect')" />
+                    <div id="customerOptions" class="intake-searchable-options" role="listbox"></div>
+                    <select id="customerSelect" class="intake-searchable-store" onchange="syncProjectSelection(false); clearIntakeSelectSearch('customerSearch', 'customerSelect')"></select>
+                  </div>
                 </label>
                 <label>业务平台
                   <select id="businessPlatformInput"></select>
@@ -3378,6 +3410,7 @@
       taskSessionActive: false,
       loginConfig: null,
       users: [],
+      loginUsers: [],
       projects: [],
       customers: [],
       contactContexts: [],
@@ -3830,7 +3863,7 @@
         api.loadBootstrap(),
         request("/auth/login-config").catch(() => ({ passwordLoginEnabled: true, emergencyLoginEnabled: false })),
       ]);
-      state.users = users;
+      state.loginUsers = users;
       state.loginConfig = loginConfig;
       qs("healthPill").textContent = `后端 ${health.status} / 数据库 ${health.database}`;
       renderLoginUsers();
@@ -3893,6 +3926,87 @@
     function unwrap(value) {
       return api.unwrap(value);
     }
+    function searchableSelectIds(selectId) {
+      if (selectId === "contactContextSelect") return { searchId: "contactContextSearch", pickerId: "contactContextPicker", listId: "contactContextOptions" };
+      if (selectId === "customerSelect") return { searchId: "customerSearch", pickerId: "customerPicker", listId: "customerOptions" };
+      const taskId = selectId.startsWith("assignee-") ? selectId.slice("assignee-".length) : "";
+      return { searchId: `assignee-search-${taskId}`, pickerId: `assignee-picker-${taskId}`, listId: `assignee-options-${taskId}` };
+    }
+    function rememberIntakeSelectOptions(selectId) {
+      const select = qs(selectId);
+      if (!select) return;
+      select._intakeSearchOptions = [...select.options].map(option => option.cloneNode(true));
+      syncIntakeSelectDisplay(selectId);
+    }
+    function filterIntakeSelect(searchId, selectId) {
+      const search = qs(searchId);
+      const select = qs(selectId);
+      if (!search || !select) return;
+      const source = select._intakeSearchOptions || [...select.options].map(option => option.cloneNode(true));
+      const keyword = search.value.trim().toLocaleLowerCase("zh-Hans-CN");
+      const matches = source.filter(option => {
+        const searchableText = selectId === "contactContextSelect"
+          ? option.textContent
+          : `${option.textContent} ${option.value} ${option.dataset.searchText || ""}`;
+        return !keyword || searchableText.toLocaleLowerCase("zh-Hans-CN").includes(keyword);
+      });
+      const currentValue = select.value;
+      const { listId, pickerId } = searchableSelectIds(selectId);
+      const list = qs(listId);
+      const picker = qs(pickerId);
+      if (!list || !picker) return;
+      picker.classList.add("is-open");
+      search.setAttribute("aria-expanded", "true");
+      list.innerHTML = matches.length
+        ? matches.map(option => `<button type="button" class="intake-searchable-option" role="option" aria-selected="${option.value === currentValue}" onmousedown="event.preventDefault()" onclick="chooseIntakeOption('${selectId}', '${escapeAttr(option.value)}')">${escapeHtml(option.textContent || option.value || "—")}</button>`).join("")
+        : `<div class="intake-searchable-empty">没有匹配项</div>`;
+    }
+    function clearIntakeSelectSearch(searchId, selectId) {
+      const search = qs(searchId);
+      if (!search) return;
+      const { pickerId } = searchableSelectIds(selectId);
+      const picker = qs(pickerId);
+      picker?.classList.remove("is-open");
+      search.setAttribute("aria-expanded", "false");
+      syncIntakeSelectDisplay(selectId);
+    }
+    function selectIntakeOption(selectId, value) {
+      const { searchId } = searchableSelectIds(selectId);
+      const select = qs(selectId);
+      if (select) select.value = value || "";
+      clearIntakeSelectSearch(searchId, selectId);
+    }
+    function syncIntakeSelectDisplay(selectId) {
+      const select = qs(selectId);
+      const { searchId } = searchableSelectIds(selectId);
+      const search = qs(searchId);
+      if (!select || !search) return;
+      const option = [...select.options].find(item => item.value === select.value);
+      search.value = option?.textContent?.trim() || "";
+    }
+    function openIntakeSelect(searchId, selectId) {
+      const search = qs(searchId);
+      if (!search) return;
+      search.value = "";
+      filterIntakeSelect(searchId, selectId);
+    }
+    function chooseIntakeOption(selectId, value) {
+      selectIntakeOption(selectId, value);
+      qs(selectId)?.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    function handleIntakeSelectKeydown(event, selectId) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        clearIntakeSelectSearch(searchableSelectIds(selectId).searchId, selectId);
+      } else if (event.key === "Enter") {
+        const { listId } = searchableSelectIds(selectId);
+        const option = qs(listId)?.querySelector(".intake-searchable-option");
+        if (option) {
+          event.preventDefault();
+          option.click();
+        }
+      }
+    }
     function renderBootstrap() {
       renderLoginUsers();
       const fundCustomers = state.customers.filter(c => c.industry === "公募基金");
@@ -3902,6 +4016,7 @@
       qs("customerSelect").innerHTML = intakeScopedCustomers.length
         ? intakeScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_name || c.customer_code || "客户")}</option>`).join("")
         : `<option value="">当前账号未配置可派发基金</option>`;
+      rememberIntakeSelectOptions("customerSelect");
       qs("quoteCustomerSelect").innerHTML = fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
       qs("mappingCustomerSelect").innerHTML = fundScopedCustomers.map(c => `<option value="${escapeAttr(c.customer_code)}">${escapeHtml(c.customer_code || "客户")} · ${escapeHtml(c.customer_name)}</option>`).join("");
       qs("mappingQuarterSelect").innerHTML = quarterOptions().map(item => `<option value="${item.value}">${item.label}</option>`).join("");
@@ -3937,7 +4052,7 @@
       }
     }
     function renderLoginUsers() {
-      const options = state.users.map(u => `<option value="${escapeAttr(userLoginAccount(u))}">${escapeHtml(userLoginLabel(u))}</option>`).join("");
+      const options = state.loginUsers.map(u => `<option value="${escapeAttr(userLoginAccount(u))}">${escapeHtml(userLoginLabel(u))}</option>`).join("");
       if (qs("loginAccount")) qs("loginAccount").innerHTML = options;
       if (qs("loginUser")) qs("loginUser").innerHTML = options;
     }
@@ -3987,15 +4102,25 @@
       const select = qs("contactContextSelect");
       if (!select) return;
       const dispatchCodes = new Set(state.user?.dispatch_customer_codes || []);
-      const activeContexts = expandedContactContexts().filter(item =>
+      const scopedContexts = expandedContactContexts().filter(item =>
         item.status !== "inactive" &&
         (isAdminUser() || isSharedInternalCustomer(item.customer_code) || dispatchCodes.has(item.customer_code))
       );
+      const seenContactNames = new Set();
+      const activeContexts = scopedContexts.filter(item => {
+        const name = String(item.contact_name || "").trim();
+        if (!name) return true;
+        const key = name.replace(/\s+/g, " ").toLocaleLowerCase("zh-Hans-CN");
+        if (seenContactNames.has(key)) return false;
+        seenContactNames.add(key);
+        return true;
+      });
       select.innerHTML = [
         `<option value="">手动选择客户和平台</option>`,
         ...activeContexts.map(item => `<option value="${escapeAttr(item.id)}" data-option-key="${escapeAttr(item.optionKey)}">${escapeHtml(item.contact_name || "需求方")}</option>`),
         `<option value="__manual_contact__">其它需求方</option>`,
       ].join("");
+      rememberIntakeSelectOptions("contactContextSelect");
       syncContactContextPreview(null);
     }
     function contactContextLabel(context) {
@@ -4066,6 +4191,7 @@
     function selectContactContextOption(context) {
       const select = qs("contactContextSelect");
       if (!select || !context) return;
+      clearIntakeSelectSearch("contactContextSearch", "contactContextSelect");
       const optionKey = context.optionKey || `${context.id}:0`;
       const option = [...select.options].find(item => item.dataset.optionKey === optionKey);
       if (option) {
@@ -4074,6 +4200,7 @@
       } else {
         select.value = context.id || "";
       }
+      syncIntakeSelectDisplay("contactContextSelect");
     }
     function isManualContactSelected() {
       return qs("contactContextSelect")?.value === "__manual_contact__";
@@ -4089,7 +4216,7 @@
         await syncProjectSelection(false);
         return;
       }
-      if (context.customer_code && qs("customerSelect")) qs("customerSelect").value = context.customer_code;
+      if (context.customer_code && qs("customerSelect")) selectIntakeOption("customerSelect", context.customer_code);
       syncContactContextPreview(context);
       await syncProjectSelection(false);
     }
@@ -4097,14 +4224,14 @@
       const select = qs("contactContextSelect");
       const contactName = await showManualContactPopover();
       if (!contactName) {
-        if (select) select.value = "";
+        if (select) selectIntakeOption("contactContextSelect", "");
         syncContactContextPreview(null);
         return;
       }
       const customerCode = qs("customerSelect")?.value;
       if (!customerCode) {
         toast("请先选择客户");
-        if (select) select.value = "";
+        if (select) selectIntakeOption("contactContextSelect", "");
         return;
       }
       const businessPlatform = normalizeBusinessPlatform(qs("businessPlatformInput")?.value || "");
@@ -4138,7 +4265,7 @@
           toast(`已新增并选中需求方：${contactName}`);
         }
       } catch (error) {
-        if (select) select.value = "";
+        if (select) selectIntakeOption("contactContextSelect", "");
         toast(error.message);
       }
     }
@@ -4616,7 +4743,7 @@
       const selected = new Set(state.workflowConfigSelectedUserIds);
       const memberKeyword = state.workflowConfigMemberSearch;
       const users = [...state.users]
-        .filter(user => user.id && user.status !== "inactive")
+        .filter(user => user.id && isActiveEmployee(user))
         .filter(user => !memberKeyword || [userDisplayName(user), user.display_name, user.username]
           .filter(Boolean)
           .some(value => String(value).toLowerCase().includes(memberKeyword)))
@@ -4799,7 +4926,7 @@
     function resetLocalSession() {
       window.XlyqAppShell.session.clear();
       sessionStorage.clear();
-      if (qs("loginAccount")) qs("loginAccount").selectedIndex = state.users.length ? 0 : -1;
+      if (qs("loginAccount")) qs("loginAccount").selectedIndex = state.loginUsers.length ? 0 : -1;
       if (qs("loginPassword")) qs("loginPassword").value = "";
       if (qs("loginKey")) qs("loginKey").value = "";
       qs("loginHint").textContent = "已清理本地登录状态，请重新登录。";
@@ -5183,19 +5310,19 @@
     function taskAssigneeName(task) {
       const assignee = task?.assignee;
       if (assignee?.display_name || assignee?.username || assignee?.email || assignee?.mobile) {
-        return userDisplayName(assignee);
+        return userDisplayName(assignee) + (isDepartedEmployee(assignee) ? " · 已离职" : "");
       }
-      return taskAssigneeUserId(task) ? assigneeName(taskAssigneeUserId(task)) : "未指派";
+      return taskAssigneeUserId(task) ? employeeLabel(taskAssigneeUserId(task)) : "未指派";
     }
     function taskDispatcherName(task) {
-      return task?.dispatcher_user_id ? assigneeName(task.dispatcher_user_id) : "待派发";
+      return task?.dispatcher_user_id ? employeeLabel(task.dispatcher_user_id) : "待派发";
     }
     function taskProductReviewerName(task) {
-      if (task?.product_reviewer_user_id) return assigneeName(task.product_reviewer_user_id);
+      if (task?.product_reviewer_user_id) return employeeLabel(task.product_reviewer_user_id);
       return task?.review_stage === "product_review" ? "待一审" : "未开始";
     }
     function taskCustomerReviewerName(task) {
-      if (task?.customer_reviewer_user_id) return assigneeName(task.customer_reviewer_user_id);
+      if (task?.customer_reviewer_user_id) return employeeLabel(task.customer_reviewer_user_id);
       return task?.review_stage === "customer_review" ? "待二审" : "未开始";
     }
     function resetDimensionFilters() {
@@ -5523,6 +5650,19 @@
       if (users.length === 0) return `<option value="">暂无飞书用户</option>`;
       return [`<option value="">选择员工</option>`, ...users.map(u => `<option value="${u.id}" ${u.id === selectedId ? "selected" : ""} title="${escapeAttr(u.feishu_open_id || "")}">${userDisplayName(u)}</option>`)].join("");
     }
+    function renderEmployeeSearchPicker(taskId, selectedId, disabled = false) {
+      const selectId = `assignee-${taskId}`;
+      const ids = searchableSelectIds(selectId);
+      const selected = state.users.find(user => user.id === selectedId && user.feishu_open_id && isActiveEmployee(user));
+      const selectedName = selected ? userDisplayName(selected) : "";
+      return `
+        <div id="${escapeAttr(ids.pickerId)}" class="intake-searchable-select employee-searchable-select">
+          <input id="${escapeAttr(ids.searchId)}" type="text" value="${escapeAttr(selectedName)}" placeholder="选择或搜索员工" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="${escapeAttr(ids.listId)}" ${disabled ? "disabled" : ""} onfocus="openIntakeSelect('${ids.searchId}', '${selectId}')" oninput="filterIntakeSelect('${ids.searchId}', '${selectId}')" onblur="setTimeout(() => clearIntakeSelectSearch('${ids.searchId}', '${selectId}'), 120)" onkeydown="handleIntakeSelectKeydown(event, '${selectId}')" />
+          <div id="${escapeAttr(ids.listId)}" class="intake-searchable-options" role="listbox"></div>
+          <select id="${escapeAttr(selectId)}" class="intake-searchable-store" ${disabled ? "disabled" : ""}>${feishuUserOptions(selectedId)}</select>
+        </div>
+      `;
+    }
     function defaultWorkspaceUrl(task) {
       const key = (task?.task_no || `task-${Date.now()}`).toLowerCase().replace(/[^a-z0-9-]/g, "-");
       return `https://www.feishu.cn/drive/folder/${key}`;
@@ -5687,7 +5827,7 @@
         if (qs("requirementPriorityInput")) qs("requirementPriorityInput").value = "";
         if (qs("requirementUrgencyInput")) qs("requirementUrgencyInput").value = "";
         if (qs("requirementPriceInput")) qs("requirementPriceInput").value = "";
-        if (qs("contactContextSelect")) qs("contactContextSelect").value = "";
+        if (qs("contactContextSelect")) selectIntakeOption("contactContextSelect", "");
         syncContactContextPreview(null);
       }
       syncProjectSelection(false);
@@ -5800,7 +5940,7 @@
         });
         state.aiContextMatch = match;
         state.aiMatchSourceText = content;
-        if (match.customerId) qs("customerSelect").value = match.customerId;
+        if (match.customerId) selectIntakeOption("customerSelect", match.customerId);
         if (match.projectType) qs("projectTypeSelect").value = match.projectType;
         await syncProjectSelection(false);
         renderAiMatchBox(match);
@@ -6276,6 +6416,7 @@
     }
     function aiPreviewOwnerOptions() {
       return state.users
+        .filter(isActiveEmployee)
         .filter(user => user.id && Array.isArray(user.dispatch_customer_codes) && user.dispatch_customer_codes.length)
         .map(user => ({
           value: user.id,
@@ -6594,7 +6735,7 @@
         syncContactContextPreview(contactContext);
       }
       if ((contactContext?.customer_code || customer?.customer_code) && qs("customerSelect")) {
-        qs("customerSelect").value = contactContext?.customer_code || customer.customer_code;
+        selectIntakeOption("customerSelect", contactContext?.customer_code || customer.customer_code);
       }
       const categoryValue = matchBusinessCategoryValue(candidate.business_category);
       ensureSelectOption(qs("projectTypeSelect"), categoryValue);
@@ -6640,11 +6781,11 @@
         selectContactContextOption(context);
         syncContactContextPreview(context);
       } else if (qs("contactContextSelect")) {
-        qs("contactContextSelect").value = "";
+        selectIntakeOption("contactContextSelect", "");
         syncContactContextPreview(null);
       }
       if (requirement.customer_code && qs("customerSelect")) {
-        qs("customerSelect").value = requirement.customer_code;
+        selectIntakeOption("customerSelect", requirement.customer_code);
       }
       const project = projectForRequirement(requirement);
       const categoryValue = matchBusinessCategoryValue(requirement.business_category || project?.project_type || "");
@@ -7311,7 +7452,7 @@
       }
       return `
         <div class="assign-action" onclick="event.stopPropagation()">
-          <select id="assignee-${row.task.id}" ${isBusy ? "disabled" : ""}>${feishuUserOptions(row.task.assignee_user_id)}</select>
+          ${renderEmployeeSearchPicker(row.task.id, row.task.assignee_user_id, isBusy)}
           <button class="btn" ${isBusy ? "disabled" : ""} onclick="openAssignmentCandidates('${row.task.id}')">推荐</button>
           <button class="btn primary" ${isBusy ? "disabled" : ""} onclick="assignTaskFromBoard('${row.requirement.id}', '${row.task.id}')">${isBusy ? "处理中" : (hasAssignee ? "确认" : "指派")}</button>
         </div>
@@ -7480,7 +7621,8 @@
       let project = state.projects.find(item => item.customer_code === customerId && item.project_type === projectType);
       if (project) return project;
 
-      const ownerUserId = state.user?.id || state.users.find(user => user.username === "demo.pm.v2")?.id || state.users[0]?.id;
+      const activeUsers = state.users.filter(isActiveEmployee);
+      const ownerUserId = state.user?.id || activeUsers.find(user => user.username === "demo.pm.v2")?.id || activeUsers[0]?.id;
       project = await request("/projects", {
         method: "POST",
         body: {
@@ -7556,7 +7698,8 @@
 
       let project = state.projects.find(p => p.customer_code === customer.customer_code && p.project_type === type.value);
       if (!project && createIfMissing) {
-        const ownerUserId = state.user?.id || state.users.find(u => u.username === "demo.pm.v2")?.id || state.users[0]?.id;
+        const activeUsers = state.users.filter(isActiveEmployee);
+        const ownerUserId = state.user?.id || activeUsers.find(u => u.username === "demo.pm.v2")?.id || activeUsers[0]?.id;
         project = await request("/projects", {
           method: "POST",
           body: {
@@ -9928,7 +10071,7 @@
                 <td>${safeText(row.businessCategory)}</td>
                 <td>${safeText(row.secondaryCategory)}</td>
                 <td>${safeText(row.tertiaryCategory)}</td>
-                <td>${safeText(row.employeeName)}</td>
+                <td>${safeText(row.task?.assignee_user_id ? employeeLabel(row.task.assignee_user_id) : row.employeeName)}</td>
                 <td>${row.assetCount > 0 ? row.assetCount : "未交付"}</td>
                 <td>${formatMoney(row.taskPrice)}</td>
                 <td>${formatMoney(row.amount)}</td>
@@ -10118,7 +10261,7 @@
         renderAiMatchBox(match);
         return toast("AI未能匹配客户和业务大类，请补充文件中的客户和需求信息后重试");
       }
-      qs("customerSelect").value = match.customerId;
+      selectIntakeOption("customerSelect", match.customerId);
       qs("projectTypeSelect").value = match.projectType;
       const project = await syncProjectSelection(true);
       if (!project) return toast("AI匹配结果无法创建后台挂靠，请重试");
@@ -10765,6 +10908,8 @@
       if (!box) return;
       const groups = new Map();
       visibleTasks.forEach(task => {
+        const user = task.assignee_user_id ? getLookupMaps().userById.get(task.assignee_user_id) : null;
+        if (task.assignee_user_id && !isActiveEmployee(user)) return;
         const id = task.assignee_user_id || "unassigned";
         const current = groups.get(id) || { label: id === "unassigned" ? "未指派" : assigneeName(id), normal: 0, overdue: 0, total: 0 };
         current.total += 1;
@@ -11136,7 +11281,7 @@
       const overdue = tasks.filter(isTaskOverdue).length;
       const points = tasks.reduce((sum, task) => sum + (Number(task.contribution_points ?? task.contributionPoints ?? 0) || 0), 0);
       qs("employeeDetailBackdrop")?.classList.remove("hidden");
-      qs("employeeDetailTitle").textContent = userDisplayName(user) + " · 任务详情";
+      qs("employeeDetailTitle").textContent = employeeLabel(userId) + " · 任务详情";
       qs("employeeDetailSubtitle").textContent = "当前排行时间范围内共 " + tasks.length + " 项任务";
       const body = qs("employeeDetailBody");
       if (!body) return;
@@ -11257,7 +11402,7 @@
     function employeeTaskDetailHtml(task) {
       const progress = task.progressPercent == null ? "-" : `${Number(task.progressPercent)}%`;
       const estimatedHours = task.estimatedHours == null ? "-" : `${Number(task.estimatedHours).toFixed(2)} 小时`;
-      const dispatcher = task.dispatcherUserId ? assigneeName(task.dispatcherUserId) : "-";
+      const dispatcher = task.dispatcherUserId ? employeeLabel(task.dispatcherUserId) : "-";
       return `
         <details class="employee-task-detail" onclick="event.stopPropagation()">
           <summary>查看详情</summary>
@@ -11362,7 +11507,7 @@
     const employeeHistoryCenterOrder = ["TOK产品中心", "客户成功中心", "业务运营", "业务内容"];
     function employeeHistoryCenterOptions() {
       const available = new Set();
-      for (const user of state.users || []) {
+      for (const user of employeeRankingUsers()) {
         const center = employeeCenterLabel(user.center_name || user.centerName);
         if (center && employeeHistoryCenterOrder.includes(center)) available.add(center);
       }
@@ -11525,11 +11670,13 @@
     }
     function renderOwnerTaskBoard(tasks) {
       const groups = new Map();
+      const visibleEmployeeIds = new Set(employeeRankingUsers().map(user => user.id));
       for (const task of tasks) {
+        if (task.dispatcher_user_id && !visibleEmployeeIds.has(task.dispatcher_user_id)) continue;
         const ownerKey = task.dispatcher_user_id || "unassigned_dispatcher";
         const current = groups.get(ownerKey) || {
           ownerId: task.dispatcher_user_id || "",
-          name: task.dispatcher_user_id ? assigneeName(task.dispatcher_user_id) : "待派发",
+          name: task.dispatcher_user_id ? employeeLabel(task.dispatcher_user_id) : "待派发",
           total: 0,
           inProgress: 0,
           pendingReview: 0,

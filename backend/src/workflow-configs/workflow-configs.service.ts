@@ -49,6 +49,8 @@ export class WorkflowConfigsService implements OnModuleInit {
         JOIN users user
           ON user.id = member.user_id
          AND user.deleted_at IS NULL
+         AND user.status = 'active'
+         AND COALESCE(user.employment_status, 'active') = 'active'
         LEFT JOIN customers customer
           ON customer.customer_code = member.customer_code
          AND customer.deleted_at IS NULL
@@ -69,6 +71,8 @@ export class WorkflowConfigsService implements OnModuleInit {
         JOIN users user
           ON user.id = member.user_id
          AND user.deleted_at IS NULL
+         AND user.status = 'active'
+         AND COALESCE(user.employment_status, 'active') = 'active'
         WHERE member.deleted_at IS NULL
           AND member.status = 'active'
         ORDER BY FIELD(member.business_category_code, 'design', 'copywriting', 'operation', 'community'), user.display_name
@@ -86,6 +90,8 @@ export class WorkflowConfigsService implements OnModuleInit {
         JOIN users user
           ON user.id = member.user_id
          AND user.deleted_at IS NULL
+         AND user.status = 'active'
+         AND COALESCE(user.employment_status, 'active') = 'active'
         WHERE member.deleted_at IS NULL
           AND member.status = 'active'
         ORDER BY member.role_code, user.display_name
@@ -154,7 +160,9 @@ export class WorkflowConfigsService implements OnModuleInit {
       `SELECT member.user_id AS userId
        FROM global_workflow_members member
        JOIN users user ON user.id = member.user_id
-        AND user.status = 'active' AND user.deleted_at IS NULL
+        AND user.status = 'active'
+        AND COALESCE(user.employment_status, 'active') = 'active'
+        AND user.deleted_at IS NULL
        WHERE member.role_code = ? AND member.status = 'active' AND member.deleted_at IS NULL
        ORDER BY member.created_at, member.user_id`,
       [roleCode],
@@ -171,7 +179,10 @@ export class WorkflowConfigsService implements OnModuleInit {
       `SELECT DISTINCT user_role.user_id AS userId
        FROM user_roles user_role
        JOIN roles role ON role.id = user_role.role_id AND role.role_code = 'admin'
-       JOIN users user ON user.id = user_role.user_id AND user.status = 'active' AND user.deleted_at IS NULL`,
+       JOIN users user ON user.id = user_role.user_id
+        AND user.status = 'active'
+        AND COALESCE(user.employment_status, 'active') = 'active'
+        AND user.deleted_at IS NULL`,
     );
     for (const admin of admins) {
       await this.dataSource.query(
@@ -275,6 +286,7 @@ export class WorkflowConfigsService implements OnModuleInit {
         JOIN users user
           ON user.id = member.user_id
          AND user.status = 'active'
+         AND COALESCE(user.employment_status, 'active') = 'active'
          AND user.deleted_at IS NULL
         WHERE member.customer_code = ?
           AND member.role_code = ?
@@ -300,6 +312,7 @@ export class WorkflowConfigsService implements OnModuleInit {
         JOIN users user
           ON user.id = member.user_id
          AND user.status = 'active'
+         AND COALESCE(user.employment_status, 'active') = 'active'
          AND user.deleted_at IS NULL
         WHERE member.business_category_code = ?
           AND member.status = 'active'
@@ -369,6 +382,7 @@ export class WorkflowConfigsService implements OnModuleInit {
         FROM users
         WHERE id IN (${normalized.map(() => '?').join(',')})
           AND status = 'active'
+          AND COALESCE(employment_status, 'active') = 'active'
           AND deleted_at IS NULL
       `,
       normalized,

@@ -68,6 +68,7 @@ export class AttendanceService {
     const users = await this.usersRepository.find({
       where: {
         status: 'active',
+        employment_status: 'active',
         attendance_exempt: false,
       },
       order: { display_name: 'ASC' },
