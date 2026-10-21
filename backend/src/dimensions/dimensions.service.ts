@@ -383,7 +383,9 @@ export class DimensionsService implements OnModuleInit {
               deliveryStandard: tertiary.delivery_standard,
               scoringBoundary: tertiary.scoring_boundary,
               acceptanceEvidence: tertiary.acceptance_evidence,
-              referenceMinutes: tertiary.reference_minutes,
+              estimatedMinutes: Math.round(
+                Number(tertiary.estimated_hours ?? 0) * 60,
+              ),
               scoreMode: tertiary.score_mode,
               scoreRate: tertiary.score_rate,
               sortOrder: tertiary.sort_order,
