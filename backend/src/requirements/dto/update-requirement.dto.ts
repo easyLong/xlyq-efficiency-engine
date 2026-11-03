@@ -1,6 +1,7 @@
 import {
   ArrayMaxSize,
   IsArray,
+  IsDateString,
   IsObject,
   IsOptional,
   IsString,
@@ -24,6 +25,14 @@ export class UpdateRequirementDto {
   @IsOptional()
   @IsString()
   urgencyLevel?: string;
+
+  @IsOptional()
+  @IsDateString()
+  plannedStartAt?: string | null;
+
+  @IsOptional()
+  @IsDateString()
+  plannedEndAt?: string | null;
 
   @IsOptional()
   @Matches(/^\d{1,12}(?:\.\d{1,2})?$/, {

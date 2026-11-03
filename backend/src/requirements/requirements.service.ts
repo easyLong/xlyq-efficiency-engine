@@ -1677,6 +1677,42 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     if (targetCustomerCode !== requirement.customer_code) {
       await this.assertCanDispatchCustomer(currentUser, targetCustomerCode);
     }
+    const items = await this.requirementItemsRepository.find({
+      where: { requirement_id: id },
+      order: { created_at: 'ASC' },
+      take: 1,
+    });
+    const item = items[0];
+    const task = item
+      ? await this.tasksRepository.findOne({
+          where: { requirement_item_id: item.id },
+        })
+      : null;
+    const shouldSyncDates =
+      dto.plannedStartAt !== undefined || dto.plannedEndAt !== undefined;
+    const plannedStartAt = dto.plannedStartAt !== undefined
+      ? (dto.plannedStartAt === null ? null : new Date(dto.plannedStartAt))
+      : task?.planned_start_at ?? null;
+    const plannedEndAt = dto.plannedEndAt !== undefined
+      ? (dto.plannedEndAt === null ? null : new Date(dto.plannedEndAt))
+      : task?.planned_end_at ?? null;
+    if (shouldSyncDates) {
+      if (!task) {
+        throw new BadRequestException('没有关联任务，无法修改计划时间');
+      }
+      if (
+        (plannedStartAt && Number.isNaN(new Date(plannedStartAt).getTime())) ||
+        (plannedEndAt && Number.isNaN(new Date(plannedEndAt).getTime()))
+      ) {
+        throw new BadRequestException('请填写有效的计划日期');
+      }
+      if (
+        plannedStartAt && plannedEndAt &&
+        new Date(plannedStartAt).getTime() > new Date(plannedEndAt).getTime()
+      ) {
+        throw new BadRequestException('计划开始时间不能晚于计划结束时间');
+      }
+    }
     const priority =
       dto.priority !== undefined
         ? this.normalizePriority(dto.priority)
@@ -1753,12 +1789,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     const savedRequirement =
       await this.requirementsRepository.save(requirement);
 
-    const items = await this.requirementItemsRepository.find({
-      where: { requirement_id: id },
-      order: { created_at: 'ASC' },
-      take: 1,
-    });
-    const item = items[0];
     const shouldSyncItem =
       dto.title !== undefined ||
       dto.rawContent !== undefined ||
@@ -1767,6 +1797,7 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     const shouldSyncClassification = dto.tertiaryCategoryCodes !== undefined;
     const shouldSyncTask =
       shouldSyncItem ||
+      shouldSyncDates ||
       shouldSyncClassification ||
       dto.priceAmount !== undefined ||
       dto.projectId !== undefined ||
@@ -1786,9 +1817,6 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (item && shouldSyncTask) {
-      const task = await this.tasksRepository.findOne({
-        where: { requirement_item_id: item.id },
-      });
       if (task) {
         if (dto.projectId && dto.projectId !== task.project_id) {
           task.task_no = await this.nextTaskNo(dto.projectId);
@@ -1798,6 +1826,10 @@ export class RequirementsService implements OnModuleInit, OnModuleDestroy {
         task.description = dto.rawContent ?? task.description;
         task.priority = priority ?? task.priority;
         task.urgency_level = urgencyLevel ?? task.urgency_level;
+        if (shouldSyncDates) {
+          task.planned_start_at = plannedStartAt;
+          task.planned_end_at = plannedEndAt;
+        }
         if (dto.priceAmount !== undefined && Number(dto.priceAmount) > 0) {
           task.price_amount = Number(dto.priceAmount).toFixed(2);
           task.price_source = 'manual_override';

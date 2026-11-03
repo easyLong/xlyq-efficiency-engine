@@ -7300,6 +7300,15 @@
                 任务价格（元）
                 <input id="edit-price-${requirement.id}" type="number" min="0" step="0.01" value="${escapeAttr(Number(row.task?.price_amount || 0).toFixed(2))}" />
               </label>
+              <label>
+                计划开始时间
+                <input id="edit-planned-start-${requirement.id}" type="date" value="${escapeAttr(dateInputValue(row.task?.planned_start_at))}" data-original-value="${escapeAttr(dateInputValue(row.task?.planned_start_at))}" ${row.task ? "" : "disabled"} />
+              </label>
+              <label>
+                计划结束时间
+                <input id="edit-planned-end-${requirement.id}" type="date" value="${escapeAttr(dateInputValue(row.task?.planned_end_at))}" data-original-value="${escapeAttr(dateInputValue(row.task?.planned_end_at))}" ${row.task ? "" : "disabled"} />
+                <span class="muted">用于结算日期</span>
+              </label>
               <label class="wide">
                 需求内容
                 <textarea id="edit-content-${requirement.id}" rows="4">${escapeHtml(requirement.raw_content || requirement.summary || "")}</textarea>
@@ -7572,6 +7581,20 @@
       const tertiaryCategoryQuantities = selectedTertiaryCategoryQuantities(tertiaryCategorySelect);
       const customerId = qs(`edit-customer-${requirementId}`)?.value;
       const projectType = qs(`edit-project-type-${requirementId}`)?.value;
+      const startInput = qs(`edit-planned-start-${requirementId}`);
+      const endInput = qs(`edit-planned-end-${requirementId}`);
+      const plannedStartAt = startInput?.value || "";
+      const plannedEndAt = endInput?.value || "";
+      if (plannedStartAt && plannedEndAt && plannedStartAt > plannedEndAt) {
+        return toast("计划开始时间不能晚于计划结束时间");
+      }
+      const dateChanges = {};
+      if (startInput && !startInput.disabled && plannedStartAt !== startInput.dataset.originalValue) {
+        dateChanges.plannedStartAt = plannedStartAt || null;
+      }
+      if (endInput && !endInput.disabled && plannedEndAt !== endInput.dataset.originalValue) {
+        dateChanges.plannedEndAt = plannedEndAt || null;
+      }
       if (!title) return toast("需求标题不能为空");
       if (!rawContent) return toast("需求内容不能为空");
       if (!customerId || !projectType) return toast("请选择基金客户和业务大类");
@@ -7587,7 +7610,7 @@
 
         const result = await request(`/requirements/${requirementId}`, {
           method: "PATCH",
-          body: { title, rawContent, priority, urgencyLevel, priceAmount: priceAmountInput ? priceAmount.toFixed(2) : undefined, customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, businessCategory: projectType, secondaryCategory, tertiaryCategoryCodes, tertiaryCategoryQuantities },
+          body: { title, rawContent, priority, urgencyLevel, priceAmount: priceAmountInput ? priceAmount.toFixed(2) : undefined, customerCode: customerId, projectId: project.id, businessPlatform: businessPlatform || undefined, businessCategory: projectType, secondaryCategory, tertiaryCategoryCodes, tertiaryCategoryQuantities, ...dateChanges },
         });
         if (result.requirement) {
           state.requirements = state.requirements.map(item => item.id === requirementId ? result.requirement : item);
