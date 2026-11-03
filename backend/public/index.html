@@ -7301,11 +7301,11 @@
                 <input id="edit-price-${requirement.id}" type="number" min="0" step="0.01" value="${escapeAttr(Number(row.task?.price_amount || 0).toFixed(2))}" />
               </label>
               <label>
-                计划开始时间
+                开始时间
                 <input id="edit-planned-start-${requirement.id}" type="date" value="${escapeAttr(dateInputValue(row.task?.planned_start_at))}" data-original-value="${escapeAttr(dateInputValue(row.task?.planned_start_at))}" ${row.task ? "" : "disabled"} />
               </label>
               <label>
-                计划结束时间
+                截止时间
                 <input id="edit-planned-end-${requirement.id}" type="date" value="${escapeAttr(dateInputValue(row.task?.planned_end_at))}" data-original-value="${escapeAttr(dateInputValue(row.task?.planned_end_at))}" ${row.task ? "" : "disabled"} />
                 <span class="muted">用于结算日期</span>
               </label>
@@ -7586,7 +7586,7 @@
       const plannedStartAt = startInput?.value || "";
       const plannedEndAt = endInput?.value || "";
       if (plannedStartAt && plannedEndAt && plannedStartAt > plannedEndAt) {
-        return toast("计划开始时间不能晚于计划结束时间");
+        return toast("开始时间不能晚于截止时间");
       }
       const dateChanges = {};
       if (startInput && !startInput.disabled && plannedStartAt !== startInput.dataset.originalValue) {
